@@ -180,17 +180,18 @@ Gate: `pytest tests/test_p6_playlist.py` green and one real playlist shows up in
 Goal: usable on a phone. Four Jinja pages, no JavaScript framework.
 
 Build
-- [ ] `templates/`: `base.html` (viewport meta, one small CSS file), `login.html`, `onboarding.html`, `index.html` (mood box + last 5 playlists), `playlist.html` (result with Spotify link and track list)
-- [ ] `GET /history`: list of the user's playlists with links
-- [ ] Spotify logo/link on every track and playlist (policy requirement)
-- [ ] Disconnect button on `index.html`
+- [x] `templates/`: `base.html` (viewport meta, one small CSS file), `login.html`, `onboarding.html`, `index.html` (mood box + last 5 playlists), `playlist.html` (result with Spotify link and track list)
+- [x] `GET /login` renders `login.html` (what Moodify does, what goes to OpenAI, how to delete); its button POSTs to `/login`, which starts the Spotify login. Phase 2 started it on GET, which let link prefetchers use up the one-time state
+- [x] `GET /history`: list of the user's playlists with links
+- [x] Spotify logo/link on every track and playlist (policy requirement). Per developer.spotify.com/documentation/design (read 2026-10-23): official logo files only (`static/`, from Spotify's 2024 zips), black on light / white on dark, full logo ≥70 px next to Spotify metadata, icon alone (≥21 px) only where there's no room, link text "OPEN SPOTIFY". So: full logo + OPEN SPOTIFY on the playlist, the icon on every track and playlist row, each row linking to `open.spotify.com`
+- [x] Disconnect button on `index.html`
 
 Tests (`tests/test_p7_ui.py`)
-- [ ] every page returns 200 for a logged-in user with onboarding done
-- [ ] `/`, `/history`, `/playlist` redirect to `/login` when logged out
-- [ ] `index.html` contains the mood form posting to `/playlist`
-- [ ] `playlist.html` renders every track and the `open.spotify.com` link
-- [ ] no template references a static file that doesn't exist
+- [x] every page returns 200 for a logged-in user with onboarding done
+- [x] `/`, `/history`, `/playlist` redirect to `/login` when logged out
+- [x] `index.html` contains the mood form posting to `/playlist`
+- [x] `playlist.html` renders every track and the `open.spotify.com` link
+- [x] no template references a static file that doesn't exist
 - [ ] manual: open on a phone, complete login → onboarding → playlist without zooming
 
 Gate: `pytest tests/test_p7_ui.py` green and the manual phone run works.

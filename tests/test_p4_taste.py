@@ -42,7 +42,7 @@ def client():
 
 @pytest.fixture
 def logged_in(client, user, respx_mock):
-    params = dict(p.split("=", 1) for p in client.get("/login").headers["location"].split("?", 1)[1].split("&"))
+    params = dict(p.split("=", 1) for p in client.post("/login").headers["location"].split("?", 1)[1].split("&"))
     respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "refresh_token": "refresh-1", "expires_in": 3600})
     respx_mock.get(auth.ME_URL).respond(200, json={"id": "friend1", "display_name": "Friend One"})
     assert client.get("/callback", params={"code": "c", "state": params["state"]}).status_code == 303

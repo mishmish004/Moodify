@@ -1,17 +1,18 @@
 {% extends "base.html" %}
+{% from "_spotify.html" import icon, open_spotify %}
 {% block title %}Moodify · {{ result.mood }}{% endblock %}
 {% block content %}
 <h1>Moodify: {{ result.mood }}</h1>
-{% if result.tracks %}
-<p><a href="{{ result.url }}">Open in Spotify</a> · {{ result.tracks | length }} tracks</p>
-<form method="post" action="/queue/{{ result.id }}">
-  <button type="submit">Play now</button> <small>(needs Premium and Spotify open on a device)</small>
+<p class="muted">{{ result.tracks | length }} tracks, saved as a private playlist in your Spotify account.</p>
+{{ open_spotify(result.url) }}
+<form method="post" action="/queue/{{ result.id }}" data-busy="Adding to your queue…">
+  <button type="submit">Play now</button>
+  <small class="hint">Needs Premium and Spotify open on one of your devices.</small>
 </form>
-<ol>
+<ol class="list">
   {% for t in result.tracks %}
-  <li>{{ t.name }} <small>— {{ t.artists | join(", ") }}</small></li>
+  <li><a href="{{ t.url }}"><span class="n">{{ loop.index }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
   {% endfor %}
 </ol>
-{% endif %}
-<p><a href="/">Make another</a></p>
+<p><a class="button" href="/">Make another</a></p>
 {% endblock %}

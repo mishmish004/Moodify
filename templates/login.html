@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Playlists for the mood you're in</h1>
+<p>Describe how you feel or what you're doing. Moodify picks songs that fit, in the style you like, and saves them as a private playlist in your Spotify account.</p>
+{# POST, not a link: starting the Spotify login from a GET lets prefetchers and crawlers use up the one-time state #}
+<form method="post" action="/login">
+  <button type="submit" class="wide">Log in with Spotify</button>
+</form>
+<p><small>Friends only: your Spotify account has to be added to the app first. Ask whoever sent you the link.</small></p>
+
+<h2>What happens to your data</h2>
+<ul>
+  <li>Each mood you type is sent to OpenAI together with your answers to six taste questions and your most played artists and tracks on Spotify, so its model can suggest songs.</li>
+  <li>Moodify stores your Spotify ID and name, a login token, your answers, that taste summary, and the playlists it made for you (links and track IDs).</li>
+  <li>It can create playlists in your account and, when you press Play now, add songs to your queue. It can't see your existing playlists.</li>
+  <li>Disconnect, at the bottom of the home page, deletes everything Moodify stored about you at once. To remove its access to Spotify as well, go to <a href="https://www.spotify.com/account/apps/">spotify.com/account/apps</a>.</li>
+</ul>
+{% endblock %}

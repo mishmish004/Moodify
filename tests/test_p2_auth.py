@@ -33,7 +33,7 @@ def _query(url: str) -> dict:
 
 
 def _start_login(client) -> dict:
-    resp = client.get("/login")
+    resp = client.post("/login")
     assert resp.status_code == 303
     return _query(resp.headers["location"])
 

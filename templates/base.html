@@ -4,16 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Moodify{% endblock %}</title>
-  {# Phase 7 moves this into a static CSS file #}
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; line-height: 1.5; }
-    label { display: block; margin-top: 1rem; font-weight: 600; }
-    input, select, textarea { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
-    button { margin-top: 1.5rem; padding: .8rem 1.4rem; font-size: 1rem; }
-    small { font-weight: normal; color: #555; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:,">
 </head>
 <body>
-  {% block content %}{% endblock %}
+  <header>
+    <a class="brand" href="/">Moodify</a>
+    {% if user %}
+    <nav><a href="/">New playlist</a><a href="/history">History</a></nav>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    // Forms with data-busy submit once: a double tap on "Make a playlist" would make two.
+    // pageshow puts the button back when the page returns from the back/forward cache.
+    for (const form of document.querySelectorAll("form[data-busy]")) {
+      const button = form.querySelector("button"), label = button.textContent;
+      form.addEventListener("submit", () => { button.disabled = true; button.textContent = form.dataset.busy; });
+      addEventListener("pageshow", () => { button.disabled = false; button.textContent = label; });
+    }
+  </script>
 </body>
 </html>

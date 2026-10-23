@@ -101,7 +101,7 @@ def user(test_settings):
 def logged_in(user, respx_mock):
     client = TestClient(app, follow_redirects=False)
     with client:
-        state = parse_qs(urlsplit(client.get("/login").headers["location"]).query)["state"][0]
+        state = parse_qs(urlsplit(client.post("/login").headers["location"]).query)["state"][0]
         respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "refresh_token": "refresh-1", "expires_in": 3600})
         respx_mock.get(auth.ME_URL).respond(200, json={"id": "friend1", "display_name": "Friend One"})
         client.get("/callback", params={"code": "c", "state": state})

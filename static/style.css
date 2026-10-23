@@ -1,0 +1,89 @@
+/* The only stylesheet. Phone first: one column, 16px inputs (iOS zooms into anything smaller), 44px tap targets. */
+
+:root {
+  --bg: #fff;
+  --text: #191414;
+  --muted: #5c5c5c;
+  --line: #e2e2e2;
+  --accent: #191414;
+  --accent-text: #fff;
+  --danger: #b3261e;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --text: #f2f2f2;
+    --muted: #a7a7a7;
+    --line: #2e2e2e;
+    --accent: #f2f2f2;
+    --accent-text: #121212;
+    --danger: #f2b8b5;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+header, main { max-width: 40rem; margin: 0 auto; padding: 0 1rem; }
+header { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; border-bottom: 1px solid var(--line); }
+header nav { display: flex; gap: 1rem; }
+header a { color: var(--text); text-decoration: none; display: inline-block; padding: .5rem 0; }
+.brand { font-weight: 700; font-size: 1.15rem; }
+main { padding-bottom: 3rem; }
+
+h1 { font-size: 1.5rem; line-height: 1.25; margin: 1.5rem 0 .5rem; overflow-wrap: anywhere; }
+h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
+a { color: inherit; }
+small, .muted { color: var(--muted); }
+.hint { display: block; margin-top: .4rem; }
+
+label { display: block; margin-top: 1rem; font-weight: 600; }
+input, select, textarea {
+  display: block; width: 100%; margin-top: .25rem; padding: .7rem;
+  font: inherit; font-weight: 400; color: inherit; background: var(--bg);
+  border: 1px solid var(--line); border-radius: .5rem;
+}
+textarea { resize: vertical; }
+
+button, .button {
+  display: inline-block; min-height: 2.75rem; margin-top: 1rem; padding: .6rem 1.4rem;
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+  color: var(--accent-text); background: var(--accent); border: 0; border-radius: 2rem;
+}
+button:disabled { opacity: .6; cursor: progress; }
+button.quiet { color: var(--danger); background: none; border: 1px solid currentColor; }
+.wide { width: 100%; }
+
+/* Spotify's guidelines: official logo files, black on light backgrounds and white on dark ones.
+   Inverting the black file gives exactly the white one. Logo ≥70px wide, icon ≥21px. */
+.spotify-logo { height: 24px; width: auto; vertical-align: middle; }
+.spotify-icon { height: 22px; width: auto; vertical-align: middle; }
+@media (prefers-color-scheme: dark) {
+  .spotify-logo, .spotify-icon { filter: invert(1); }
+}
+
+/* "OPEN SPOTIFY": the full logo with clear space of half the icon height around it */
+.open-spotify {
+  display: inline-flex; align-items: center; gap: 12px; min-height: 2.75rem; margin-top: 1rem; padding: 0 1rem;
+  border: 1px solid var(--line); border-radius: 2rem; text-decoration: none; font-weight: 700; letter-spacing: .03em;
+}
+
+/* One link per row. min-height 44px leaves the 22px icon its clear space of half its height above and below */
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { border-bottom: 1px solid var(--line); }
+.list a { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .5rem 0; text-decoration: none; }
+.list .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.list .what small { display: block; }
+.list .n { color: var(--muted); min-width: 1.5rem; text-align: right; }
+
+details { margin-top: 2rem; }
+summary { cursor: pointer; padding: .6rem 0; }
+footer.page { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); }

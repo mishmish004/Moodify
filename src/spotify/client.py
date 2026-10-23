@@ -30,6 +30,11 @@ class Track:
     artists: tuple[str, ...]
     duration_ms: int
 
+    @property
+    def url(self) -> str:
+        """open.spotify.com link: Spotify's guidelines want every track shown to link back."""
+        return "https://open.spotify.com/track/" + self.uri.rsplit(":", 1)[-1]
+
 
 @dataclass(frozen=True)
 class Playlist:

@@ -23,7 +23,10 @@ def get(playlist_id: int, spotify_id: str) -> Optional[sqlite3.Row]:
 
 
 def recent(spotify_id: str, limit: int = 5) -> list[sqlite3.Row]:
+    """Newest first, with track_count. limit=-1 means all of them (SQLite's "no limit")."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM playlists WHERE spotify_id = ? ORDER BY id DESC LIMIT ?", (spotify_id, limit)
+            "SELECT *, json_array_length(track_uris_json) AS track_count FROM playlists"
+            " WHERE spotify_id = ? ORDER BY id DESC LIMIT ?",
+            (spotify_id, limit),
         ).fetchall()

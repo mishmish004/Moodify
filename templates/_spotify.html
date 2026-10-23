@@ -1,0 +1,23 @@
+{# Spotify's design guidelines: Spotify metadata always comes with the Spotify logo and links back to Spotify.
+   The full logo goes next to playlists; the icon alone is allowed where there's no room, so track rows get the icon. #}
+
+{% macro logo() -%}
+<img class="spotify-logo" src="/static/spotify-logo.svg" alt="Spotify" width="88" height="24">
+{%- endmacro %}
+
+{% macro icon() -%}
+<img class="spotify-icon" src="/static/spotify-icon.svg" alt="on Spotify" width="23" height="22">
+{%- endmacro %}
+
+{% macro open_spotify(url) -%}
+<a class="open-spotify" href="{{ url }}">{{ logo() }}<span>OPEN SPOTIFY</span></a>
+{%- endmacro %}
+
+{# Rows from the playlists table, with track_count #}
+{% macro playlist_list(rows) -%}
+<ul class="list">
+  {% for p in rows %}
+  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.prompt }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}</small></span>{{ icon() }}</a></li>
+  {% endfor %}
+</ul>
+{%- endmacro %}

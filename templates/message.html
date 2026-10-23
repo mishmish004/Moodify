@@ -1,6 +1,9 @@
 {% extends "base.html" %}
+{% from "_spotify.html" import open_spotify %}
+{% block title %}Moodify · {{ title }}{% endblock %}
 {% block content %}
 <h1>{{ title }}</h1>
 <p>{{ text }}</p>
-<p><a href="/">Back</a></p>
+{% if spotify_url %}{{ open_spotify(spotify_url) }}{% endif %}
+<p><a class="button" href="/">Back</a></p>
 {% endblock %}

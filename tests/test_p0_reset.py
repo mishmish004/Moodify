@@ -102,7 +102,9 @@ def test_dockerignore_excludes(rel):
     assert _dockerignored(rel, _dockerignore_patterns()), f"{rel} would be sent to the Docker build context"
 
 
-@pytest.mark.parametrize("rel", ["requirements.txt", "src/main.py", "src/db.py", "src/schema.sql"])
+@pytest.mark.parametrize(
+    "rel", ["requirements.txt", "src/main.py", "src/db.py", "src/schema.sql", "templates/base.html", "static/style.css"]
+)
 def test_dockerignore_keeps_what_the_image_needs(rel):
     assert not _dockerignored(rel, _dockerignore_patterns()), f"{rel} is excluded but the image needs it"
 

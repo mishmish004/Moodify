@@ -1,27 +1,31 @@
 {% extends "base.html" %}
+{% from "_spotify.html" import logo, playlist_list %}
 {% block content %}
-<h1>Moodify</h1>
-<p>Hi {{ user.display_name or user.spotify_id }}. <a href="/onboarding">Edit your taste</a></p>
-<form method="post" action="/playlist">
-  <label>How are you feeling? What are you doing?
-    <textarea name="mood" required maxlength="300" rows="3" placeholder="e.g. rainy sunday, a bit nostalgic, nothing sleepy"></textarea>
-  </label>
-  <button type="submit">Make a playlist</button>
+<h1>How are you feeling?</h1>
+<form method="post" action="/playlist" data-busy="Making your playlist…">
+  <label for="mood">The mood, the moment, or what you're doing</label>
+  <textarea id="mood" name="mood" required maxlength="300" rows="3" placeholder="e.g. rainy sunday, a bit nostalgic, nothing sleepy"></textarea>
+  <button type="submit" class="wide">Make a playlist</button>
 </form>
-<p><small>Takes up to a minute: the suggestions come from an AI model, then each song is looked up on Spotify.</small></p>
+<p><small>Takes up to a minute: an AI model suggests the songs, then each one is looked up on Spotify.</small></p>
+
 {% if recent %}
 <h2>Recent playlists</h2>
-<ul>
-  {% for p in recent %}
-  <li><a href="{{ p.spotify_url }}">{{ p.prompt }}</a> <small>{{ p.created_at }}</small></li>
-  {% endfor %}
-</ul>
+{{ playlist_list(recent) }}
+<p><a href="/history">All your playlists</a></p>
 {% endif %}
+
 <details>
   <summary>What the model is told about your taste</summary>
   <p><small>{{ summary }}</small></p>
+  <p><small>Top artists and tracks from</small> {{ logo() }}</p>
+  <p><a href="/onboarding">Change your answers</a></p>
 </details>
-<form method="post" action="/disconnect" onsubmit="return confirm('Delete your Moodify data?')">
-  <button type="submit">Disconnect</button>
-</form>
+
+<footer class="page">
+  <p class="muted">Logged in as {{ user.display_name or user.spotify_id }}.</p>
+  <form method="post" action="/disconnect" onsubmit="return confirm('Delete everything Moodify stored about you?')">
+    <button type="submit" class="quiet">Disconnect and delete my data</button>
+  </form>
+</footer>
 {% endblock %}

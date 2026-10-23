@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% from "_spotify.html" import playlist_list %}
+{% block title %}Moodify · your playlists{% endblock %}
+{% block content %}
+<h1>Your playlists</h1>
+{% if rows %}
+{{ playlist_list(rows) }}
+{% else %}
+<p>Nothing yet. <a href="/">Make your first playlist</a>.</p>
+{% endif %}
+{% endblock %}
