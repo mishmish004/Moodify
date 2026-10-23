@@ -7,17 +7,22 @@ from src.db import get_conn
 from src.spotify.client import Track
 
 
-def insert(spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track], brief_json: Optional[str] = None) -> int:
-    """The playlist row and its tracks, in order, in one transaction."""
+def insert(
+    spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track], brief_json: Optional[str] = None,
+    sections: Optional[list[int]] = None,
+) -> int:
+    """The playlist row and its tracks, in order, in one transaction. `sections`: each track's section index."""
+    sections = sections or [None] * len(tracks)
     with get_conn() as conn:
         playlist_id = conn.execute(
             "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json, brief_json) VALUES (?, ?, ?, ?, ?)",
             (spotify_id, prompt, spotify_url, json.dumps([t.uri for t in tracks]), brief_json),
         ).lastrowid
         conn.executemany(
-            "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            [(playlist_id, i, t.uri, t.name, json.dumps(list(t.artists)), t.duration_ms) for i, t in enumerate(tracks)],
+            "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms, section)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(playlist_id, i, t.uri, t.name, json.dumps(list(t.artists)), t.duration_ms, section)
+             for i, (t, section) in enumerate(zip(tracks, sections))],
         )
         return playlist_id
 
@@ -38,6 +43,17 @@ def tracks(playlist_id: int) -> list[Track]:
             (playlist_id,),
         ).fetchall()
     return [Track(r["uri"], r["name"], tuple(json.loads(r["artists_json"])), r["duration_ms"]) for r in rows]
+
+
+def section_minutes(playlist_id: int) -> dict[int, float]:
+    """How long each section came out, by section index."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT section, sum(duration_ms) / 60000.0 FROM playlist_tracks WHERE playlist_id = ? AND section IS NOT NULL"
+            " GROUP BY section",
+            (playlist_id,),
+        ).fetchall()
+    return {int(section): minutes for section, minutes in rows}
 
 
 def recent(spotify_id: str, limit: int = 5) -> list[sqlite3.Row]:

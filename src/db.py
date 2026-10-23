@@ -54,6 +54,16 @@ MIGRATIONS = [
     """
     ALTER TABLE playlists ADD COLUMN brief_json TEXT;
     """,
+    # 4 (Phase 12): search results per user
+    """
+    CREATE TABLE IF NOT EXISTS search_cache (
+        spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        query        TEXT NOT NULL,
+        tracks_json  TEXT NOT NULL,
+        fetched_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (spotify_id, query)
+    );
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

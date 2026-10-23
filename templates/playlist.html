@@ -8,7 +8,7 @@
 {% endif %}
 <h1>Moodify: {{ title }}</h1>
 {% if tracks %}
-<p class="muted">{{ tracks | length }} tracks, saved as a private playlist in your Spotify account.</p>
+<p class="muted">{{ tracks | length }} tracks, {{ total_minutes // 60 ~ " h " if total_minutes >= 60 else "" }}{{ total_minutes % 60 }} min, saved as a private playlist in your Spotify account.</p>
 {% else %}
 <p class="muted">This playlist was made before Moodify kept track lists. Open it in Spotify to see the songs.</p>
 {% endif %}
@@ -25,7 +25,7 @@
   {% if brief.sections | length > 1 %}
   <ol>
     {% for s in brief.sections %}
-    <li><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min{% endif %}{% if not loop.first and s.transition_in == "cut" %} <small>(straight in)</small>{% endif %}</li>
+    <li><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min asked{% endif %}{% if loop.index0 in section_minutes %}, {{ section_minutes[loop.index0] | round | int }} min made{% endif %}{% if not loop.first and s.transition_in == "cut" %} <small>(straight in)</small>{% endif %}</li>
     {% endfor %}
   </ol>
   {% endif %}

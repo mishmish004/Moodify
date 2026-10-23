@@ -13,10 +13,11 @@ from src.spotify import auth
 from src.spotify.client import API_URL, SpotifyClient, Track
 from src.suggest import Song
 
-from .conftest import finish_build, mock_listening, tracks
+from .conftest import default_brief, finish_build, mock_listening, tracks
 from .test_p4_taste import ONBOARDING
 
 CHAT_URL = "https://api.openai.com/v1/chat/completions"
+SONG_MS = 210_000  # every fake track is 3.5 minutes, so lengths (Phase 12) are easy to reason about
 
 
 # --- pick --------------------------------------------------------------------------
@@ -82,8 +83,8 @@ class FakeSpotify:
             return httpx.Response(200, json={"tracks": {"items": []}})
         # A decoy with the wrong artist comes first; pick() must skip it
         items = [
-            {"uri": f"spotify:track:decoy-{title}", "name": title, "artists": [{"name": "Someone Else"}], "duration_ms": 1},
-            {"uri": f"spotify:track:{self.found[title]}", "name": title, "artists": [{"name": artist}], "duration_ms": 1},
+            {"uri": f"spotify:track:decoy-{title}", "name": title, "artists": [{"name": "Someone Else"}], "duration_ms": SONG_MS},
+            {"uri": f"spotify:track:{self.found[title]}", "name": title, "artists": [{"name": artist}], "duration_ms": SONG_MS},
         ]
         return httpx.Response(200, json={"tracks": {"items": items}})
 
@@ -122,7 +123,9 @@ def _playlist_rows():
         return conn.execute("SELECT * FROM playlists").fetchall()
 
 
-def test_end_to_end_24_of_30_match(logged_in, respx_mock):
+def test_end_to_end_24_of_30_match(logged_in, respx_mock, briefs):
+    # Phase 12: length decides how many tracks; 90 minutes needs all 24 matches (24 x 3.5 = 84, window 81-99)
+    briefs.answer = default_brief("rainy sunday", total_minutes=90)
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))
     found = {f"Song {i}": f"t{i}" for i in range(30) if i % 5 != 0}  # 6 of 30 don't exist
     sp = FakeSpotify(respx_mock, found)
@@ -145,12 +148,13 @@ def test_end_to_end_24_of_30_match(logged_in, respx_mock):
     assert json.loads(rows[0]["track_uris_json"]) == uris
 
 
-def test_stops_searching_at_25(logged_in, respx_mock):
+def test_stops_searching_once_the_playlist_is_long_enough(logged_in, respx_mock):
+    # Phase 12 replaced "stop at 25": no length given means 60 minutes (window 54-66), so 16 songs of 3.5 min
     respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(30)})
     _build(logged_in, "upbeat")
-    assert len(sp.added_uris()) == 25
-    assert sp.search.call_count == 25
+    assert len(sp.added_uris()) == 16
+    assert sp.search.call_count == 16
 
 
 def test_duplicate_suggestions_resolve_to_one_uri(logged_in, respx_mock):
@@ -166,7 +170,8 @@ def test_duplicate_suggestions_resolve_to_one_uri(logged_in, respx_mock):
     assert len(uris) == 11
 
 
-def test_fewer_than_8_matches_asks_once_more(logged_in, respx_mock):
+def test_too_short_asks_once_more(logged_in, respx_mock):
+    # Phase 12 replaced "under 8 matches": 5 found is 17.5 of 60 minutes, so 42.5 are missing
     chat = respx_mock.post(CHAT_URL).mock(side_effect=[
         httpx.Response(200, json=_completion(_songs(30))),
         httpx.Response(200, json=_completion(_songs(15, start=100))),
@@ -179,7 +184,7 @@ def test_fewer_than_8_matches_asks_once_more(logged_in, respx_mock):
     assert resp.status_code == 200
     assert chat.call_count == 2
     second = json.loads(chat.calls[1].request.content)["messages"][-1]["content"]
-    assert "15 songs" in second and "Song 1 by Artist 1" in second
+    assert "Your mood: 19 songs" in second and "Song 1 by Artist 1" in second  # ceil(1.5 x 42.5 / 3.5)
     assert len(sp.added_uris()) == 15
 
 

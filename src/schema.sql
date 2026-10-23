@@ -66,3 +66,12 @@ CREATE TABLE IF NOT EXISTS job_events (
 );
 
 CREATE INDEX IF NOT EXISTS job_events_by_job ON job_events (job_id, id);
+
+-- Spotify search results per user, 7 days (src/search_cache.py)
+CREATE TABLE IF NOT EXISTS search_cache (
+    spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    query        TEXT NOT NULL,
+    tracks_json  TEXT NOT NULL,
+    fetched_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (spotify_id, query)
+);

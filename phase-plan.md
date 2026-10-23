@@ -70,7 +70,7 @@ Four layers. Each says what is cached, how it's invalidated, and where it's buil
 
 1. **Spotify reads** (saves quota and time)
    - Taste profile and known-songs pool: per user, 24 h, rebuilt on new onboarding answers (Phase 10)
-   - Search results: `search_cache(key, candidates_json, fetched_at)`, keyed on normalized title + artist, 7 days; shared across users because results don't depend on the user (Phase 12). A cache hit doesn't count toward the per-build search limit
+   - Search results: `search_cache(spotify_id, query, tracks_json, fetched_at)`, keyed on title + artist, 7 days, per user because Spotify's results follow each user's market (Phase 12). A cache hit doesn't count toward the per-build search limit
 2. **Derived memory** (saves LLM calls and keeps prompts stable)
    - Lessons are extracted and consolidated once, when a review is saved, in the background; never per build (Phase 15). ADK compacts history asynchronously the same way
    - `users.memory_block` and `users.memory_version`: the rendered memory text, rebuilt only when lessons, likes or ratings change (Phase 16)
@@ -190,23 +190,25 @@ Done 2026-10-23. Live eval: 18/18 fixtures read right on `gpt-6.1-sol` (the conf
 Goal: a playlist lasts as long as asked, and its songs fit the request, using Spotify's real track lengths.
 
 Build
-- [ ] Target length: sum of section minutes, else `total_minutes`, else 60 min. Hard cap 3 h / 100 tracks (quota)
-- [ ] Over-ask: request songs per section for about 1.5× its minutes at ~3.5 min/song, so there is choice after matching
-- [ ] `src/fill.py`: pure function `fill(section_minutes, candidates) -> tracks`. Add matched tracks in suggested order until the section is within ±10% or ±3 min, whichever is larger; never cut a song mid-way. Drop tracks breaking `max_track_minutes` / `min_track_minutes`
-- [ ] Short section after matching → one extra LLM call for that section only (replaces the global "under 8 → 15 more")
-- [ ] `search_cache` (caching layer 1): normalized title + artist → candidates, 7 days
-- [ ] Result page and playlist description show total length and each section's length
-- [ ] Count searches per build (cache hits excluded) into `job_events`; refuse to start a build that would exceed 150 searches
+- [x] Target length: sum of section minutes, else `total_minutes`, else 60 min. Hard cap 3 h / 100 tracks (quota)
+- [x] Over-ask: request songs per section for about 1.5× its minutes at ~3.5 min/song, so there is choice after matching
+- [x] `src/fill.py`: pure function `fill(section_minutes, candidates) -> tracks`. Add matched tracks in suggested order until the section is within ±10% or ±3 min, whichever is larger; never cut a song mid-way. Drop tracks breaking `max_track_minutes` / `min_track_minutes`
+- [x] Short section after matching → one extra LLM call for that section only (replaces the global "under 8 → 15 more")
+- [x] `search_cache` (caching layer 1): normalized title + artist → candidates, 7 days
+- [x] Result page and playlist description show total length and each section's length
+- [x] Count searches per build (cache hits excluded) into `job_events`; refuse to start a build that would exceed 150 searches
 
 Tests (`tests/test_p12_length.py`)
-- [ ] `fill` table tests: exact fit; overshoot by one long song stays within tolerance or drops it; no candidates; all too long for `max_track_minutes`
-- [ ] "workout for half an hour" section → 27–33 min
-- [ ] no length in prompt → 54–66 min
-- [ ] a short section triggers exactly one extra call, for that section only
-- [ ] the same song searched twice within 7 days → one Spotify call; after 7 days → two
-- [ ] `live`: "45 minute commute, chill" → 40.5–49.5 min
+- [x] `fill` table tests: exact fit; overshoot by one long song stays within tolerance or drops it; no candidates; all too long for `max_track_minutes`
+- [x] "workout for half an hour" section → 27–33 min
+- [x] no length in prompt → 54–66 min
+- [x] a short section triggers exactly one extra call, for that section only
+- [x] the same song searched twice within 7 days → one Spotify call; after 7 days → two
+- [x] `live`: "45 minute commute, chill" → 40.5–49.5 min
 
 Gate: `pytest tests/test_p12_length.py` green, and the live run is in range.
+
+Done 2026-10-23. Live: "45 minute commute, chill" gave 43.1 min (15 tracks, 6 known, 10 searches, 20 suggestions). Sections without a stated length share the rest of the total, or of 60 minutes (the 2026-10-23 prompt becomes 15 + 30 + 15). Different from the list above: the search cache is per user, not shared, because Spotify's results follow each user's market; short sections get one extra call together, not one call each; a song suggested twice is looked up once; the 100-track cap was dropped, since the 3-hour cap and the 150-search limit already bound a build.
 
 ---
 

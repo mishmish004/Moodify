@@ -13,7 +13,7 @@ from src.db import get_conn, init_db
 from src.main import app
 from src.spotify import auth
 
-from .conftest import ROOT, finish_build, tracks
+from .conftest import ROOT, default_brief, finish_build, tracks
 from .test_p6_playlist import CHAT_URL, FakeSpotify, _build, _completion, _playlist_rows, _songs, logged_in, user  # noqa: F401
 
 V0_SCHEMA = (ROOT / "tests" / "fixtures" / "schema_v0.sql").read_text()  # schema.sql as of Phase 8
@@ -39,7 +39,7 @@ def test_first_call_times_out_and_the_retry_gives_a_full_playlist(logged_in, res
     resp = _build(logged_in, "summer morning, then workout")
     assert resp.status_code == 200
     assert chat.call_count == 2
-    assert len(sp.added_uris()) == 25  # not the 15-song fallback
+    assert len(sp.added_uris()) == 16  # a full 60 minutes (Phase 12), not the 15-song fallback
 
 
 def test_both_calls_failing_explains_and_saves_nothing(logged_in, respx_mock):
@@ -78,7 +78,8 @@ def test_post_answers_at_once_and_the_job_page_shows_progress(logged_in, respx_m
     assert ">Song 3<" in done.text
 
 
-def test_second_submit_while_running_joins_the_same_build(logged_in, respx_mock):
+def test_second_submit_while_running_joins_the_same_build(logged_in, respx_mock, briefs):
+    briefs.answer = default_brief("focus", total_minutes=35)  # 10 songs of 3.5 min: no top-up call
     chat = respx_mock.post(CHAT_URL).mock(side_effect=_slow(0.5, httpx.Response(200, json=_completion(_songs(10)))))
     FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
     first = logged_in.post("/playlist", data={"mood": "focus"})
@@ -88,7 +89,8 @@ def test_second_submit_while_running_joins_the_same_build(logged_in, respx_mock)
     assert chat.call_count == 1 and len(_playlist_rows()) == 1
 
 
-def test_finished_job_logs_every_step_with_token_counts(logged_in, respx_mock):
+def test_finished_job_logs_every_step_with_token_counts(logged_in, respx_mock, briefs):
+    briefs.answer = default_brief("gym", total_minutes=45)  # window 40.5-49.5: all 12 songs below (42 min)
     completion = _completion(_songs(12))
     completion["usage"] = {"prompt_tokens": 1200, "completion_tokens": 300, "total_tokens": 1500,
                            "prompt_tokens_details": {"cached_tokens": 1024}}
@@ -116,10 +118,11 @@ def test_finished_job_logs_every_step_with_token_counts(logged_in, respx_mock):
     searches = [e for e in events if e["kind"] == "search"]
     assert len(searches) == 12 and all(e["matched"] for e in searches)
     assert events[-1]["kind"] == "built" and events[-1]["tracks"] == 12 and events[-1]["searched"] == 12
-    assert any("12 tracks (0 known) from 12 searches (12 suggestions)" in r.getMessage() for r in records)
+    assert any("12 tracks, 42 min (0 known) from 12 searches (12 suggestions)" in r.getMessage() for r in records)
 
 
-def test_failed_attempts_are_logged_too(logged_in, respx_mock):
+def test_failed_attempts_are_logged_too(logged_in, respx_mock, briefs):
+    briefs.answer = default_brief("x", total_minutes=35)
     respx_mock.post(CHAT_URL).mock(side_effect=[httpx.ReadTimeout("t"), httpx.Response(200, json=_completion(_songs(10)))])
     FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
     post = logged_in.post("/playlist", data={"mood": "x"})
