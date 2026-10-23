@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if reason == "scopes" %}
+<p class="notice">Moodify can now use more of your Spotify: your liked songs, what you played recently, the artists you follow and your playlists. Please log in again to allow it. Nothing you saved is lost.</p>
+{% endif %}
 <h1>Playlists for the mood you're in</h1>
 <p>Describe how you feel or what you're doing. Moodify picks songs that fit, in the style you like, and saves them as a private playlist in your Spotify account.</p>
 {# POST, not a link: starting the Spotify login from a GET lets prefetchers and crawlers use up the one-time state #}
@@ -10,9 +13,9 @@
 
 <h2>What happens to your data</h2>
 <ul>
-  <li>Each mood you type is sent to OpenAI together with your answers to six taste questions and your most played artists and tracks on Spotify, so its model can suggest songs.</li>
-  <li>Moodify stores your Spotify ID and name, a login token, your answers, that taste summary, and the playlists it made for you (links and track IDs).</li>
-  <li>It can create playlists in your account and, when you press Play now, add songs to your queue. It can't see your existing playlists.</li>
+  <li>Each mood you type is sent to OpenAI with your answers to the taste questions and a summary of your Spotify listening, so its model can suggest songs. The summary covers your most played artists and tracks, what you played recently, some of your liked songs, the artists you follow and your playlists' names. Up to 150 songs you know are listed too, so some can go into your playlists.</li>
+  <li>Moodify stores your Spotify ID and name, a login token and which Spotify permissions you gave, your answers, that summary and song list (refreshed daily), and the playlists it made for you with their tracks.</li>
+  <li>It can read your listening history, liked songs, followed artists and playlists; create playlists in your account; add songs to your liked songs when you like them in Moodify; and, when you press Play now, add songs to your queue.</li>
   <li>Disconnect, at the bottom of the home page, deletes everything Moodify stored about you at once. To remove its access to Spotify as well, go to <a href="https://www.spotify.com/account/apps/">spotify.com/account/apps</a>.</li>
 </ul>
 {% endblock %}

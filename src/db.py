@@ -45,6 +45,11 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS job_events_by_job ON job_events (job_id, id);
     """,
+    # 2 (Phase 10): granted scopes, known-songs pool
+    """
+    ALTER TABLE users ADD COLUMN granted_scopes TEXT;
+    ALTER TABLE users ADD COLUMN taste_pool_json TEXT;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

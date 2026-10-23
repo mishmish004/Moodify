@@ -6,6 +6,7 @@ Shapes as of the Feb 2026 changes: playlists are created with POST /me/playlists
 playlist objects say `items`/`item` where they used to say `tracks`/`track`.
 Search still answers under `tracks` -> `items`, at most 10 results. Track
 popularity and /me's country, email and product are gone, so nothing reads them.
+Playlist items are readable only for playlists the user owns or collaborates on (403 otherwise).
 """
 import time
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from src.spotify import auth
 
 API_URL = "https://api.spotify.com/v1"
 SEARCH_LIMIT = 10      # Spotify's maximum since Feb 2026
+PAGE = 50              # the most items one page of library, history or playlist reads returns
 ADD_ITEMS_BATCH = 100  # most URIs one POST /playlists/{id}/items accepts
 MAX_WAIT = 10.0        # seconds; a longer Retry-After is a real back-off, not something to sleep through
 
@@ -40,6 +42,14 @@ class Track:
 class Playlist:
     id: str
     url: str
+
+
+@dataclass(frozen=True)
+class UserPlaylist:
+    """One of the user's playlists from GET /me/playlists. Only `readable` ones have items we can fetch."""
+    id: str
+    name: str
+    readable: bool  # owned by the user, or collaborative
 
 
 class SpotifyClient:
@@ -69,13 +79,51 @@ class SpotifyClient:
     def me(self) -> dict:
         return self._request("GET", "/me")
 
-    def top_artists(self, limit: int = 20) -> list[str]:
-        data = self._request("GET", "/me/top/artists", params={"limit": limit, "time_range": "medium_term"})
+    def top_artists(self, limit: int = 20, time_range: str = "medium_term") -> list[str]:
+        """time_range: short_term (about 4 weeks), medium_term (6 months) or long_term (years)."""
+        data = self._request("GET", "/me/top/artists", params={"limit": limit, "time_range": time_range})
         return [artist["name"] for artist in data["items"]]
 
     def top_tracks(self, limit: int = 20) -> list[Track]:
         data = self._request("GET", "/me/top/tracks", params={"limit": limit, "time_range": "medium_term"})
         return [_track(item) for item in data["items"]]
+
+    def recently_played(self, limit: int = PAGE) -> list[Track]:
+        data = self._request("GET", "/me/player/recently-played", params={"limit": limit})
+        return _unwrap(data["items"])
+
+    def saved_tracks(self, max_tracks: int = 200) -> list[Track]:
+        """Liked Songs, newest first, one page of 50 at a time until max_tracks or the end."""
+        found: list[Track] = []
+        offset = 0
+        while len(found) < max_tracks:
+            data = self._request("GET", "/me/tracks", params={"limit": PAGE, "offset": offset})
+            found += _unwrap(data["items"])
+            if not data.get("next") or not data["items"]:
+                break
+            offset += PAGE
+        return found[:max_tracks]
+
+    def followed_artists(self, limit: int = PAGE) -> list[str]:
+        data = self._request("GET", "/me/following", params={"type": "artist", "limit": limit})
+        return [artist["name"] for artist in data["artists"]["items"] if artist]
+
+    def my_playlists(self, limit: int = PAGE) -> list[UserPlaylist]:
+        data = self._request("GET", "/me/playlists", params={"limit": limit})
+        return [
+            UserPlaylist(p["id"], p["name"], p["owner"]["id"] == self.spotify_id or bool(p.get("collaborative")))
+            for p in data["items"] if p
+        ]
+
+    def playlist_items(self, playlist_id: str, limit: int = PAGE) -> list[Track]:
+        """The first `limit` tracks. A playlist the user only follows answers 403 since Feb 2026: that gives []."""
+        try:
+            data = self._request("GET", f"/playlists/{playlist_id}/items", params={"limit": limit})
+        except SpotifyError as exc:
+            if exc.status == 403:
+                return []
+            raise
+        return _unwrap(data["items"])
 
     def search_track(self, title: str, artist: str) -> list[Track]:
         params = {"q": f"track:{title} artist:{artist}", "type": "track", "limit": SEARCH_LIMIT}
@@ -145,3 +193,15 @@ def _retry_after(resp: httpx.Response) -> float:
 
 def _track(item: dict) -> Track:
     return Track(item["uri"], item["name"], tuple(a["name"] for a in item["artists"]), item["duration_ms"])
+
+
+def _unwrap(entries: list[dict]) -> list[Track]:
+    """Tracks from list entries that wrap one: {"track": ...} in history and Liked Songs, {"item": ...} in
+    playlists since Feb 2026. Skips podcast episodes, local files and removed tracks (null)."""
+    tracks = []
+    for entry in entries:
+        item = (entry or {}).get("item") or (entry or {}).get("track")
+        if not item or item.get("type", "track") != "track" or entry.get("is_local") or item.get("is_local"):
+            continue
+        tracks.append(_track(item))
+    return tracks

@@ -6,14 +6,14 @@ from typing import Optional
 from src.db import get_conn
 
 
-def upsert(spotify_id: str, display_name: Optional[str], refresh_token: str) -> None:
-    """Create the user, or refresh name and token on a repeat login without touching onboarding or taste."""
+def upsert(spotify_id: str, display_name: Optional[str], refresh_token: str, granted_scopes: Optional[str] = None) -> None:
+    """Create the user, or refresh name, token and granted scopes on a repeat login without touching onboarding or taste."""
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO users (spotify_id, display_name, refresh_token) VALUES (?, ?, ?)"
-            " ON CONFLICT (spotify_id) DO UPDATE SET"
-            " display_name = excluded.display_name, refresh_token = excluded.refresh_token",
-            (spotify_id, display_name, refresh_token),
+            "INSERT INTO users (spotify_id, display_name, refresh_token, granted_scopes) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (spotify_id) DO UPDATE SET display_name = excluded.display_name,"
+            " refresh_token = excluded.refresh_token, granted_scopes = excluded.granted_scopes",
+            (spotify_id, display_name, refresh_token, granted_scopes),
         )
 
 
@@ -26,11 +26,12 @@ def set_onboarding(spotify_id: str, onboarding: dict) -> None:
         )
 
 
-def set_taste_summary(spotify_id: str, summary: str, updated_at: str) -> None:
+def set_taste_summary(spotify_id: str, summary: str, updated_at: str, pool_json: Optional[str] = None) -> None:
+    """The summary and the known-songs pool are cached together (src/taste.py)."""
     with get_conn() as conn:
         conn.execute(
-            "UPDATE users SET taste_summary = ?, taste_updated_at = ? WHERE spotify_id = ?",
-            (summary, updated_at, spotify_id),
+            "UPDATE users SET taste_summary = ?, taste_pool_json = ?, taste_updated_at = ? WHERE spotify_id = ?",
+            (summary, pool_json, updated_at, spotify_id),
         )
 
 

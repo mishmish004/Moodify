@@ -128,24 +128,26 @@ Done 2026-10-23: the live run gave 25 tracks (25/25 searches matched, one 31 s c
 Goal: suggestions draw on what you actually play and save, and playlists can include songs you already know.
 
 Build
-- [ ] Scopes: add `user-read-recently-played user-library-read user-library-modify user-follow-read playlist-read-private user-read-playback-state`. Phases 14 and 17 need the last ones, and adding them all now means friends re-consent only once
-- [ ] Store `granted_scopes` from the token response. When a needed scope is missing, redirect to `/login?reason=scopes`, and the login page explains why. This is the "re-consent flow" from plan.md's Later list
-- [ ] `src/spotify/client.py`: `recently_played(50)`, `saved_tracks(max=200)` (paged, 50 per page), `followed_artists()`, `my_playlists()`, `playlist_items(id)` for owned/collaborative playlists only (skip on 403). Each returns `Track` with `duration_ms`
-- [ ] `src/taste.py` v2: top artists for short and long term, recent plays, a sample of Liked Songs, followed artists, names of your own playlists. Summary cap 1,500 → 3,000 chars. Cached 24 h (caching layer 1)
-- [ ] Known-songs pool: Liked + recent + top tracks with URIs and lengths, cached with the summary. The LLM may pick from it by number, which needs no search, so the match is exact and costs no quota
-- [ ] Familiarity: default 30% known songs, changed by the prompt ("only songs I know", "discover new stuff") and an optional onboarding question
-- [ ] Login page: the data list names the new data that goes to OpenAI
+- [x] Scopes: add `user-read-recently-played user-library-read user-library-modify user-follow-read playlist-read-private user-read-playback-state`. Phases 14 and 17 need the last ones, and adding them all now means friends re-consent only once
+- [x] Store `granted_scopes` from the token response. When a needed scope is missing, redirect to `/login?reason=scopes`, and the login page explains why. This is the "re-consent flow" from plan.md's Later list
+- [x] `src/spotify/client.py`: `recently_played(50)`, `saved_tracks(max=200)` (paged, 50 per page), `followed_artists()`, `my_playlists()`, `playlist_items(id)` for owned/collaborative playlists only (skip on 403). Each returns `Track` with `duration_ms`
+- [x] `src/taste.py` v2: top artists for short and long term, recent plays, a sample of Liked Songs, followed artists, names of your own playlists. Summary cap 1,500 → 3,000 chars. Cached 24 h (caching layer 1)
+- [x] Known-songs pool: Liked + recent + top tracks with URIs and lengths, cached with the summary. The LLM may pick from it by number, which needs no search, so the match is exact and costs no quota
+- [x] Familiarity: default 30% known songs, changed by the prompt ("only songs I know", "discover new stuff") and an optional onboarding question
+- [x] Login page: the data list names the new data that goes to OpenAI
 
 Tests (`tests/test_p10_spotify_data.py`)
-- [ ] every new client method parses the Feb-2026 shapes (`items`/`item`, paging with `next`), with fixtures
-- [ ] `saved_tracks(max=200)` makes 4 requests and stops at `next: null`
-- [ ] `playlist_items` on a followed-only playlist (403) is skipped, not raised
-- [ ] a user whose `granted_scopes` lacks a new scope is sent to `/login?reason=scopes`
-- [ ] summary includes each data source and stays ≤3,000 chars; empty sources (new account) still give a valid summary
-- [ ] a pool song picked by number skips search entirely (assert no `/search` call)
+- [x] every new client method parses the Feb-2026 shapes (`items`/`item`, paging with `next`), with fixtures
+- [x] `saved_tracks(max=200)` makes 4 requests and stops at `next: null`
+- [x] `playlist_items` on a followed-only playlist (403) is skipped, not raised
+- [x] a user whose `granted_scopes` lacks a new scope is sent to `/login?reason=scopes`
+- [x] summary includes each data source and stays ≤3,000 chars; empty sources (new account) still give a valid summary
+- [x] a pool song picked by number skips search entirely (assert no `/search` call)
 - [ ] `live`: your account returns recent plays and Liked Songs, and the summary mentions artists from both
 
 Gate: `pytest tests/test_p10_spotify_data.py` green, and after re-login a live playlist has ~30% songs from your library.
+
+Code and offline tests done 2026-10-23. Picks from the pool are checked against title and artist before use, so a wrong number from the LLM falls back to search. Moodify's own playlists are left out of the profile. Live checks wait for a re-login (`.venv/bin/python -m pytest -m live tests/test_p10_spotify_data.py -s`).
 
 ---
 

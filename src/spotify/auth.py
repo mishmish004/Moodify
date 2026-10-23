@@ -22,6 +22,10 @@ TOKEN_URL = "https://accounts.spotify.com/api/token"
 ME_URL = "https://api.spotify.com/v1/me"
 SCOPES = (
     "user-top-read user-read-private playlist-modify-public playlist-modify-private user-modify-playback-state"
+    # Phase 10: listening history, Liked Songs, follows, own playlists; liking (Phase 14) and devices (Phase 17).
+    # Asked for together so friends re-consent once
+    " user-read-recently-played user-library-read user-library-modify user-follow-read playlist-read-private"
+    " user-read-playback-state"
 )
 TIMEOUT = 10.0
 
@@ -31,6 +35,12 @@ class Tokens:
     access_token: str
     refresh_token: str
     expires_in: int
+    scope: str = ""  # what the user granted, space-separated
+
+
+def missing_scopes(granted: str | None) -> set[str]:
+    """Scopes Moodify asks for that this user's login didn't grant (all of them if unknown)."""
+    return set(SCOPES.split()) - set((granted or "").split())
 
 
 def new_verifier() -> str:
@@ -66,7 +76,7 @@ def exchange_code(code: str, verifier: str) -> Tokens:
         "client_id": settings.SPOTIFY_CLIENT_ID,
         "code_verifier": verifier,
     })
-    return Tokens(data["access_token"], data["refresh_token"], int(data["expires_in"]))
+    return Tokens(data["access_token"], data["refresh_token"], int(data["expires_in"]), data.get("scope", ""))
 
 
 def refresh(refresh_token: str) -> Tokens:

@@ -115,7 +115,7 @@ def test_finished_job_logs_every_step_with_token_counts(logged_in, respx_mock):
     searches = [e for e in events if e["kind"] == "search"]
     assert len(searches) == 12 and all(e["matched"] for e in searches)
     assert events[-1]["kind"] == "built" and events[-1]["tracks"] == 12 and events[-1]["searched"] == 12
-    assert any("12 tracks from 12 searches (12 suggestions)" in r.getMessage() for r in records)
+    assert any("12 tracks (0 known) from 12 searches (12 suggestions)" in r.getMessage() for r in records)
 
 
 def test_failed_attempts_are_logged_too(logged_in, respx_mock):

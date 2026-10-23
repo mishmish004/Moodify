@@ -13,7 +13,7 @@ from src.spotify import auth
 from src.spotify.client import API_URL, SpotifyClient, Track
 from src.suggest import Song
 
-from .conftest import finish_build, tracks
+from .conftest import finish_build, mock_listening, tracks
 from .test_p4_taste import ONBOARDING
 
 CHAT_URL = "https://api.openai.com/v1/chat/completions"
@@ -64,11 +64,12 @@ def _completion(songs):
 class FakeSpotify:
     """respx routes for one scenario. `found` says which suggested titles exist on Spotify."""
 
-    def __init__(self, respx_mock, found):
+    def __init__(self, respx_mock, found, **listening):
         self.found = found
         respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "expires_in": 3600})
         respx_mock.get(f"{API_URL}/me/top/artists").respond(200, json={"items": [{"name": "Radiohead"}]})
         respx_mock.get(f"{API_URL}/me/top/tracks").respond(200, json={"items": []})
+        self.listening = mock_listening(respx_mock, **listening)  # Phase 10's other reads, empty by default
         self.search = respx_mock.get(f"{API_URL}/search").mock(side_effect=self._search)
         self.create = respx_mock.post(f"{API_URL}/me/playlists").respond(201, json={
             "id": "pl1", "external_urls": {"spotify": "https://open.spotify.com/playlist/pl1"}})
@@ -103,7 +104,8 @@ def logged_in(user, respx_mock):
     client = TestClient(app, follow_redirects=False)
     with client:
         state = parse_qs(urlsplit(client.post("/login").headers["location"]).query)["state"][0]
-        respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "refresh_token": "refresh-1", "expires_in": 3600})
+        respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "refresh_token": "refresh-1", "expires_in": 3600,
+                                                           "scope": auth.SCOPES})
         respx_mock.get(auth.ME_URL).respond(200, json={"id": "friend1", "display_name": "Friend One"})
         client.get("/callback", params={"code": "c", "state": state})
         respx_mock.routes.clear()

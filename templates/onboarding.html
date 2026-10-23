@@ -2,7 +2,7 @@
 {% block title %}Moodify · about your taste{% endblock %}
 {% block content %}
 <h1>Tell Moodify about your taste</h1>
-<p>Six quick questions. Together with your most played artists on Spotify they shape every playlist.</p>
+<p>Seven quick questions. Together with your most played artists on Spotify they shape every playlist.</p>
 <form method="post" action="/onboarding">
   <label>Favourite genres
     <input name="genres" required maxlength="200" value="{{ answers.genres or '' }}" placeholder="e.g. indie rock, bollywood, lo-fi">
@@ -28,6 +28,13 @@
   </label>
   <label>Anything to avoid <small>(optional)</small>
     <input name="avoid" maxlength="200" value="{{ answers.avoid or '' }}" placeholder="e.g. no country, nothing explicit">
+  </label>
+  <label>Songs you already know, or new ones?
+    <select name="familiar">
+      {% for value, text in [("new", "Mostly new to me"), ("mix", "A mix (about a third I know)"), ("known", "Mostly ones I know")] %}
+      <option value="{{ value }}" {% if (answers.familiar or "mix") == value %}selected{% endif %}>{{ text }}</option>
+      {% endfor %}
+    </select>
   </label>
   <button type="submit" class="wide">Save</button>
 </form>

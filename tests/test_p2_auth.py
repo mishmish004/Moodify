@@ -40,7 +40,8 @@ def _start_login(client) -> dict:
 
 def _mock_spotify(respx_mock, spotify_id="friend1", display_name="Friend One", me_status=200):
     token = respx_mock.post(auth.TOKEN_URL).respond(
-        200, json={"access_token": "access-1", "refresh_token": "refresh-1", "expires_in": 3600, "token_type": "Bearer"}
+        200, json={"access_token": "access-1", "refresh_token": "refresh-1", "expires_in": 3600, "token_type": "Bearer",
+                   "scope": auth.SCOPES}
     )
     me = respx_mock.get(auth.ME_URL).respond(me_status, json={"id": spotify_id, "display_name": display_name})
     return token, me
@@ -84,6 +85,9 @@ def test_authorize_url_has_pkce_scopes_and_state():
     assert set(q["scope"].split()) == {
         "user-top-read", "user-read-private", "playlist-modify-public",
         "playlist-modify-private", "user-modify-playback-state",
+        # Phase 10
+        "user-read-recently-played", "user-library-read", "user-library-modify", "user-follow-read",
+        "playlist-read-private", "user-read-playback-state",
     }
 
 

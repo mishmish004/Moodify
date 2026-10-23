@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS users (
     onboarding_json   TEXT,
     taste_summary     TEXT,
     taste_updated_at  TEXT,
-    created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Phase 10: space-separated scopes from the last login, and the cached known-songs pool (src/taste.py)
+    granted_scopes    TEXT,
+    taste_pool_json   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS playlists (

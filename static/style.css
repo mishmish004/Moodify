@@ -44,6 +44,7 @@ h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
 a { color: inherit; }
 small, .muted { color: var(--muted); }
 .hint { display: block; margin-top: .4rem; }
+.notice { padding: .75rem 1rem; border: 1px solid var(--line); border-radius: .5rem; }
 
 label { display: block; margin-top: 1rem; font-weight: 600; }
 input, select, textarea {

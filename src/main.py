@@ -60,12 +60,16 @@ app.mount("/static", StaticFiles(directory=PROJECT_ROOT / "static"), name="stati
 
 
 class LoginRequired(Exception):
-    """Raised by current_user; answered with a redirect to /login."""
+    """Raised by current_user; answered with a redirect to /login. `reason` is shown there."""
+
+    def __init__(self, reason: str = ""):
+        super().__init__(reason)
+        self.reason = reason
 
 
 @app.exception_handler(LoginRequired)
 def _redirect_to_login(request: Request, exc: LoginRequired) -> RedirectResponse:
-    return RedirectResponse("/login", status_code=303)
+    return RedirectResponse(f"/login?reason={exc.reason}" if exc.reason else "/login", status_code=303)
 
 
 @app.exception_handler(ReauthRequired)
@@ -89,7 +93,8 @@ def _message(request: Request, title: str, text: str, status_code: int = 200, **
     )
 
 
-def current_user(request: Request) -> sqlite3.Row:
+def any_user(request: Request) -> sqlite3.Row:
+    """The logged-in user, whatever Spotify access they granted. Only /disconnect settles for this."""
     spotify_id = request.session.get("spotify_id")
     user = users.get(spotify_id) if spotify_id else None
     if user is None:
@@ -99,14 +104,22 @@ def current_user(request: Request) -> sqlite3.Row:
     return user
 
 
+def current_user(request: Request, user: sqlite3.Row = Depends(any_user)) -> sqlite3.Row:
+    if auth.missing_scopes(user["granted_scopes"]):
+        # Logged in before Moodify asked for more access (Phase 10). One new login grants it; data stays
+        request.session.clear()
+        raise LoginRequired("scopes")
+    return user
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get("/login")
-def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html")
+def login_page(request: Request, reason: str = ""):
+    return templates.TemplateResponse(request, "login.html", {"reason": reason})
 
 
 @app.post("/login")
@@ -134,7 +147,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
                             "Your Spotify account isn't on this app's allowlist yet. Ask the owner to add you, then log in again.",
                             status_code=403)
         return _message(request, "Login failed", "Spotify login failed. Please try again.", status_code=502)
-    users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token)
+    users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token, tokens.scope)
     request.session["spotify_id"] = profile["id"]
     return RedirectResponse("/", status_code=303)
 
@@ -250,17 +263,18 @@ def onboarding_submit(
     instrumental: Literal["yes", "no"] = Form("yes"),
     languages: str = Form("", max_length=200),
     avoid: str = Form("", max_length=200),
+    familiar: Literal["new", "mix", "known"] = Form(taste.DEFAULT_FAMILIAR),
 ) -> RedirectResponse:
     answers = {
         "genres": genres.strip(), "artists": artists.strip(), "energy": energy,
-        "instrumental": instrumental, "languages": languages.strip(), "avoid": avoid.strip(),
+        "instrumental": instrumental, "languages": languages.strip(), "avoid": avoid.strip(), "familiar": familiar,
     }
     users.set_onboarding(user["spotify_id"], answers)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/disconnect")
-def disconnect(request: Request, user: sqlite3.Row = Depends(current_user)):
+def disconnect(request: Request, user: sqlite3.Row = Depends(any_user)):
     # Spotify requires deleting a user's data within 5 days of disconnect; we do it now
     users.delete(user["spotify_id"])
     request.session.clear()
