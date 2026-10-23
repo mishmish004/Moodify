@@ -16,6 +16,11 @@ def upsert(spotify_id: str, display_name: Optional[str], refresh_token: str) -> 
         )
 
 
+def set_refresh_token(spotify_id: str, refresh_token: str) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET refresh_token = ? WHERE spotify_id = ?", (refresh_token, spotify_id))
+
+
 def get(spotify_id: str) -> Optional[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute("SELECT * FROM users WHERE spotify_id = ?", (spotify_id,)).fetchone()

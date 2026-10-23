@@ -91,18 +91,18 @@ Gate: `pytest tests/test_p2_auth.py` green and one real login works end to end.
 Goal: every Spotify call the app needs, in one small file, with retries.
 
 Build
-- [ ] `src/spotify/client.py` on `httpx`, about 100 lines: `me()`, `top_artists(limit)`, `top_tracks(limit)`, `search_track(title, artist)` (returns ≤10 candidates), `create_playlist(name, description)` (`POST /me/playlists`), `add_items(playlist_id, uris)` (`POST /playlists/{id}/items`, ≤100 per call), `queue(uri)`
-- [ ] Transparent access-token refresh on 401, one retry
-- [ ] On 429: sleep `Retry-After` and retry once; if the body says `QUOTA_EXCEEDED`, raise `SpotifyQuotaExceeded` so the caller can show a message instead of hammering
-- [ ] Response parsing uses the Feb-2026 field names (`items`, `item`), not `tracks`/`track`
+- [x] `src/spotify/client.py` on `httpx`, about 100 lines: `me()`, `top_artists(limit)`, `top_tracks(limit)`, `search_track(title, artist)` (returns ≤10 candidates), `create_playlist(name, description)` (`POST /me/playlists`), `add_items(playlist_id, uris)` (`POST /playlists/{id}/items`, ≤100 per call), `queue(uri)`
+- [x] Transparent access-token refresh on 401, one retry
+- [x] On 429: sleep `Retry-After` and retry once; if the body says `QUOTA_EXCEEDED`, raise `SpotifyQuotaExceeded` so the caller can show a message instead of hammering. A `Retry-After` over 10 s also raises instead of blocking the request
+- [x] Response parsing uses the Feb-2026 shapes: playlist objects say `items`/`item` instead of `tracks`/`track`; search results are still under `tracks.items` (checked against Spotify's docs on 2026-10-23). Create playlist and add items answer 201, queue answers 204
 
 Tests (`tests/test_p3_client.py`, all `respx`-mocked unless marked)
-- [ ] `search_track` builds `q=track:... artist:...`, `type=track`, `limit=10` and returns a list of `{uri, name, artists, duration_ms}`
-- [ ] `add_items` with 150 URIs makes two requests of 100 and 50
-- [ ] 401 → refresh → retry → success, and the new token is persisted
-- [ ] 429 with `Retry-After: 1` → one retry; `QUOTA_EXCEEDED` → `SpotifyQuotaExceeded`
-- [ ] non-2xx other than 401/429 raises `SpotifyError` with status and body
-- [ ] `live`: `search_track("Bohemian Rhapsody", "Queen")` returns at least one candidate whose artist is Queen
+- [x] `search_track` builds `q=track:... artist:...`, `type=track`, `limit=10` and returns a list of `{uri, name, artists, duration_ms}`
+- [x] `add_items` with 150 URIs makes two requests of 100 and 50
+- [x] 401 → refresh → retry → success, and the new token is persisted
+- [x] 429 with `Retry-After: 1` → one retry; `QUOTA_EXCEEDED` → `SpotifyQuotaExceeded`
+- [x] non-2xx other than 401/429 raises `SpotifyError` with status and body
+- [x] `live`: `search_track("Bohemian Rhapsody", "Queen")` returns at least one candidate whose artist is Queen
 
 Gate: `pytest tests/test_p3_client.py` green.
 

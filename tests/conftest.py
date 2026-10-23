@@ -18,8 +18,14 @@ TEST_ENV = {
 
 
 @pytest.fixture(autouse=True)
-def test_settings(monkeypatch, tmp_path) -> Settings:
-    """Ignore the real .env and any exported variables, so results don't depend on the machine."""
+def test_settings(request, monkeypatch, tmp_path) -> Settings:
+    """Ignore the real .env and any exported variables, so results don't depend on the machine.
+    Live tests are the exception: they use the real .env and data/moodify.db."""
+    get_settings.cache_clear()
+    if request.node.get_closest_marker("live"):
+        yield get_settings()
+        get_settings.cache_clear()
+        return
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     for name in Settings.model_fields:
         monkeypatch.delenv(name, raising=False)

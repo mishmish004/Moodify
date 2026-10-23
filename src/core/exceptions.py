@@ -16,3 +16,8 @@ class SpotifyError(MoodifyException):
 class ReauthRequired(SpotifyError):
     """The refresh token is dead (revoked, or past Spotify's 6-month limit); the user must log in again."""
     pass
+
+class SpotifyQuotaExceeded(SpotifyError):
+    """Spotify wants us to back off: the Dev Mode quota is used up, or a 429 persists or asks
+    for a longer wait than a request can sit through. Show a message; don't retry."""
+    pass
