@@ -113,18 +113,18 @@ Gate: `pytest tests/test_p3_client.py` green.
 Goal: a short form plus top artists becomes one paragraph of text we can hand to the LLM.
 
 Build
-- [ ] `GET/POST /onboarding`: 5–6 questions (favourite genres, 3 artists you love, energy preference, instrumental ok?, languages, anything to avoid). Store as `onboarding_json`
-- [ ] `src/taste.py`: `build_summary(onboarding, top_artists, top_tracks) -> str`. Plain string formatting, no LLM, under 1,500 characters
-- [ ] Cache in `users.taste_summary`; rebuild when `taste_updated_at` is older than 7 days or onboarding changes
-- [ ] After onboarding, redirect to `/` (the mood box)
+- [x] `GET/POST /onboarding`: 5–6 questions (favourite genres, 3 artists you love, energy preference, instrumental ok?, languages, anything to avoid). Store as `onboarding_json`
+- [x] `src/taste.py`: `build_summary(onboarding, top_artists, top_tracks) -> str`. Plain string formatting, no LLM, under 1,500 characters
+- [x] Cache in `users.taste_summary`; rebuild when `taste_updated_at` is older than 7 days or onboarding changes
+- [x] After onboarding, redirect to `/` (the mood box)
 
 Tests (`tests/test_p4_taste.py`)
-- [ ] `build_summary` on fixture data is deterministic and ≤1,500 chars
-- [ ] summary mentions every onboarding answer and the top 5 artists
-- [ ] empty top artists (new Spotify account) still produces a valid summary from onboarding alone
-- [ ] stale `taste_updated_at` (8 days) triggers a rebuild; fresh (1 day) does not (mock `top_artists`, assert call count)
-- [ ] `POST /onboarding` with a missing required field → 422 and nothing stored
-- [ ] logged-in user without onboarding hitting `/` → redirected to `/onboarding`
+- [x] `build_summary` on fixture data is deterministic and ≤1,500 chars
+- [x] summary mentions every onboarding answer and the top 5 artists
+- [x] empty top artists (new Spotify account) still produces a valid summary from onboarding alone
+- [x] stale `taste_updated_at` (8 days) triggers a rebuild; fresh (1 day) does not (mock `top_artists`, assert call count)
+- [x] `POST /onboarding` with a missing required field → 422 and nothing stored
+- [x] logged-in user without onboarding hitting `/` → redirected to `/onboarding`
 
 Gate: `pytest tests/test_p4_taste.py` green.
 
@@ -135,18 +135,18 @@ Gate: `pytest tests/test_p4_taste.py` green.
 Goal: mood + taste summary → about 30 `{title, artist}` pairs, every time, without crashing.
 
 Build
-- [ ] `src/suggest.py`: `suggest_songs(mood, taste_summary, n=30) -> list[Song]` with one OpenAI call using structured JSON output (`Song` is a Pydantic model: `title`, `artist`)
-- [ ] System prompt: suggest real, released songs that fit the mood and the taste; vary artists (max 2 songs per artist); no commentary
-- [ ] Cap `mood` input at 300 characters, strip control characters
-- [ ] Any parse or API error → log and return `[]`; never raise to the route
+- [x] `src/suggest.py`: `suggest_songs(mood, taste_summary, n=30) -> list[Song]` with one OpenAI call using structured JSON output (`Song` is a Pydantic model: `title`, `artist`)
+- [x] System prompt: suggest real, released songs that fit the mood and the taste; vary artists (max 2 songs per artist); no commentary
+- [x] Cap `mood` input at 300 characters, strip control characters
+- [x] Any parse or API error → log and return `[]`; never raise to the route
 
 Tests (`tests/test_p5_suggest.py`)
-- [ ] mocked response with 30 valid songs → 30 `Song` objects
-- [ ] mocked malformed JSON → `[]`, no exception, error logged
-- [ ] mocked API error (timeout, 500) → `[]`
-- [ ] the request body sent to OpenAI contains the mood, the taste summary and the configured model
-- [ ] a 2,000-character mood is truncated to 300 before sending
-- [ ] `live`: real call with "rainy sunday, nostalgic" returns ≥20 songs, each with non-empty title and artist, ≥10 distinct artists
+- [x] mocked response with 30 valid songs → 30 `Song` objects
+- [x] mocked malformed JSON → `[]`, no exception, error logged
+- [x] mocked API error (timeout, 500) → `[]`
+- [x] the request body sent to OpenAI contains the mood, the taste summary and the configured model
+- [x] a 2,000-character mood is truncated to 300 before sending
+- [x] `live`: real call with "rainy sunday, nostalgic" returns ≥20 songs, each with non-empty title and artist, ≥10 distinct artists
 
 Gate: `pytest tests/test_p5_suggest.py` green.
 

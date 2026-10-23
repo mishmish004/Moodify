@@ -1,4 +1,5 @@
 """The users table: who has logged in, and the refresh token Moodify acts with."""
+import json
 import sqlite3
 from typing import Optional
 
@@ -13,6 +14,23 @@ def upsert(spotify_id: str, display_name: Optional[str], refresh_token: str) -> 
             " ON CONFLICT (spotify_id) DO UPDATE SET"
             " display_name = excluded.display_name, refresh_token = excluded.refresh_token",
             (spotify_id, display_name, refresh_token),
+        )
+
+
+def set_onboarding(spotify_id: str, onboarding: dict) -> None:
+    """Save the questionnaire answers. New answers invalidate the cached taste summary."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET onboarding_json = ?, taste_summary = NULL, taste_updated_at = NULL WHERE spotify_id = ?",
+            (json.dumps(onboarding), spotify_id),
+        )
+
+
+def set_taste_summary(spotify_id: str, summary: str, updated_at: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET taste_summary = ?, taste_updated_at = ? WHERE spotify_id = ?",
+            (summary, updated_at, spotify_id),
         )
 
 

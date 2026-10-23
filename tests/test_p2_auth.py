@@ -149,9 +149,10 @@ def test_callback_logs_the_user_in(client, respx_mock):
     assert "client_secret" not in form
     assert auth.code_challenge(form["code_verifier"]) == params["code_challenge"]
 
+    # Logged in, but no onboarding yet: home sends them there (Phase 4)
     home = client.get("/")
-    assert home.status_code == 200
-    assert "Friend One" in home.text
+    assert home.status_code == 303
+    assert home.headers["location"] == "/onboarding"
 
 
 def test_repeat_login_updates_token_and_keeps_onboarding(client, respx_mock):
@@ -267,8 +268,8 @@ def test_session_cookie_is_signed(client, respx_mock):
     tampered = cookie[:-4] + ("AAAA" if not cookie.endswith("AAAA") else "BBBB")
     # A fresh client with an empty cookie jar, so only the header below is sent
     other = TestClient(app, follow_redirects=False)
-    assert other.get("/", headers={"cookie": f"moodify_session={cookie}"}).status_code == 200
-    assert other.get("/", headers={"cookie": f"moodify_session={tampered}"}).status_code == 303
+    assert other.get("/", headers={"cookie": f"moodify_session={cookie}"}).headers["location"] == "/onboarding"
+    assert other.get("/", headers={"cookie": f"moodify_session={tampered}"}).headers["location"] == "/login"
 
 
 # --- redirect URI rules -------------------------------------------------------

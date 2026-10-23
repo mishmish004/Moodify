@@ -1,19 +1,23 @@
+import json
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
+from typing import Literal
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import users
-from src.core.config import get_settings
-from src.core.exceptions import SpotifyError
+from src import taste, users
+from src.core.config import PROJECT_ROOT, get_settings
+from src.core.exceptions import ReauthRequired, SpotifyError
 from src.core.logger import MoodifyLogger
 from src.db import init_db
 from src.spotify import auth
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
+templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
 
 
 @asynccontextmanager
@@ -55,6 +59,13 @@ class LoginRequired(Exception):
 
 @app.exception_handler(LoginRequired)
 def _redirect_to_login(request: Request, exc: LoginRequired) -> RedirectResponse:
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.exception_handler(ReauthRequired)
+def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
+    # The stored refresh token is dead (revoked, or past 6 months): a fresh login replaces it
+    request.session.clear()
     return RedirectResponse("/login", status_code=303)
 
 
@@ -104,9 +115,36 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
 
 
 @app.get("/")
-def home(user: sqlite3.Row = Depends(current_user)) -> PlainTextResponse:
-    # Placeholder: Phase 4 sends new users to onboarding, Phase 7 renders the real page
-    return PlainTextResponse(f"Logged in as {user['display_name'] or user['spotify_id']}.")
+def home(user: sqlite3.Row = Depends(current_user)):
+    if not user["onboarding_json"]:
+        return RedirectResponse("/onboarding", status_code=303)
+    # Placeholder until Phase 7 renders the mood box; showing the summary lets the user check it
+    summary = taste.summary_for(user)
+    return PlainTextResponse(f"Logged in as {user['display_name'] or user['spotify_id']}.\n\nYour taste summary:\n{summary}")
+
+
+@app.get("/onboarding")
+def onboarding_form(request: Request, user: sqlite3.Row = Depends(current_user)):
+    answers = json.loads(user["onboarding_json"] or "{}")
+    return templates.TemplateResponse(request, "onboarding.html", {"answers": answers})
+
+
+@app.post("/onboarding")
+def onboarding_submit(
+    user: sqlite3.Row = Depends(current_user),
+    genres: str = Form(..., min_length=1, max_length=200),
+    artists: str = Form(..., min_length=1, max_length=200),
+    energy: Literal["low", "medium", "high", "mixed"] = Form(...),
+    instrumental: Literal["yes", "no"] = Form("yes"),
+    languages: str = Form("", max_length=200),
+    avoid: str = Form("", max_length=200),
+) -> RedirectResponse:
+    answers = {
+        "genres": genres.strip(), "artists": artists.strip(), "energy": energy,
+        "instrumental": instrumental, "languages": languages.strip(), "avoid": avoid.strip(),
+    }
+    users.set_onboarding(user["spotify_id"], answers)
+    return RedirectResponse("/", status_code=303)
 
 
 @app.post("/disconnect")

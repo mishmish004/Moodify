@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Moodify · about your taste{% endblock %}
+{% block content %}
+<h1>Tell Moodify about your taste</h1>
+<p>Six quick questions. Together with your most played artists on Spotify they shape every playlist.</p>
+<form method="post" action="/onboarding">
+  <label>Favourite genres
+    <input name="genres" required maxlength="200" value="{{ answers.genres or '' }}" placeholder="e.g. indie rock, bollywood, lo-fi">
+  </label>
+  <label>Three artists you love
+    <input name="artists" required maxlength="200" value="{{ answers.artists or '' }}" placeholder="e.g. Prateek Kuhad, Radiohead, Arijit Singh">
+  </label>
+  <label>Energy you usually want
+    <select name="energy" required>
+      {% for value, text in [("low", "Low: calm, slow"), ("medium", "Medium"), ("high", "High: loud, fast"), ("mixed", "Depends on the day")] %}
+      <option value="{{ value }}" {% if answers.energy == value %}selected{% endif %}>{{ text }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Instrumental tracks (no vocals) OK?
+    <select name="instrumental">
+      <option value="yes" {% if answers.instrumental != "no" %}selected{% endif %}>Yes</option>
+      <option value="no" {% if answers.instrumental == "no" %}selected{% endif %}>No</option>
+    </select>
+  </label>
+  <label>Languages you listen in <small>(optional)</small>
+    <input name="languages" maxlength="200" value="{{ answers.languages or '' }}" placeholder="e.g. English, Hindi, Punjabi">
+  </label>
+  <label>Anything to avoid <small>(optional)</small>
+    <input name="avoid" maxlength="200" value="{{ answers.avoid or '' }}" placeholder="e.g. no country, nothing explicit">
+  </label>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}
