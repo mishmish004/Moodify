@@ -157,18 +157,18 @@ Gate: `pytest tests/test_p5_suggest.py` green.
 Goal: `POST /playlist {mood}` ends with a real playlist in the user's Spotify account.
 
 Build
-- [ ] `src/match.py`: `pick(song, candidates) -> uri | None`. Lowercase, strip punctuation and anything after ` - ` / `(feat.` in titles; accept the first candidate whose artist list contains the suggested artist and whose title matches. No fuzzy-matching library
-- [ ] `src/playlist.py`: `build(user, mood)`: suggest → search each → pick → dedupe URIs → stop at 25 → `create_playlist("Moodify: <mood>")` → `add_items` → insert `playlists` row → return URL. If fewer than 8 tracks matched, ask the LLM once more for 15 extra songs
-- [ ] `POST /playlist`: calls `build`, renders the result page with the Spotify link; on `SpotifyQuotaExceeded` or 0 matches, show a plain message instead of a stack trace
-- [ ] Optional `POST /queue/{playlist_id}`: adds the tracks to the active device; on 403/404 show "needs Premium and an active device"
+- [x] `src/match.py`: `pick(song, candidates) -> uri | None`. Lowercase, strip punctuation and anything after ` - ` / `(feat.` in titles; accept the first candidate whose artist list contains the suggested artist and whose title matches. No fuzzy-matching library
+- [x] `src/playlist.py`: `build(user, mood)`: suggest → search each → pick → dedupe URIs → stop at 25 → `create_playlist("Moodify: <mood>")` → `add_items` → insert `playlists` row → return URL. If fewer than 8 tracks matched, ask the LLM once more for 15 extra songs
+- [x] `POST /playlist`: calls `build`, renders the result page with the Spotify link; on `SpotifyQuotaExceeded` or 0 matches, show a plain message instead of a stack trace
+- [x] Optional `POST /queue/{playlist_id}`: adds the tracks to the active device; on 403/404 show "needs Premium and an active device"
 
 Tests (`tests/test_p6_playlist.py`)
-- [ ] `pick` table test: exact match; case difference; "Song - Remastered 2011" vs "Song"; "Song (feat. X)" vs "Song"; same title different artist → `None`; empty candidates → `None`
-- [ ] end to end with mocked OpenAI and Spotify: 30 suggestions, 24 match, 6 don't → playlist created once, `add_items` called with 24 unique URIs, one `playlists` row, response contains the URL
-- [ ] duplicate suggestions resolve to one URI
-- [ ] fewer than 8 matches triggers exactly one extra suggestion call
-- [ ] 0 matches → no playlist created, friendly message, no DB row
-- [ ] `SpotifyQuotaExceeded` from search → 200 page with message, no partial playlist
+- [x] `pick` table test: exact match; case difference; "Song - Remastered 2011" vs "Song"; "Song (feat. X)" vs "Song"; same title different artist → `None`; empty candidates → `None`
+- [x] end to end with mocked OpenAI and Spotify: 30 suggestions, 24 match, 6 don't → playlist created once, `add_items` called with 24 unique URIs, one `playlists` row, response contains the URL
+- [x] duplicate suggestions resolve to one URI
+- [x] fewer than 8 matches triggers exactly one extra suggestion call
+- [x] 0 matches → no playlist created, friendly message, no DB row
+- [x] `SpotifyQuotaExceeded` from search → 200 page with message, no partial playlist
 - [ ] `live`: full run on your own account creates a playlist with ≥15 tracks (delete it by hand afterwards)
 
 Gate: `pytest tests/test_p6_playlist.py` green and one real playlist shows up in your Spotify.

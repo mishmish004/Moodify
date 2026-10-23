@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Moodify · {{ result.mood }}{% endblock %}
+{% block content %}
+<h1>Moodify: {{ result.mood }}</h1>
+{% if result.tracks %}
+<p><a href="{{ result.url }}">Open in Spotify</a> · {{ result.tracks | length }} tracks</p>
+<form method="post" action="/queue/{{ result.id }}">
+  <button type="submit">Play now</button> <small>(needs Premium and Spotify open on a device)</small>
+</form>
+<ol>
+  {% for t in result.tracks %}
+  <li>{{ t.name }} <small>— {{ t.artists | join(", ") }}</small></li>
+  {% endfor %}
+</ol>
+{% endif %}
+<p><a href="/">Make another</a></p>
+{% endblock %}

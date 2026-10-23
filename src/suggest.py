@@ -42,18 +42,19 @@ def clean_mood(mood: str) -> str:
     return " ".join(printable.split())[:MAX_MOOD_CHARS]
 
 
-def suggest_songs(mood: str, taste_summary: str, n: int = 30) -> list[Song]:
-    """Never raises: any API or parsing problem is logged and gives []."""
+def suggest_songs(mood: str, taste_summary: str, n: int = 30, exclude: list[Song] = ()) -> list[Song]:
+    """Never raises: any API or parsing problem is logged and gives [].
+    `exclude` lists songs from an earlier call that the model shouldn't repeat."""
     settings = get_settings()
     mood = clean_mood(mood)
+    prompt = f"Mood: {mood}\n\nListener's taste: {taste_summary}\n\nSuggest {n} songs."
+    if exclude:
+        prompt += "\n\nDo not repeat these: " + "; ".join(f"{s.title} by {s.artist}" for s in exclude)
     client = OpenAI(api_key=settings.OPENAI_API_KEY.get_secret_value(), timeout=TIMEOUT, max_retries=0)
     try:
         completion = client.chat.completions.parse(
             model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Mood: {mood}\n\nListener's taste: {taste_summary}\n\nSuggest {n} songs."},
-            ],
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
             response_format=Suggestions,
         )
         parsed = completion.choices[0].message.parsed

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Moodify</h1>
+<p>Hi {{ user.display_name or user.spotify_id }}. <a href="/onboarding">Edit your taste</a></p>
+<form method="post" action="/playlist">
+  <label>How are you feeling? What are you doing?
+    <textarea name="mood" required maxlength="300" rows="3" placeholder="e.g. rainy sunday, a bit nostalgic, nothing sleepy"></textarea>
+  </label>
+  <button type="submit">Make a playlist</button>
+</form>
+<p><small>Takes up to a minute: the suggestions come from an AI model, then each song is looked up on Spotify.</small></p>
+{% if recent %}
+<h2>Recent playlists</h2>
+<ul>
+  {% for p in recent %}
+  <li><a href="{{ p.spotify_url }}">{{ p.prompt }}</a> <small>{{ p.created_at }}</small></li>
+  {% endfor %}
+</ul>
+{% endif %}
+<details>
+  <summary>What the model is told about your taste</summary>
+  <p><small>{{ summary }}</small></p>
+</details>
+<form method="post" action="/disconnect" onsubmit="return confirm('Delete your Moodify data?')">
+  <button type="submit">Disconnect</button>
+</form>
+{% endblock %}

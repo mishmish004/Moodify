@@ -9,12 +9,13 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import taste, users
+from src import playlist, playlists, taste, users
 from src.core.config import PROJECT_ROOT, get_settings
-from src.core.exceptions import ReauthRequired, SpotifyError
+from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
 from src.db import init_db
 from src.spotify import auth
+from src.spotify.client import SpotifyClient
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
@@ -69,6 +70,17 @@ def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
     return RedirectResponse("/login", status_code=303)
 
 
+@app.exception_handler(SpotifyQuotaExceeded)
+def _quota(request: Request, exc: SpotifyQuotaExceeded):
+    MoodifyLogger.get_logger("spotify").warning("quota/rate limit hit: %s", exc)
+    return _message(request, "Spotify is asking us to slow down",
+                    "The app's Spotify quota is used up for now. Try again in an hour or so.")
+
+
+def _message(request: Request, title: str, text: str, status_code: int = 200):
+    return templates.TemplateResponse(request, "message.html", {"title": title, "text": text}, status_code=status_code)
+
+
 def current_user(request: Request) -> sqlite3.Row:
     spotify_id = request.session.get("spotify_id")
     user = users.get(spotify_id) if spotify_id else None
@@ -114,13 +126,51 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
     return RedirectResponse("/", status_code=303)
 
 
-@app.get("/")
-def home(user: sqlite3.Row = Depends(current_user)):
+def onboarded_user(user: sqlite3.Row = Depends(current_user)) -> sqlite3.Row:
     if not user["onboarding_json"]:
-        return RedirectResponse("/onboarding", status_code=303)
-    # Placeholder until Phase 7 renders the mood box; showing the summary lets the user check it
-    summary = taste.summary_for(user)
-    return PlainTextResponse(f"Logged in as {user['display_name'] or user['spotify_id']}.\n\nYour taste summary:\n{summary}")
+        raise OnboardingRequired()
+    return user
+
+
+class OnboardingRequired(Exception):
+    pass
+
+
+@app.exception_handler(OnboardingRequired)
+def _redirect_to_onboarding(request: Request, exc: OnboardingRequired) -> RedirectResponse:
+    return RedirectResponse("/onboarding", status_code=303)
+
+
+@app.get("/")
+def home(request: Request, user: sqlite3.Row = Depends(onboarded_user)):
+    return templates.TemplateResponse(request, "index.html", {
+        "user": user, "summary": taste.summary_for(user), "recent": playlists.recent(user["spotify_id"]),
+    })
+
+
+@app.post("/playlist")
+def make_playlist(request: Request, user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=300)):
+    result = playlist.build(user, mood)
+    if result is None:
+        return _message(request, "Nothing matched",
+                        "None of the suggested songs could be found on Spotify. Try describing the mood differently.")
+    return templates.TemplateResponse(request, "playlist.html", {"result": result})
+
+
+@app.post("/queue/{playlist_id}")
+def queue_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
+    row = playlists.get(playlist_id, user["spotify_id"])
+    if row is None:
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404)
+    try:
+        with SpotifyClient.for_user(user) as sp:
+            for uri in json.loads(row["track_uris_json"]):
+                sp.queue(uri)
+    except SpotifyError as exc:
+        if exc.status in (403, 404):
+            return _message(request, "Can't queue", "Queuing needs Spotify Premium and Spotify open on one of your devices.")
+        raise
+    return _message(request, "Queued", f"The tracks are in your queue. Open Spotify to listen, or open the playlist: {row['spotify_url']}")
 
 
 @app.get("/onboarding")
