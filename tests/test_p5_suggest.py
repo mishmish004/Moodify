@@ -97,20 +97,34 @@ def test_refusal_gives_empty_list(chat, suggest_log):
     chat.respond(200, json=body)
     assert suggest_songs("rainy", TASTE) == []
     assert suggest_log.records
+    assert chat.call_count == 1  # a refusal would only repeat itself
 
 
-@pytest.mark.parametrize("failure", [
-    httpx.Response(500, json={"error": {"message": "server error"}}),
-    httpx.Response(401, json={"error": {"message": "bad key"}}),
-    httpx.Response(429, json={"error": {"message": "rate limited"}}),
-    httpx.ReadTimeout("timed out"),
-    httpx.ConnectError("refused"),
+@pytest.mark.parametrize("failure, calls", [
+    (httpx.Response(500, json={"error": {"message": "server error"}}), 2),
+    (httpx.Response(401, json={"error": {"message": "bad key"}}), 1),
+    (httpx.Response(429, json={"error": {"message": "rate limited"}}), 1),
+    (httpx.ReadTimeout("timed out"), 2),
+    (httpx.ConnectError("refused"), 2),
 ])
-def test_api_failures_give_empty_list(chat, suggest_log, failure):
-    chat.mock(side_effect=[failure])
+def test_api_failures_give_empty_list(chat, suggest_log, failure, calls):
+    # Phase 9: timeouts, 5xx and dropped connections get one more try; other 4xx would fail again
+    chat.mock(side_effect=[failure] * calls)
     assert suggest_songs("rainy", TASTE) == []
-    assert chat.call_count == 1  # no SDK retries: the route decides what to do
+    assert chat.call_count == calls
     assert suggest_log.records
+
+
+def test_timeout_then_success_returns_songs(chat):
+    chat.mock(side_effect=[httpx.ReadTimeout("timed out"), httpx.Response(200, json=_completion(_songs_json(30)))])
+    assert len(suggest_songs("rainy", TASTE)) == 30
+    assert chat.call_count == 2
+
+
+def test_malformed_answer_is_retried_once(chat):
+    chat.mock(side_effect=[httpx.Response(200, json=_completion("not json")), httpx.Response(200, json=_completion(_songs_json(5)))])
+    assert len(suggest_songs("rainy", TASTE)) == 5
+    assert chat.call_count == 2
 
 
 def test_blank_and_duplicate_songs_are_dropped(chat):

@@ -32,8 +32,9 @@ class MoodifyLogger:
         logger = logging.getLogger(logger_name)
 
         # 3. Idempotency Check (Prevent Duplicate Logs)
-        # If logger already exists and has handlers, just return it.
-        if logger.hasHandlers():
+        # If this logger already has its own handlers, just return it. Not hasHandlers(): that also
+        # counts the root logger's, so any root setup (pytest, basicConfig) left INFO unconfigured.
+        if logger.handlers:
             return logger
 
         # 4. Debug goes to the file, the console stays at INFO (handlers below)

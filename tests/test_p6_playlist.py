@@ -13,6 +13,7 @@ from src.spotify import auth
 from src.spotify.client import API_URL, SpotifyClient, Track
 from src.suggest import Song
 
+from .conftest import finish_build, tracks
 from .test_p4_taste import ONBOARDING
 
 CHAT_URL = "https://api.openai.com/v1/chat/completions"
@@ -109,6 +110,10 @@ def logged_in(user, respx_mock):
         yield client
 
 
+def _build(client, mood):
+    return finish_build(client, client.post("/playlist", data={"mood": mood}))
+
+
 def _playlist_rows():
     with get_conn() as conn:
         return conn.execute("SELECT * FROM playlists").fetchall()
@@ -119,7 +124,7 @@ def test_end_to_end_24_of_30_match(logged_in, respx_mock):
     found = {f"Song {i}": f"t{i}" for i in range(30) if i % 5 != 0}  # 6 of 30 don't exist
     sp = FakeSpotify(respx_mock, found)
 
-    resp = logged_in.post("/playlist", data={"mood": "rainy sunday"})
+    resp = _build(logged_in, "rainy sunday")
 
     assert resp.status_code == 200
     assert "https://open.spotify.com/playlist/pl1" in resp.text
@@ -140,7 +145,7 @@ def test_end_to_end_24_of_30_match(logged_in, respx_mock):
 def test_stops_searching_at_25(logged_in, respx_mock):
     respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(30)})
-    logged_in.post("/playlist", data={"mood": "upbeat"})
+    _build(logged_in, "upbeat")
     assert len(sp.added_uris()) == 25
     assert sp.search.call_count == 25
 
@@ -152,7 +157,7 @@ def test_duplicate_suggestions_resolve_to_one_uri(logged_in, respx_mock):
     found = {f"Song {i}": f"t{i}" for i in range(2, 12)}
     found["Song 1"] = found["Song 1 - Remastered"] = "same"
     sp = FakeSpotify(respx_mock, found)
-    logged_in.post("/playlist", data={"mood": "upbeat"})
+    _build(logged_in, "upbeat")
     uris = sp.added_uris()
     assert uris.count("spotify:track:same") == 1
     assert len(uris) == 11
@@ -166,7 +171,7 @@ def test_fewer_than_8_matches_asks_once_more(logged_in, respx_mock):
     found = {f"Song {i}": f"t{i}" for i in [1, 2, 3, 4, 5]} | {f"Song {i}": f"t{i}" for i in range(100, 110)}
     sp = FakeSpotify(respx_mock, found)
 
-    resp = logged_in.post("/playlist", data={"mood": "obscure"})
+    resp = _build(logged_in, "obscure")
 
     assert resp.status_code == 200
     assert chat.call_count == 2
@@ -178,7 +183,7 @@ def test_fewer_than_8_matches_asks_once_more(logged_in, respx_mock):
 def test_still_few_after_retry_builds_anyway(logged_in, respx_mock):
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))
     sp = FakeSpotify(respx_mock, {"Song 3": "t3"})
-    resp = logged_in.post("/playlist", data={"mood": "obscure"})
+    resp = _build(logged_in, "obscure")
     assert resp.status_code == 200 and chat.call_count == 2
     assert sp.added_uris() == ["spotify:track:t3"]
 
@@ -186,7 +191,7 @@ def test_still_few_after_retry_builds_anyway(logged_in, respx_mock):
 def test_zero_matches_creates_nothing(logged_in, respx_mock):
     respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))
     sp = FakeSpotify(respx_mock, {})
-    resp = logged_in.post("/playlist", data={"mood": "nothing exists"})
+    resp = _build(logged_in, "nothing exists")
     assert resp.status_code == 200
     assert "Nothing matched" in resp.text
     assert sp.create.call_count == 0
@@ -194,10 +199,11 @@ def test_zero_matches_creates_nothing(logged_in, respx_mock):
 
 
 def test_llm_failure_is_a_friendly_page(logged_in, respx_mock):
-    respx_mock.post(CHAT_URL).respond(500)
+    chat = respx_mock.post(CHAT_URL).respond(500)
     sp = FakeSpotify(respx_mock, {})
-    resp = logged_in.post("/playlist", data={"mood": "anything"})
-    assert resp.status_code == 200 and "Nothing matched" in resp.text
+    resp = _build(logged_in, "anything")
+    assert resp.status_code == 200 and "No song ideas" in resp.text
+    assert chat.call_count == 2  # Phase 9: one retry, then a clear message instead of a 15-song fallback
     assert sp.search.call_count == 0 and sp.create.call_count == 0
 
 
@@ -214,7 +220,7 @@ def test_quota_exceeded_mid_search_is_a_message_and_no_partial_playlist(logged_i
         return good(request)
 
     sp.search.mock(side_effect=flaky)
-    resp = logged_in.post("/playlist", data={"mood": "busy day"})
+    resp = _build(logged_in, "busy day")
     assert resp.status_code == 200
     assert "slow down" in resp.text
     assert sp.create.call_count == 0
@@ -224,7 +230,7 @@ def test_quota_exceeded_mid_search_is_a_message_and_no_partial_playlist(logged_i
 def test_mood_is_cleaned_before_use(logged_in, respx_mock):
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(10)))
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
-    logged_in.post("/playlist", data={"mood": "  rainy\x00   sunday  "})
+    _build(logged_in, "  rainy\x00   sunday  ")
     assert "Mood: rainy sunday\n" in json.loads(chat.calls.last.request.content)["messages"][-1]["content"]
     assert json.loads(sp.create.calls.last.request.content)["name"] == "Moodify: rainy sunday"
     assert _playlist_rows()[0]["prompt"] == "rainy sunday"
@@ -254,7 +260,7 @@ def test_home_lists_recent_playlists(logged_in, respx_mock):
 
 def test_queue_adds_every_track(logged_in, respx_mock):
     FakeSpotify(respx_mock, {})
-    row_id = playlists.insert("friend1", "m", "https://open.spotify.com/playlist/p", ["spotify:track:a", "spotify:track:b"])
+    row_id = playlists.insert("friend1", "m", "https://open.spotify.com/playlist/p", tracks("spotify:track:a", "spotify:track:b"))
     queue = respx_mock.post(f"{API_URL}/me/player/queue").respond(204)
     resp = logged_in.post(f"/queue/{row_id}")
     assert resp.status_code == 200 and "Queued" in resp.text
@@ -264,7 +270,7 @@ def test_queue_adds_every_track(logged_in, respx_mock):
 @pytest.mark.parametrize("status", [403, 404])
 def test_queue_without_premium_or_device(logged_in, respx_mock, status):
     FakeSpotify(respx_mock, {})
-    row_id = playlists.insert("friend1", "m", "u", ["spotify:track:a"])
+    row_id = playlists.insert("friend1", "m", "u", tracks("spotify:track:a"))
     respx_mock.post(f"{API_URL}/me/player/queue").respond(status, json={"error": {"status": status, "message": "x"}})
     resp = logged_in.post(f"/queue/{row_id}")
     assert resp.status_code == 200 and "Premium" in resp.text
@@ -272,7 +278,7 @@ def test_queue_without_premium_or_device(logged_in, respx_mock, status):
 
 def test_queue_someone_elses_playlist_is_404(logged_in, respx_mock):
     users.upsert("friend2", "Two", "r2")
-    row_id = playlists.insert("friend2", "m", "u", ["spotify:track:a"])
+    row_id = playlists.insert("friend2", "m", "u", tracks("spotify:track:a"))
     assert logged_in.post(f"/queue/{row_id}").status_code == 404
     assert logged_in.post("/queue/999").status_code == 404
 
@@ -286,7 +292,7 @@ def test_live_full_run_creates_a_real_playlist():
         user = conn.execute("SELECT * FROM users WHERE onboarding_json IS NOT NULL ORDER BY created_at LIMIT 1").fetchone()
     if user is None:
         pytest.skip("no onboarded user in data/moodify.db: log in and complete /onboarding first")
-    result = pl.build(user, "rainy sunday, nostalgic")
-    assert result is not None
-    print(f"\ncreated {result.url} with {len(result.tracks)} tracks (delete it by hand afterwards)")
-    assert len(result.tracks) >= 15, [(t.name, t.artists) for t in result.tracks]
+    row_id = pl.build(user, "rainy sunday, nostalgic")
+    made = playlists.tracks(row_id)
+    print(f"\ncreated {playlists.get(row_id, user['spotify_id'])['spotify_url']} with {len(made)} tracks (delete it by hand afterwards)")
+    assert len(made) >= 15, [(t.name, t.artists) for t in made]

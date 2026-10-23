@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{# Reloads itself until the build ends; /jobs/{id} then redirects to the playlist or explains the failure #}
+{% block head %}<meta http-equiv="refresh" content="3">{% endblock %}
+{% block title %}Moodify · making your playlist{% endblock %}
+{% block content %}
+<h1>Making your playlist</h1>
+<p class="muted">{{ job.prompt }}</p>
+<p><strong>{{ job.step or "Starting" }}…</strong></p>
+<p><small>This page updates by itself. It usually takes one to three minutes; you can leave it open in the background.</small></p>
+{% endblock %}

@@ -2,13 +2,14 @@
 mood -> a real playlist in the user's Spotify account.
 
 suggest (LLM) -> search each song on Spotify -> pick the matching track
--> dedupe, stop at MAX_TRACKS -> create playlist -> add items -> save a row.
+-> dedupe, stop at MAX_TRACKS -> create playlist -> add items -> save the row and its tracks.
 If fewer than MIN_TRACKS matched, the LLM is asked once more for extra songs.
+run() is the background entry point: it records how the build ended on its job.
 """
-from dataclasses import dataclass
-
-from src import playlists, taste
+from src import jobs, playlists, taste, users
+from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
+from src.jobs import NO_TRACE, Trace
 from src.match import pick
 from src.spotify.client import SpotifyClient, Track
 from src.suggest import Song, clean_mood, suggest_songs
@@ -19,47 +20,87 @@ EXTRA_SONGS = 15
 NAME_CHARS = 60  # how much of the mood goes into the playlist name
 
 
-@dataclass(frozen=True)
-class Result:
-    id: int        # playlists row
-    url: str       # open.spotify.com link
-    mood: str
-    tracks: list[Track]
+class BuildFailed(Exception):
+    """Nothing to make. `reason` is one of the jobs.NO_* codes. No playlist was created."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
-def build(user, mood: str) -> Result | None:
-    """None when nothing could be matched: no playlist is created and nothing is stored.
-    SpotifyQuotaExceeded and ReauthRequired propagate to the route."""
+def run(job_id: int, spotify_id: str, mood: str) -> None:
+    """Build in the background and record the outcome on the job. Never raises: a thread has nobody to raise to."""
+    log = MoodifyLogger.get_logger("playlist")
+    try:
+        user = users.get(spotify_id)
+        if user is None:  # disconnected while queued; the job row went with the user
+            return
+        playlist_id = build(user, mood, Trace(job_id))
+    except BuildFailed as exc:
+        jobs.fail(job_id, exc.reason)
+    except SpotifyQuotaExceeded as exc:
+        log.warning("quota/rate limit hit during job %d: %s", job_id, exc)
+        jobs.fail(job_id, jobs.QUOTA)
+    except ReauthRequired:
+        jobs.fail(job_id, jobs.REAUTH)
+    except Exception:
+        log.exception("job %d failed", job_id)
+        jobs.fail(job_id, jobs.ERROR)
+    else:
+        jobs.finish(job_id, playlist_id)
+
+
+def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
+    """Returns the new playlists row id. Raises BuildFailed when there is nothing to make;
+    SpotifyQuotaExceeded and ReauthRequired propagate. In every failure no playlist is created."""
     mood = clean_mood(mood)
+    trace.step("Reading your taste")
     summary = taste.summary_for(user)
-    songs = suggest_songs(mood, summary)
+    trace.step("Asking for song ideas")
+    songs = suggest_songs(mood, summary, trace=trace)
+    if not songs:
+        raise BuildFailed(jobs.NO_SUGGESTIONS)
+    trace.step("Finding the songs on Spotify")
     with SpotifyClient.for_user(user) as sp:
-        tracks = _resolve(sp, songs)
+        tracks, searched = _resolve(sp, songs, trace)
+        suggested = len(songs)
         if len(tracks) < MIN_TRACKS:
-            extra = suggest_songs(mood, summary, n=EXTRA_SONGS, exclude=songs)
-            tracks += _resolve(sp, extra, seen={t.uri for t in tracks}, room=MAX_TRACKS - len(tracks))
+            trace.step("Asking for a few more songs")
+            extra = suggest_songs(mood, summary, n=EXTRA_SONGS, exclude=songs, trace=trace)
+            more, more_searched = _resolve(sp, extra, trace, seen={t.uri for t in tracks}, room=MAX_TRACKS - len(tracks))
+            tracks, searched, suggested = tracks + more, searched + more_searched, suggested + len(extra)
         if not tracks:
-            return None
+            raise BuildFailed(jobs.NO_MATCHES)
+        trace.step("Saving the playlist to your Spotify")
         playlist = sp.create_playlist(f"Moodify: {mood[:NAME_CHARS]}", f"Made by Moodify for: {mood}")
         sp.add_items(playlist.id, [t.uri for t in tracks])
-    row_id = playlists.insert(user["spotify_id"], mood, playlist.url, [t.uri for t in tracks])
+    row_id = playlists.insert(user["spotify_id"], mood, playlist.url, tracks)
     MoodifyLogger.get_logger("playlist").info(
-        "%s: %d/%d suggestions matched for %r", user["spotify_id"], len(tracks), len(songs), mood
+        "%s: %d tracks from %d searches (%d suggestions) for %r", user["spotify_id"], len(tracks), searched, suggested, mood
     )
-    return Result(row_id, playlist.url, mood, tracks)
+    trace.event("built", playlist_id=row_id, tracks=len(tracks), searched=searched, suggested=suggested)
+    return row_id
 
 
-def _resolve(sp: SpotifyClient, songs: list[Song], seen: set[str] | None = None, room: int = MAX_TRACKS) -> list[Track]:
+def _resolve(
+    sp: SpotifyClient, songs: list[Song], trace: Trace, seen: set[str] | None = None, room: int = MAX_TRACKS
+) -> tuple[list[Track], int]:
     """Search each suggestion and keep the matching track. Stops once `room` tracks are found,
-    so a good first batch costs at most MAX_TRACKS searches."""
+    so a good first batch costs at most MAX_TRACKS searches. Returns (tracks, searches made)."""
     seen = set() if seen is None else seen
     tracks: list[Track] = []
+    searched = 0
     for song in songs:
         if len(tracks) >= room:
             break
         candidates = sp.search_track(song.title, song.artist)
+        searched += 1
         uri = pick(song, candidates)
+        trace.event(
+            "search", step=f"Finding the songs on Spotify ({searched}/{len(songs)})",
+            title=song.title, artist=song.artist, candidates=len(candidates), matched=uri is not None,
+        )
         if uri and uri not in seen:
             seen.add(uri)
             tracks.append(next(t for t in candidates if t.uri == uri))
-    return tracks
+    return tracks, searched

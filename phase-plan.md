@@ -98,26 +98,28 @@ Checked against developer.spotify.com on 2026-10-23 (February, March, May and Ju
 Goal: no more 15-track accidents. A playlist build can take a few minutes without the browser timing out, every step is logged, and the result page can be reopened.
 
 Build
-- [ ] `src/suggest.py`: timeout 45 s → 120 s, plus one retry on timeout or 5xx. When a call returns nothing, retry the same full request once instead of dropping to the 15-song fallback
-- [ ] Schema migrations: `PRAGMA user_version` plus numbered steps in `src/db.py`, so new columns and tables reach existing databases. `schema.sql` stays the fresh-install path
-- [ ] `playlist_tracks(playlist_id FK, position, uri, name, artists_json, duration_ms, section)`: the result page and later phases need names and lengths, not only URIs
-- [ ] `jobs(id, spotify_id, prompt, status, step, error, playlist_id, created_at)`. `POST /playlist` creates a job, starts `build` in a background thread and answers `303 /jobs/{id}`
-- [ ] `job_events(job_id, at, kind, detail_json)`: the session log (see "How the agent is structured"). One row per step, LLM call (model, latency, input/cached/output tokens), search (query, hit/miss, cache hit), match and failure. Phase 15 reflects on it
-- [ ] `GET /jobs/{id}`: owner only. While running, show the current step ("Reading your prompt…", "Finding songs on Spotify 12/30…"), with `<meta http-equiv="refresh" content="3">` so no JS is needed. When done, `303` to `GET /playlists/{id}`. On failure, show the friendly message
-- [ ] `GET /playlists/{id}`: the result page rebuilt from `playlist_tracks`. Refreshing it no longer re-submits the form
-- [ ] Log line: `matched/searched` from all batches (not "15/0")
-- [ ] On startup, a job left `running` by a restart is marked `failed`
+- [x] `src/suggest.py`: timeout 45 s → 120 s, plus one retry on timeout or 5xx. When a call returns nothing, retry the same full request once instead of dropping to the 15-song fallback
+- [x] Schema migrations: `PRAGMA user_version` plus numbered steps in `src/db.py`, so new columns and tables reach existing databases. `schema.sql` stays the fresh-install path
+- [x] `playlist_tracks(playlist_id FK, position, uri, name, artists_json, duration_ms, section)`: the result page and later phases need names and lengths, not only URIs
+- [x] `jobs(id, spotify_id, prompt, status, step, error, playlist_id, created_at)`. `POST /playlist` creates a job, starts `build` in a background thread and answers `303 /jobs/{id}`
+- [x] `job_events(job_id, at, kind, detail_json)`: the session log (see "How the agent is structured"). One row per step, LLM call (model, latency, input/cached/output tokens), search (query, hit/miss, cache hit), match and failure. Phase 15 reflects on it
+- [x] `GET /jobs/{id}`: owner only. While running, show the current step ("Reading your prompt…", "Finding songs on Spotify 12/30…"), with `<meta http-equiv="refresh" content="3">` so no JS is needed. When done, `303` to `GET /playlists/{id}`. On failure, show the friendly message
+- [x] `GET /playlists/{id}`: the result page rebuilt from `playlist_tracks`. Refreshing it no longer re-submits the form
+- [x] Log line: `matched/searched` from all batches (not "15/0")
+- [x] On startup, a job left `running` by a restart is marked `failed`
 
 Tests (`tests/test_p9_jobs.py`)
-- [ ] first call times out, retry succeeds → full-size playlist, not 15 tracks
-- [ ] both calls fail → job `failed`, friendly page, no playlist, no DB row in `playlists`
-- [ ] `POST /playlist` answers 303 within 1 s even when the mocked LLM takes 5 s
-- [ ] `/jobs/{id}` and `/playlists/{id}` of another user → 404
-- [ ] a finished job has events for every step, in order, with token counts on LLM calls
-- [ ] a migration run twice is a no-op; a database at `user_version` 0 with data upgrades without loss
-- [ ] job left `running` at startup becomes `failed`
+- [x] first call times out, retry succeeds → full-size playlist, not 15 tracks
+- [x] both calls fail → job `failed`, friendly page, no playlist, no DB row in `playlists`
+- [x] `POST /playlist` answers 303 within 1 s even when the mocked LLM takes 5 s
+- [x] `/jobs/{id}` and `/playlists/{id}` of another user → 404
+- [x] a finished job has events for every step, in order, with token counts on LLM calls
+- [x] a migration run twice is a no-op; a database at `user_version` 0 with data upgrades without loss
+- [x] job left `running` at startup becomes `failed`
 
 Gate: `pytest tests/test_p9_jobs.py` green, and the 2026-10-23 prompt run live gives ≥20 tracks.
+
+Done 2026-10-23: the live run gave 25 tracks (25/25 searches matched, one 31 s call to `gpt-6.1-sol`, 455 input tokens, 0 cached; below the 1,024-token minimum until Phase 11). Also fixed on the way: `MoodifyLogger` skipped its setup whenever the root logger had handlers, dropping INFO lines; SQLite now runs `synchronous = NORMAL` under WAL; tests wait for leftover build threads.
 
 ---
 

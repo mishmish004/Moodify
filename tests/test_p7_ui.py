@@ -9,7 +9,7 @@ from src.db import init_db
 from src.main import app
 from src.spotify.client import API_URL
 
-from .conftest import ROOT
+from .conftest import ROOT, finish_build, tracks
 from .test_p6_playlist import CHAT_URL, FakeSpotify, _completion, _songs, logged_in, user  # noqa: F401 (fixtures)
 
 STATIC = ROOT / "static"
@@ -26,7 +26,7 @@ def anon(test_settings):
 def _make_playlist(client, respx_mock, n=12):
     respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(n)))
     FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(n)})
-    return client.post("/playlist", data={"mood": "rainy sunday"})
+    return finish_build(client, client.post("/playlist", data={"mood": "rainy sunday"}))
 
 
 # --- every page ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def test_home_attributes_spotify_next_to_the_taste_summary(logged_in, respx_mock
 
 def test_home_recent_playlists_link_to_spotify(logged_in, respx_mock):
     FakeSpotify(respx_mock, {})
-    playlists.insert("friend1", "late night drive", "https://open.spotify.com/playlist/p1", ["spotify:track:a"])
+    playlists.insert("friend1", "late night drive", "https://open.spotify.com/playlist/p1", tracks("spotify:track:a"))
     html = logged_in.get("/").text
     assert 'href="https://open.spotify.com/playlist/p1"' in html
     assert "1 track<" in html
@@ -126,7 +126,7 @@ def test_playlist_page_renders_every_track_with_spotify_links(logged_in, respx_m
 
 def test_queued_page_links_to_the_playlist(logged_in, respx_mock):
     FakeSpotify(respx_mock, {})
-    row_id = playlists.insert("friend1", "m", "https://open.spotify.com/playlist/p9", ["spotify:track:a"])
+    row_id = playlists.insert("friend1", "m", "https://open.spotify.com/playlist/p9", tracks("spotify:track:a"))
     respx_mock.post(f"{API_URL}/me/player/queue").respond(204)
     html = logged_in.post(f"/queue/{row_id}").text
     assert 'href="https://open.spotify.com/playlist/p9"' in html and "OPEN SPOTIFY" in html
@@ -136,7 +136,7 @@ def test_queued_page_links_to_the_playlist(logged_in, respx_mock):
 
 def test_history_lists_every_playlist_newest_first(logged_in):
     for i in range(7):
-        playlists.insert("friend1", f"mood {i}", f"https://open.spotify.com/playlist/p{i}", [f"spotify:track:{n}" for n in range(i)])
+        playlists.insert("friend1", f"mood {i}", f"https://open.spotify.com/playlist/p{i}", tracks(*(f"spotify:track:{n}" for n in range(i))))
     html = logged_in.get("/history").text
     positions = [html.index(f">mood {i}<") for i in reversed(range(7))]
     assert positions == sorted(positions)

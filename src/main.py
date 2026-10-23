@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import playlist, playlists, taste, users
+from src import jobs, playlist, playlists, taste, users
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
@@ -26,6 +26,9 @@ templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
 async def lifespan(app: FastAPI):
     # Settings are validated here, so a bad .env stops startup with the field name
     init_db(get_settings().DB_PATH)
+    # Builds run in threads of this process; any still marked running were cut off by a restart
+    if interrupted := jobs.fail_interrupted():
+        MoodifyLogger.get_logger("jobs").warning("%d build(s) interrupted by a restart", interrupted)
     yield
 
 
@@ -158,13 +161,53 @@ def home(request: Request, user: sqlite3.Row = Depends(onboarded_user)):
     })
 
 
+# How a failed build is explained, by jobs.error
+BUILD_FAILURES = {
+    jobs.NO_SUGGESTIONS: ("No song ideas this time",
+                          "The AI model didn't answer, even on a second try. Nothing was created. Try again in a minute."),
+    jobs.NO_MATCHES: ("Nothing matched",
+                      "None of the suggested songs could be found on Spotify. Try describing the mood differently."),
+    jobs.QUOTA: ("Spotify is asking us to slow down",
+                 "The app's Spotify quota is used up for now. Try again in an hour or so."),
+    jobs.INTERRUPTED: ("Interrupted", "Moodify restarted while making this playlist. Nothing was saved. Try again."),
+    jobs.ERROR: ("Something went wrong", "The playlist couldn't be made, and nothing was saved. Try again."),
+}
+
+
 @app.post("/playlist")
-def make_playlist(request: Request, user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=300)):
-    result = playlist.build(user, mood)
-    if result is None:
-        return _message(request, "Nothing matched",
-                        "None of the suggested songs could be found on Spotify. Try describing the mood differently.")
-    return templates.TemplateResponse(request, "playlist.html", {"user": user, "result": result})
+def make_playlist(user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=300)):
+    # One build at a time per user: a second submit lands on the build already running
+    job = jobs.running_for(user["spotify_id"])
+    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    if job is None:
+        jobs.start(playlist.run, job_id, user["spotify_id"], mood)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@app.get("/jobs/{job_id}")
+def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_user)):
+    job = jobs.get(job_id, user["spotify_id"])
+    if job is None:
+        return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user)
+    if job["status"] == "done":
+        return RedirectResponse(f"/playlists/{job['playlist_id']}", status_code=303)
+    if job["status"] == "failed":
+        if job["error"] == jobs.REAUTH:
+            request.session.clear()
+            return RedirectResponse("/login", status_code=303)
+        title, text = BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR])
+        return _message(request, title, text, user=user)
+    return templates.TemplateResponse(request, "job.html", {"user": user, "job": job})
+
+
+@app.get("/playlists/{playlist_id}")
+def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
+    row = playlists.get(playlist_id, user["spotify_id"])
+    if row is None:
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    return templates.TemplateResponse(request, "playlist.html", {
+        "user": user, "playlist": row, "tracks": playlists.tracks(playlist_id),
+    })
 
 
 @app.get("/history")
