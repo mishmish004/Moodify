@@ -9,20 +9,23 @@ from src.spotify.client import Track
 
 def insert(
     spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track], brief_json: Optional[str] = None,
-    sections: Optional[list[int]] = None,
+    sections: Optional[list[int]] = None, energies: Optional[list[Optional[int]]] = None,
+    roles: Optional[list[Optional[str]]] = None,
 ) -> int:
-    """The playlist row and its tracks, in order, in one transaction. `sections`: each track's section index."""
+    """The playlist row and its tracks, in order, in one transaction. `sections`, `energies`, `roles`: per track."""
     sections = sections or [None] * len(tracks)
+    energies = energies or [None] * len(tracks)
+    roles = roles or [None] * len(tracks)
     with get_conn() as conn:
         playlist_id = conn.execute(
             "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json, brief_json) VALUES (?, ?, ?, ?, ?)",
             (spotify_id, prompt, spotify_url, json.dumps([t.uri for t in tracks]), brief_json),
         ).lastrowid
         conn.executemany(
-            "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms, section)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(playlist_id, i, t.uri, t.name, json.dumps(list(t.artists)), t.duration_ms, section)
-             for i, (t, section) in enumerate(zip(tracks, sections))],
+            "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms, section, energy, role)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(playlist_id, i, t.uri, t.name, json.dumps(list(t.artists)), t.duration_ms, section, energy, role)
+             for i, (t, section, energy, role) in enumerate(zip(tracks, sections, energies, roles))],
         )
         return playlist_id
 
@@ -43,6 +46,13 @@ def tracks(playlist_id: int) -> list[Track]:
             (playlist_id,),
         ).fetchall()
     return [Track(r["uri"], r["name"], tuple(json.loads(r["artists_json"])), r["duration_ms"]) for r in rows]
+
+
+def track_sections(playlist_id: int) -> list[Optional[int]]:
+    """Each track's section index, in playlist order (None for playlists made before Phase 12)."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT section FROM playlist_tracks WHERE playlist_id = ? ORDER BY position", (playlist_id,))
+        return [None if r[0] is None else int(r[0]) for r in rows]
 
 
 def section_minutes(playlist_id: int) -> dict[int, float]:

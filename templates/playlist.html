@@ -35,7 +35,16 @@
 </details>
 {% endif %}
 
-{% if tracks %}
+{% if groups %}
+{% for g in groups %}
+<h2 class="section-head">{{ g.label }} <small>· starts at {{ g.start }}</small></h2>
+<ol class="list">
+  {% for t in g.tracks %}
+  <li><a href="{{ t.url }}"><span class="n">{{ g.first + loop.index0 }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
+  {% endfor %}
+</ol>
+{% endfor %}
+{% elif tracks %}
 <ol class="list">
   {% for t in tracks %}
   <li><a href="{{ t.url }}"><span class="n">{{ loop.index }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>

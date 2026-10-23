@@ -217,22 +217,25 @@ Done 2026-10-23. Live: "45 minute commute, chill" gave 43.1 min (15 tracks, 6 kn
 Goal: "first X, then Y for 30 minutes, then instantly Z" plays as X → Y → Z, at those times, switching the way the user said.
 
 Build
-- [ ] Suggestions come back per section, each song with `energy` 1–10 and a `role` (`opener`, `build`, `peak`, `bridge`, `closer`)
-- [ ] Order: sections exactly as in the brief. Inside a section, songs climb or fall toward the next section's energy
-- [ ] `transition_in: cut` (prompt says "instantly", "then straight into", "switch"): the new section starts at full target energy with no bridge. `blend` ("slowly", "ease into", default for mood-change arcs): 1–2 bridge songs between the two energies
-- [ ] Spotify playlist order = Moodify order (`add_items` keeps batch order; test it)
-- [ ] Playlist description (≤300 chars): the timeline, e.g. "0–14 summer morning → 14–44 workout → 44–90 lock in"
-- [ ] Result page: tracks under section headings with start times ("Workout · starts at 14:20")
+- [x] Suggestions come back per section, each song with `energy` 1–10 and a `role` (`opener`, `build`, `peak`, `bridge`, `closer`)
+- [x] Order: sections exactly as in the brief. Inside a section, songs climb or fall toward the next section's energy
+- [x] `transition_in: cut` (prompt says "instantly", "then straight into", "switch"): the new section starts at full target energy with no bridge. `blend` ("slowly", "ease into", default for mood-change arcs): 1–2 bridge songs between the two energies
+- [x] Spotify playlist order = Moodify order (`add_items` keeps batch order; test it)
+- [x] Playlist description (≤300 chars): the timeline, e.g. "0–14 summer morning → 14–44 workout → 44–90 lock in"
+- [x] Result page: tracks under section headings with start times ("Workout · starts at 14:20")
 
 Tests (`tests/test_p13_arcs.py`)
-- [ ] 3-section brief → tracks grouped in that exact order; section start times equal cumulative lengths
-- [ ] `cut` → no bridge songs at that boundary; `blend` → 1–2 bridge songs
-- [ ] energies inside a section move monotonically toward the next section (given mocked energies)
-- [ ] `add_items` with 150 ordered URIs → Spotify receives them in the same order across batches
-- [ ] description fits 300 chars and contains every section label
-- [ ] `live`: the 2026-10-23 prompt gives 3 sections in order, workout 27–33 min, and starts the focus section with no bridge. Listen to it once and note in this file whether the switches felt right
+- [x] 3-section brief → tracks grouped in that exact order; section start times equal cumulative lengths
+- [x] `cut` → no bridge songs at that boundary; `blend` → 1–2 bridge songs
+- [x] energies inside a section move monotonically toward the next section (given mocked energies)
+- [x] `add_items` with 150 ordered URIs → Spotify receives them in the same order across batches
+- [x] description fits 300 chars and contains every section label
+- [x] `live`: the 2026-10-23 prompt gives 3 sections in order, workout 27–33 min, and starts the focus section with no bridge. Listen to it once and note in this file whether the switches felt right
 
 Gate: `pytest tests/test_p13_arcs.py` green, and the live playlist sounds like the prompt.
+
+Done 2026-10-23 apart from the listening check. Live (https://open.spotify.com/playlist/6syI6aMNiem5YKKJxItpJu): Summer morning, 3 tracks (12.7 min) → Workout, 12 tracks (28.7 min), opening with two bridges at energy 6 and 7, peaking at 9, easing to 8 → Lock in, 4 tracks (16.3 min), opening straight at energy 5 with no bridge. Each track's energy and role are stored (migration 5) for Phase 15's reflection. Energy is the model's judgement; see "Later" if it proves unreliable.
+Listening check (yours): did the switches feel right?
 
 ---
 

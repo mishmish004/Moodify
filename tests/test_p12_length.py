@@ -117,7 +117,7 @@ def test_sections_fill_to_their_own_lengths_in_order(logged_in, respx_mock, brie
     built = [e for e in _job_events(post) if e["kind"] == "built"][0]
     assert built["targets"] == [15.0, 30.0, 15.0] and built["section_minutes"] == [14.0, 28.0, 14.0]
     created = json.loads(sp.create.calls.last.request.content)
-    assert created["description"].endswith("(56 min)")
+    assert created["description"] == "0–14 Part 1 → 14–42 Part 2 → 42–56 Part 3. Made by Moodify."  # Phase 13 timeline
 
 
 def test_only_short_sections_get_one_more_call(logged_in, respx_mock, briefs):

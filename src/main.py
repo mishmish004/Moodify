@@ -230,7 +230,29 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "rules": rule_list(brief.hard_rules) if brief else [],
         "total_minutes": round(sum(t.duration_ms for t in tracks) / 60_000),
         "section_minutes": playlists.section_minutes(playlist_id),
+        "groups": _section_groups(brief, tracks, playlists.track_sections(playlist_id)),
     })
+
+
+def _section_groups(brief: Optional[Brief], tracks: list, sections: list[Optional[int]]) -> list[dict]:
+    """Tracks under their section's heading with its start time, for playlists with several sections."""
+    if brief is None or len(brief.sections) < 2 or None in sections:
+        return []
+    groups, elapsed = [], 0
+    for position, (track, section) in enumerate(zip(tracks, sections), start=1):
+        if not groups or groups[-1]["section"] != section:
+            groups.append({"section": section, "label": brief.sections[section].label, "start": _clock(elapsed),
+                           "first": position, "tracks": []})
+        groups[-1]["tracks"].append(track)
+        elapsed += track.duration_ms
+    return groups
+
+
+def _clock(ms: int) -> str:
+    """14:20, or 1:04:20 past an hour."""
+    seconds = ms // 1000
+    hours, minutes = divmod(seconds // 60, 60)
+    return f"{hours}:{minutes:02d}:{seconds % 60:02d}" if hours else f"{minutes}:{seconds % 60:02d}"
 
 
 @app.get("/history")

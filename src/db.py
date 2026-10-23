@@ -64,6 +64,11 @@ MIGRATIONS = [
         PRIMARY KEY (spotify_id, query)
     );
     """,
+    # 5 (Phase 13): each track's energy and role, for the order and for reflecting on reviews (Phase 15)
+    """
+    ALTER TABLE playlist_tracks ADD COLUMN energy INTEGER;
+    ALTER TABLE playlist_tracks ADD COLUMN role TEXT;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

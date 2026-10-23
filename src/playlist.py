@@ -8,8 +8,10 @@ Sections still short after the first round get one extra suggestion call, for th
 run() is the background entry point: it records how the build ended on its job.
 """
 import json
+from typing import Optional
 
 from src import jobs, playlists, search_cache, taste, users
+from src.arc import arrange, timeline
 from src.brief import Brief, familiar_percent, read_prompt
 from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
@@ -86,18 +88,20 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
                                   trace=trace, **ask)
             finder.place(sp, extra, fills)
             songs = songs + extra
-        tracks = [t for f in fills for t in f.tracks]
-        if not tracks:
+        if not any(f.tracks for f in fills):
             raise BuildFailed(jobs.NO_MATCHES)
+        ordered = arrange([f.tracks for f in fills], finder.energy, finder.roles, brief)
+        tracks = [t for section in ordered for t in section]
         minutes = round(sum(f.total for f in fills))
         trace.step("Saving the playlist to your Spotify")
-        description = f"Made by Moodify: {brief.summary} ({minutes} min)"
-        if len(description) > DESCRIPTION_CHARS:
-            description = description[: DESCRIPTION_CHARS - 1] + "…"
+        description = _description(brief, [f.total for f in fills], minutes)
         playlist = sp.create_playlist(f"Moodify: {brief.title}", description)
         sp.add_items(playlist.id, [t.uri for t in tracks])
-    sections = [i for i, f in enumerate(fills) for _ in f.tracks]
-    row_id = playlists.insert(user["spotify_id"], mood, playlist.url, tracks, brief.model_dump_json(), sections)
+    sections = [i for i, section in enumerate(ordered) for _ in section]
+    row_id = playlists.insert(
+        user["spotify_id"], mood, playlist.url, tracks, brief.model_dump_json(), sections,
+        [finder.energy.get(t.uri) for t in tracks], [finder.roles.get(t.uri) for t in tracks],
+    )
     pool_uris = {t.uri for t in profile.pool}
     known = sum(t.uri in pool_uris for t in tracks)
     MoodifyLogger.get_logger("playlist").info(
@@ -110,6 +114,17 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
     return row_id
 
 
+def _description(brief: Brief, section_minutes: list[float], minutes: int) -> str:
+    """The timeline for a playlist with several sections ("0–14 Summer morning → 14–44 Workout → ..."),
+    else the summary; always within Spotify's limit."""
+    if len(brief.sections) > 1:
+        text = f"{timeline(brief, section_minutes)}. Made by Moodify."
+        if len(text) <= DESCRIPTION_CHARS:
+            return text
+    text = f"Made by Moodify: {brief.summary} ({minutes} min)"
+    return text if len(text) <= DESCRIPTION_CHARS else text[: DESCRIPTION_CHARS - 1] + "…"
+
+
 class _Finder:
     """Turns suggested songs into Spotify tracks and offers each to its section. Searches only while
     the song's section still needs tracks, never twice for the same song, and at most MAX_SEARCHES."""
@@ -120,6 +135,8 @@ class _Finder:
         self.cache_hits = 0
         self.tried: set[tuple[str, str]] = set()  # songs already looked at in this build
         self.used: set[str] = set()                # URIs already in the playlist
+        self.energy: dict[str, int] = {}           # by URI, from the song that placed it
+        self.roles: dict[str, Optional[str]] = {}
 
     def place(self, sp: SpotifyClient, songs: list[Song], fills: list[SectionFill]) -> None:
         for song in songs:
@@ -136,6 +153,9 @@ class _Finder:
                 continue
             if fill.offer(track):
                 self.used.add(track.uri)
+                if song.energy:
+                    self.energy[track.uri] = min(10, max(1, song.energy))
+                self.roles[track.uri] = song.role
             else:
                 self.trace.event("skipped", title=track.name, minutes=round(track.duration_ms / 60_000, 1),
                                  reason="length rule" if not fill.done else "section full")

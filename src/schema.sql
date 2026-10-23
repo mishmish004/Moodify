@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     artists_json  TEXT NOT NULL,
     duration_ms   INTEGER NOT NULL,
     section       TEXT,
+    -- Phase 13: the model's energy (1-10) and role for the track; see src/arc.py
+    energy        INTEGER,
+    role          TEXT,
     PRIMARY KEY (playlist_id, position)
 );
 

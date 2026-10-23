@@ -5,7 +5,7 @@ One OpenAI call with structured JSON output. The LLM is the music catalog here:
 it proposes songs from what it knows, and Phase 6 checks each one against
 Spotify search, so an invented song costs one wasted search and nothing more.
 """
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -26,6 +26,11 @@ Rules:
   energy levels and hard rules. Hard rules are never broken, whatever the taste summary says.
 - When the request has several sections, set "section" on each song to the number of the section it is for,
   and suggest the number of songs asked for each section. With one section, "section" is 1.
+- For each song give "energy": how intense it feels, 1 (very still) to 10 (peak), and "role": "opener",
+  "build", "peak", "bridge" or "closer" for its place in its section.
+- In a section that eases in from the previous one, list 1-2 "bridge" songs first: energy between the
+  previous section's and this one's. A section that starts with a hard cut gets no bridge songs; its
+  first song is already at the section's full energy.
 - Vary the artists: at most 2 songs per artist.
 - Use the original title and the main artist only, as they appear on streaming services.
 - Some requests list songs the listener already knows, numbered. When you pick one of those, copy its
@@ -40,6 +45,8 @@ class Song(BaseModel):
     artist: str
     known: Optional[int] = None  # number in the known-songs list, when picked from it
     section: Optional[int] = None  # 1-based section of the brief (Phase 12)
+    energy: Optional[int] = None  # 1-10, the model's judgement (Phase 13)
+    role: Optional[Literal["opener", "build", "peak", "bridge", "closer"]] = None
 
 
 class Suggestions(BaseModel):
@@ -101,7 +108,7 @@ def _clean(suggested: list[Song]) -> list[Song]:
     """Strip whitespace, drop blanks and case-insensitive duplicates."""
     songs, seen = [], set()
     for song in suggested:
-        song = Song(title=song.title.strip(), artist=song.artist.strip(), known=song.known, section=song.section)
+        song = song.model_copy(update={"title": song.title.strip(), "artist": song.artist.strip()})
         key = (song.title.lower(), song.artist.lower())
         if song.title and song.artist and key not in seen:
             seen.add(key)
