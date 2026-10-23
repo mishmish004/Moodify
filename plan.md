@@ -220,6 +220,12 @@ Gate: a friend has a playlist in their account that they didn't make themselves.
 
 ---
 
+## Next
+
+Phases 9–17 (Spotify data, prompt understanding, length, mood switches, likes and ratings, written reviews, memory, opening the app on phones) are in `phase-plan.md`.
+
+---
+
 ## Later, only if needed
 
 - [ ] Re-consent flow when `ReauthRequired` fires (refresh tokens die after 6 months): redirect to `/login` with a message
