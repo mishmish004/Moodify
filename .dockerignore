@@ -1,0 +1,14 @@
+venv/
+anaconda3/
+miniconda3/
+moodify/
+__pycache__/
+*.pyc
+
+.git/
+.gitignore/
+
+qdrant_starage/
+*.log
+
+.env
