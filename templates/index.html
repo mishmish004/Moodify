@@ -4,10 +4,10 @@
 <h1>How are you feeling?</h1>
 <form method="post" action="/playlist" data-busy="Making your playlist…">
   <label for="mood">The mood, the moment, or what you're doing</label>
-  <textarea id="mood" name="mood" required maxlength="300" rows="3" placeholder="e.g. rainy sunday, a bit nostalgic, nothing sleepy"></textarea>
+  <textarea id="mood" name="mood" required maxlength="2000" rows="4" placeholder="e.g. chill summer morning, then 30 min workout, then straight into focus mode. Say it however you like: a word, a list, a paragraph.">{{ prompt }}</textarea>
   <button type="submit" class="wide">Make a playlist</button>
 </form>
-<p><small>Takes up to a minute: an AI model suggests the songs, then each one is looked up on Spotify.</small></p>
+<p><small>Takes a minute or two: an AI model reads your request and suggests songs, then each one is looked up on Spotify.</small></p>
 
 {% if recent %}
 <h2>Recent playlists</h2>

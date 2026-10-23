@@ -200,10 +200,11 @@ def test_new_account_with_no_listening_still_gets_a_summary(user, respx_mock):
 # --- known songs in the prompt and the build ---------------------------------------------------------
 
 def test_prompt_lists_known_songs_per_user_part_first():
-    prompt = user_prompt("rainy sunday", "Likes rap.", 30, [], LIKED[:3], 30)
-    assert "1. Liked 0 by Liker 0\n2. Liked 1 by Liker 1\n3. Liked 2 by Liker 2" in prompt
-    assert "about 30%" in prompt
-    assert prompt.index("Listener's taste") < prompt.index("already knows") < prompt.index("Mood: rainy sunday")
+    per_user, per_request = user_prompt("rainy sunday", "Likes rap.", 30, [], LIKED[:3], 30)
+    assert "1. Liked 0 by Liker 0\n2. Liked 1 by Liker 1\n3. Liked 2 by Liker 2" in per_user
+    assert "about 30%" in per_request  # the share can change per prompt (Phase 11), so it's per request
+    assert per_user.index("Listener's taste") < per_user.index("already knows")
+    assert per_request.startswith("Mood: rainy sunday")
 
 
 @pytest.mark.parametrize("answer, percent", [("new", 10), ("mix", 30), ("known", 60), (None, 30)])
@@ -283,8 +284,8 @@ def test_build_finds_songs_named_with_several_artists(logged_in, respx_mock):
 
 
 def test_known_list_shows_only_the_main_artist():
-    prompt = user_prompt("x", "y", 30, [], [Track("spotify:track:a", "Slide", ("Calvin Harris", "Frank Ocean", "Migos"), 1)], 30)
-    assert "1. Slide by Calvin Harris\n" in prompt and "Frank Ocean" not in prompt
+    per_user, _ = user_prompt("x", "y", 30, [], [Track("spotify:track:a", "Slide", ("Calvin Harris", "Frank Ocean", "Migos"), 1)], 30)
+    assert per_user.endswith("1. Slide by Calvin Harris") and "Frank Ocean" not in per_user
 
 
 # --- live ------------------------------------------------------------------------------------------

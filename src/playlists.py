@@ -7,12 +7,12 @@ from src.db import get_conn
 from src.spotify.client import Track
 
 
-def insert(spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track]) -> int:
+def insert(spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track], brief_json: Optional[str] = None) -> int:
     """The playlist row and its tracks, in order, in one transaction."""
     with get_conn() as conn:
         playlist_id = conn.execute(
-            "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES (?, ?, ?, ?)",
-            (spotify_id, prompt, spotify_url, json.dumps([t.uri for t in tracks])),
+            "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json, brief_json) VALUES (?, ?, ?, ?, ?)",
+            (spotify_id, prompt, spotify_url, json.dumps([t.uri for t in tracks]), brief_json),
         ).lastrowid
         conn.executemany(
             "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms)"
@@ -44,7 +44,8 @@ def recent(spotify_id: str, limit: int = 5) -> list[sqlite3.Row]:
     """Newest first, with track_count. limit=-1 means all of them (SQLite's "no limit")."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT *, json_array_length(track_uris_json) AS track_count FROM playlists"
+            "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title"
+            " FROM playlists"
             " WHERE spotify_id = ? ORDER BY id DESC LIMIT ?",
             (spotify_id, limit),
         ).fetchall()

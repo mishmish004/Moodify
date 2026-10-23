@@ -50,6 +50,10 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN granted_scopes TEXT;
     ALTER TABLE users ADD COLUMN taste_pool_json TEXT;
     """,
+    # 3 (Phase 11): the brief each playlist was built from
+    """
+    ALTER TABLE playlists ADD COLUMN brief_json TEXT;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

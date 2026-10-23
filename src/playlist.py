@@ -1,7 +1,7 @@
 """
 mood -> a real playlist in the user's Spotify account.
 
-suggest (LLM) -> search each song on Spotify -> pick the matching track
+read the prompt into a brief (LLM) -> suggest (LLM) -> search each song on Spotify -> pick the matching track
 -> dedupe, stop at MAX_TRACKS -> create playlist -> add items -> save the row and its tracks.
 Songs the LLM takes from the user's known-songs pool need no search (Phase 10).
 If fewer than MIN_TRACKS matched, the LLM is asked once more for extra songs.
@@ -10,6 +10,7 @@ run() is the background entry point: it records how the build ended on its job.
 import json
 
 from src import jobs, playlists, taste, users
+from src.brief import Brief, familiar_percent, read_prompt
 from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
 from src.jobs import NO_TRACE, Trace
@@ -20,7 +21,7 @@ from src.suggest import Song, clean_mood, suggest_songs
 MAX_TRACKS = 25
 MIN_TRACKS = 8
 EXTRA_SONGS = 15
-NAME_CHARS = 60  # how much of the mood goes into the playlist name
+DESCRIPTION_CHARS = 300  # Spotify's limit for a playlist description
 
 
 class BuildFailed(Exception):
@@ -59,28 +60,34 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
     mood = clean_mood(mood)
     trace.step("Reading your taste")
     profile = taste.profile_for(user)
-    ask = {"known": profile.pool, "familiar_percent": taste.familiar_percent(json.loads(user["onboarding_json"] or "{}"))}
+    trace.step("Reading your prompt")
+    brief = read_prompt(mood, profile.summary, trace, spotify_id=user["spotify_id"])
+    trace.event("brief", title=brief.title, sections=len(brief.sections), support_note=brief.support_note)
+    onboarding_percent = taste.familiar_percent(json.loads(user["onboarding_json"] or "{}"))
+    ask = {"known": profile.pool, "familiar_percent": familiar_percent(brief, onboarding_percent),
+           "brief": brief, "spotify_id": user["spotify_id"]}
     trace.step("Asking for song ideas")
     songs = suggest_songs(mood, profile.summary, trace=trace, **ask)
     if not songs:
         raise BuildFailed(jobs.NO_SUGGESTIONS)
     trace.step("Finding the songs on Spotify")
     with SpotifyClient.for_user(user) as sp:
-        tracks, searched = _resolve(sp, songs, trace, profile.pool)
+        tracks, searched = _resolve(sp, songs, trace, brief, profile.pool)
         suggested = len(songs)
         if len(tracks) < MIN_TRACKS:
             trace.step("Asking for a few more songs")
             extra = suggest_songs(mood, profile.summary, n=EXTRA_SONGS, exclude=songs, trace=trace, **ask)
             more, more_searched = _resolve(
-                sp, extra, trace, profile.pool, seen={t.uri for t in tracks}, room=MAX_TRACKS - len(tracks)
+                sp, extra, trace, brief, profile.pool, seen={t.uri for t in tracks}, room=MAX_TRACKS - len(tracks)
             )
             tracks, searched, suggested = tracks + more, searched + more_searched, suggested + len(extra)
         if not tracks:
             raise BuildFailed(jobs.NO_MATCHES)
         trace.step("Saving the playlist to your Spotify")
-        playlist = sp.create_playlist(f"Moodify: {mood[:NAME_CHARS]}", f"Made by Moodify for: {mood}")
+        description = f"Made by Moodify: {brief.summary}"[:DESCRIPTION_CHARS]
+        playlist = sp.create_playlist(f"Moodify: {brief.title}", description)
         sp.add_items(playlist.id, [t.uri for t in tracks])
-    row_id = playlists.insert(user["spotify_id"], mood, playlist.url, tracks)
+    row_id = playlists.insert(user["spotify_id"], mood, playlist.url, tracks, brief.model_dump_json())
     pool_uris = {t.uri for t in profile.pool}
     known = sum(t.uri in pool_uris for t in tracks)
     MoodifyLogger.get_logger("playlist").info(
@@ -92,32 +99,40 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
 
 
 def _resolve(
-    sp: SpotifyClient, songs: list[Song], trace: Trace, pool: list[Track] = (),
+    sp: SpotifyClient, songs: list[Song], trace: Trace, brief: Brief, pool: list[Track] = (),
     seen: set[str] | None = None, room: int = MAX_TRACKS,
 ) -> tuple[list[Track], int]:
     """Find each suggestion's track: straight from the known-songs pool when the LLM picked one from it
-    (and it really is that song), else by search. Stops once `room` tracks are found, so a good first
-    batch costs at most MAX_TRACKS searches. Returns (tracks, searches made)."""
+    (and it really is that song), else by search. Tracks breaking a hard rule Spotify has data for
+    (explicit) are dropped. Stops once `room` tracks are found, so a good first batch costs at most
+    MAX_TRACKS searches. Returns (tracks, searches made)."""
     seen = set() if seen is None else seen
     tracks: list[Track] = []
     searched = 0
+
+    def allowed(track: Track) -> bool:
+        return not (brief.hard_rules.no_explicit and track.explicit)
+
     for song in songs:
         if len(tracks) >= room:
             break
         from_pool = pool[song.known - 1] if song.known and 1 <= song.known <= len(pool) else None
-        # A wrong number from the LLM must not slip in a different song: the pool entry has to match too
-        if from_pool and pick(song, [from_pool]):
-            candidates, uri = [from_pool], from_pool.uri
+        # A wrong number from the LLM must not slip in a different song: the pool entry has to match too.
+        # An explicit one under "no explicit" is searched instead, which can find the clean version
+        if from_pool and allowed(from_pool) and pick(song, [from_pool]):
+            track = from_pool
             trace.event("known", title=song.title, artist=song.artist, number=song.known)
         else:
             candidates = sp.search_track(song.title, primary_artist(song.artist))
             searched += 1
-            uri = pick(song, candidates)
+            uri = pick(song, [c for c in candidates if allowed(c)])
+            track = next((c for c in candidates if c.uri == uri), None)
             trace.event(
                 "search", step=f"Finding the songs on Spotify ({searched}/{len(songs)})",
-                title=song.title, artist=song.artist, candidates=len(candidates), matched=uri is not None,
+                title=song.title, artist=song.artist, candidates=len(candidates), matched=track is not None,
+                **({"explicit_skipped": sum(not allowed(c) for c in candidates)} if brief.hard_rules.no_explicit else {}),
             )
-        if uri and uri not in seen:
-            seen.add(uri)
-            tracks.append(next(t for t in candidates if t.uri == uri))
+        if track and track.uri not in seen:
+            seen.add(track.uri)
+            tracks.append(track)
     return tracks, searched

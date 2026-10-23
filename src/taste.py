@@ -183,11 +183,13 @@ def read_listening(user) -> Listening:
 
 
 def _dump_pool(pool: list[Track]) -> str:
-    return json.dumps([[t.uri, t.name, list(t.artists), t.duration_ms] for t in pool])
+    return json.dumps([[t.uri, t.name, list(t.artists), t.duration_ms, t.explicit] for t in pool])
 
 
 def _load_pool(raw) -> list[Track]:
-    return [Track(uri, name, tuple(artists), ms) for uri, name, artists, ms in json.loads(raw or "[]")]
+    # Pools cached before Phase 11 have no explicit flag (4 fields)
+    return [Track(entry[0], entry[1], tuple(entry[2]), entry[3], bool(entry[4:5] and entry[4]))
+            for entry in json.loads(raw or "[]")]
 
 
 def _stale(updated_at) -> bool:

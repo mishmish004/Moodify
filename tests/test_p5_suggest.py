@@ -65,18 +65,22 @@ def test_request_carries_mood_taste_model_and_schema(chat, test_settings):
     assert body["response_format"]["json_schema"]["strict"] is True
 
 
-def test_long_mood_is_truncated_to_300(chat):
+def test_long_mood_is_truncated_to_2000(chat):
+    # Phase 11 raised the cap from 300: detailed prompts are long, and cutting them drops rules
     chat.respond(200, json=_completion(_songs_json(1)))
-    suggest_songs("m" * 2000, TASTE)
+    suggest_songs("m" * 5000, TASTE)
     user_message = json.loads(chat.calls.last.request.content)["messages"][-1]["content"]
-    assert "m" * 300 in user_message
-    assert "m" * 301 not in user_message
+    assert "m" * 2000 in user_message
+    assert "m" * 2001 not in user_message
 
 
 def test_clean_mood_strips_control_characters_and_whitespace():
-    assert suggest.clean_mood("rainy\x00 sunday\x1b[31m,\n\n  nostalgic​") == "rainy sunday[31m, nostalgic"
+    # Phase 11: line breaks stay (one per line, blanks dropped), control characters become spaces
+    assert suggest.clean_mood("rainy\x00 sunday\x1b[31m,\n\n  nostalgic​") == "rainy sunday [31m,\nnostalgic"
+    assert suggest.clean_mood("- studying\r\n- 2 hours") == "- studying\n- 2 hours"
+    assert suggest.clean_mood("coding 👩‍💻") == "coding 👩‍💻"
     assert suggest.clean_mood("  ") == ""
-    assert len(suggest.clean_mood("x" * 1000)) == 300
+    assert len(suggest.clean_mood("x" * 3000)) == 2000
 
 
 def test_malformed_json_gives_empty_list_and_logs(chat, suggest_log):

@@ -2,7 +2,7 @@ import json
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import RedirectResponse
@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from src import jobs, playlist, playlists, taste, users
+from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
@@ -168,9 +169,12 @@ def _redirect_to_onboarding(request: Request, exc: OnboardingRequired) -> Redire
 
 
 @app.get("/")
-def home(request: Request, user: sqlite3.Row = Depends(onboarded_user)):
+def home(request: Request, user: sqlite3.Row = Depends(onboarded_user), redo: Optional[int] = None):
+    # "Adjust and redo" on a playlist page comes back here with that playlist's prompt in the box
+    again = playlists.get(redo, user["spotify_id"]) if redo else None
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "summary": taste.summary_for(user), "recent": playlists.recent(user["spotify_id"]),
+        "prompt": again["prompt"] if again else "",
     })
 
 
@@ -188,7 +192,7 @@ BUILD_FAILURES = {
 
 
 @app.post("/playlist")
-def make_playlist(user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=300)):
+def make_playlist(user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=2000)):
     # One build at a time per user: a second submit lands on the build already running
     job = jobs.running_for(user["spotify_id"])
     job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
@@ -218,8 +222,10 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
     row = playlists.get(playlist_id, user["spotify_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    brief = Brief.model_validate_json(row["brief_json"]) if row["brief_json"] else None
     return templates.TemplateResponse(request, "playlist.html", {
         "user": user, "playlist": row, "tracks": playlists.tracks(playlist_id),
+        "brief": brief, "rules": rule_list(brief.hard_rules) if brief else [],
     })
 
 

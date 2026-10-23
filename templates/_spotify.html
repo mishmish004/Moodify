@@ -17,7 +17,7 @@
 {% macro playlist_list(rows) -%}
 <ul class="list">
   {% for p in rows %}
-  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.prompt }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}</small></span>{{ icon() }}</a></li>
+  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}</small></span>{{ icon() }}</a></li>
   {% endfor %}
 </ul>
 {%- endmacro %}

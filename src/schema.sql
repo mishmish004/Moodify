@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS playlists (
     prompt           TEXT NOT NULL,
     spotify_url      TEXT NOT NULL,
     track_uris_json  TEXT NOT NULL,
-    created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Phase 11: how Moodify read the prompt (src/brief.py Brief as JSON)
+    brief_json       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS playlists_by_user ON playlists (spotify_id, created_at);

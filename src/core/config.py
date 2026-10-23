@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # LLM that turns mood + taste into song suggestions
     OPENAI_API_KEY: SecretStr = Field(...)
     OPENAI_MODEL: str = "gpt-5.4-mini"
+    # Reads the prompt into a brief (Phase 11); a smaller, faster model can do this. Unset: OPENAI_MODEL
+    OPENAI_BRIEF_MODEL: Optional[str] = None
 
     DB_PATH: Path = PROJECT_ROOT / "data" / "moodify.db"
     BASE_URL: str = "http://127.0.0.1:9091"

@@ -77,7 +77,7 @@ Four layers. Each says what is cached, how it's invalidated, and where it's buil
 3. **OpenAI prompt cache** (cheaper and faster calls). The rules come from OpenAI's guide, since OpenAI is the model Moodify calls; ADK gives the same advice ("Stable prefixes: System instructions, agent identity, and long-lived summaries")
    - Each prompt is laid out in three blocks: **static** (system rules, JSON schema, worked examples; identical for everyone) → **per user, slow-changing** (taste summary + `memory_block`, which change at most daily) → **per request** (the prompt, the brief). Only prompts of 1,024 tokens or more are cached, so the static block is written to exceed that
    - Never edit the prefix per request. OpenAI's guide: "Summarization, compaction, or context truncation can change the prefix and reset cache reuse." Compaction happens in consolidation, not in the prompt
-   - Models before GPT-5.6: `prompt_cache_key = "moodify:{step}:{spotify_id}"`, plus `prompt_cache_retention="24h"` if available. GPT-5.6 and later route automatically; set `prompt_cache_options.ttl="12h"`. Check which applies to `OPENAI_MODEL` when building Phase 11
+   - Every call sends `prompt_cache_key = "moodify:{step}:{spotify_id}"` (harmless on GPT-5.6+, which route automatically, and it gives per-user cache accounting). No retention options: they differ by model generation and an unsupported one fails the request. Decided in Phase 11; revisit if a user's builds are often more than 30 minutes apart
    - Log cached tokens per call into `job_events` (`usage.prompt_tokens_details.cached_tokens` in Chat Completions). Target: ≥50% of input tokens cached on a user's second build within the TTL (Phase 16 test)
 4. **Not cached on purpose**: whole LLM responses (the same prompt should be able to give a fresh playlist), and playlist pages (rebuilt from `playlist_tracks` each time)
 
@@ -156,10 +156,10 @@ Done 2026-10-23 after a re-login. Live: 50 recent plays, 200 liked, 9 follows, 4
 Goal: every prompt, however it's written, becomes a clear brief that the user can see. Nothing is refused or brushed aside.
 
 Build
-- [ ] `src/brief.py`: first LLM call, `read_prompt(prompt, taste, memory) -> Brief` (structured output). `Brief`: `sections[]` (`label`, `feeling`, `energy` 1–10, `minutes | None`, `activity`, `transition_in: cut | blend`), `total_minutes | None`, `hard_rules` (`no_vocals`, `no_explicit`, `no_sudden_loud_changes`, `steady_tempo`, `languages`, `avoid[]`, `max_track_minutes`, `min_track_minutes`), `familiarity`, `tags[]` (activities and feelings, used for memory recall in Phase 16), `support_note: bool`. `OPENAI_BRIEF_MODEL` setting, defaulting to `OPENAI_MODEL`
-- [ ] `src/prompts.py`: every LLM call is assembled in the three-block layout from "Caching" (static → per user → per request). The static block, with rules, schema and worked examples, is over 1,024 tokens. Cache settings are chosen for the configured model
-- [ ] Mood cap 300 → 2,000 chars. Detailed prompts are often long, and cutting them drops rules
-- [ ] Rules in the system prompt, each covered by a fixture prompt in the tests:
+- [x] `src/brief.py`: first LLM call, `read_prompt(prompt, taste, memory) -> Brief` (structured output). `Brief`: `sections[]` (`label`, `feeling`, `energy` 1–10, `minutes | None`, `activity`, `transition_in: cut | blend`), `total_minutes | None`, `hard_rules` (`no_vocals`, `no_explicit`, `no_sudden_loud_changes`, `steady_tempo`, `languages`, `avoid[]`, `max_track_minutes`, `min_track_minutes`), `familiarity`, `tags[]` (activities and feelings, used for memory recall in Phase 16), `support_note: bool`. `OPENAI_BRIEF_MODEL` setting, defaulting to `OPENAI_MODEL`
+- [x] `src/prompts.py`: every LLM call is assembled in the three-block layout from "Caching" (static → per user → per request). The static block, with rules, schema and worked examples, is over 1,024 tokens. Cache settings are chosen for the configured model
+- [x] Mood cap 300 → 2,000 chars. Detailed prompts are often long, and cutting them drops rules
+- [x] Rules in the system prompt, each covered by a fixture prompt in the tests:
   - **Literal and precise prompts** (common among autistic users, useful for everyone): every stated rule is applied exactly as written. "No songs with screaming", "same tempo the whole time", "only songs I know", "nothing with sudden drops" become `hard_rules`, never softened or reinterpreted
   - **Sensory needs**: volume jumps, harsh sounds, busy production and unpredictability can be named as things to avoid, and they are hard rules
   - **Lists, bullet points, info-dumps, mixed languages, slang, typos, emoji** ("lock in", "hella", "🌧️☕") are all read without asking the user to rephrase
@@ -168,18 +168,20 @@ Build
   - **Wanting to change mood** ("anxious, want to calm down", "need to get hyped"): at least 2 sections following the iso principle. Start close to the current feeling, then move step by step to the target
   - **Conflicts**: something the prompt states outright beats onboarding and memory; something it only implies does not (the 2026-10-23 case: "lock in" doesn't override "no instrumental")
   - **Distress**: if the prompt suggests crisis or self-harm, the playlist is still made, and the result page adds one calm line with a support link. Never a refusal, never a lecture
-- [ ] Result page: a "How Moodify read this" box showing sections, length and rules, plus an "Adjust and redo" link that pre-fills the prompt
-- [ ] Suggestion call takes the `Brief` instead of the raw mood
+- [x] Result page: a "How Moodify read this" box showing sections, length and rules, plus an "Adjust and redo" link that pre-fills the prompt
+- [x] Suggestion call takes the `Brief` instead of the raw mood
 
 Tests (`tests/test_p11_prompts.py`)
-- [ ] fixture set of ≥15 prompts covering every rule above (including the 2026-10-23 prompt and a 1,500-char detailed one). With a mocked LLM: each parses, nothing is cut below 2,000 chars, the brief reaches the suggestion call
-- [ ] prompt layout: for two different users and prompts, the static block is byte-identical and comes first; per-request text only appears after the per-user block
-- [ ] malformed brief from the LLM → fallback single-section brief from the raw prompt, never an error page
-- [ ] `support_note` → the support line shows, and the playlist is still created
-- [ ] `hard_rules.avoid` and onboarding "avoid" both reach the suggestion prompt
-- [ ] `live` eval over the fixture set with the real model: the 2026-10-23 prompt gives 3 sections in order with the workout at 30 min and `transition_in: cut` on the focus section; "anxious, want to calm down" gives ≥2 sections with falling energy; every explicit rule in the literal prompts shows up in `hard_rules`
+- [x] fixture set of ≥15 prompts covering every rule above (including the 2026-10-23 prompt and a 1,500-char detailed one). With a mocked LLM: each parses, nothing is cut below 2,000 chars, the brief reaches the suggestion call
+- [x] prompt layout: for two different users and prompts, the static block is byte-identical and comes first; per-request text only appears after the per-user block
+- [x] malformed brief from the LLM → fallback single-section brief from the raw prompt, never an error page
+- [x] `support_note` → the support line shows, and the playlist is still created
+- [x] `hard_rules.avoid` and onboarding "avoid" both reach the suggestion prompt
+- [x] `live` eval over the fixture set with the real model: the 2026-10-23 prompt gives 3 sections in order with the workout at 30 min and `transition_in: cut` on the focus section; "anxious, want to calm down" gives ≥2 sections with falling energy; every explicit rule in the literal prompts shows up in `hard_rules`
 
 Gate: `pytest tests/test_p11_prompts.py` green and the live eval passes on ≥90% of fixtures. Failures get read and the prompt fixed.
+
+Done 2026-10-23. Live eval: 18/18 fixtures read right on `gpt-6.1-sol` (the conflict rule held both ways: "lock in for coding" kept onboarding's "No instrumental tracks", "- NO vocals" overrode it). Prompt caching measured: a second brief call had 2,627 of 2,661 input tokens cached. Built differently from the list above: `src/prompts.py` also holds the one LLM call path (`ask`: retries, tracing, cache key) that both calls now use; prompts keep line breaks (they were being deleted, gluing list items together); "no explicit" is enforced in code with Spotify's `explicit` flag, preferring the clean version among search results; the playlist is named after the brief's title.
 
 ---
 

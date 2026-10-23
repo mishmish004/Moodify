@@ -107,8 +107,9 @@ def test_finished_job_logs_every_step_with_token_counts(logged_in, respx_mock):
 
     events = jobs.events(_job_id(post))
     assert [e["text"] for e in events if e["kind"] == "step"] == [
-        "Reading your taste", "Asking for song ideas", "Finding the songs on Spotify", "Saving the playlist to your Spotify"]
-    llm = [e for e in events if e["kind"] == "llm"]
+        "Reading your taste", "Reading your prompt", "Asking for song ideas", "Finding the songs on Spotify",
+        "Saving the playlist to your Spotify"]
+    llm = [e for e in events if e["kind"] == "llm" and e["call"] == "suggest"]
     assert len(llm) == 1
     assert llm[0] | {"seconds": 0} == {"kind": "llm", "call": "suggest", "model": "gpt-5.4-mini", "attempt": 1, "ok": True,
                                        "songs": 12, "seconds": 0, "input_tokens": 1200, "cached_tokens": 1024, "output_tokens": 300}
@@ -123,7 +124,7 @@ def test_failed_attempts_are_logged_too(logged_in, respx_mock):
     FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
     post = logged_in.post("/playlist", data={"mood": "x"})
     finish_build(logged_in, post)
-    llm = [e for e in jobs.events(_job_id(post)) if e["kind"] == "llm"]
+    llm = [e for e in jobs.events(_job_id(post)) if e["kind"] == "llm" and e["call"] == "suggest"]
     assert [(e["attempt"], e["ok"], e.get("error")) for e in llm] == [(1, False, "APITimeoutError"), (2, True, None)]
 
 

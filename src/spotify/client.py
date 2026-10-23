@@ -31,6 +31,7 @@ class Track:
     name: str
     artists: tuple[str, ...]
     duration_ms: int
+    explicit: bool = False  # Spotify's flag; "no explicit lyrics" is enforced with it (Phase 11)
 
     @property
     def url(self) -> str:
@@ -192,7 +193,8 @@ def _retry_after(resp: httpx.Response) -> float:
 
 
 def _track(item: dict) -> Track:
-    return Track(item["uri"], item["name"], tuple(a["name"] for a in item["artists"]), item["duration_ms"])
+    return Track(item["uri"], item["name"], tuple(a["name"] for a in item["artists"]), item["duration_ms"],
+                 bool(item.get("explicit")))
 
 
 def _unwrap(entries: list[dict]) -> list[Track]:

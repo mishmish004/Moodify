@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 {% from "_spotify.html" import icon, open_spotify %}
-{% block title %}Moodify · {{ playlist.prompt }}{% endblock %}
+{% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
+{% block title %}Moodify · {{ title }}{% endblock %}
 {% block content %}
-<h1>Moodify: {{ playlist.prompt }}</h1>
+{% if brief and brief.support_note %}
+<p class="notice">If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a>.</p>
+{% endif %}
+<h1>Moodify: {{ title }}</h1>
 {% if tracks %}
 <p class="muted">{{ tracks | length }} tracks, saved as a private playlist in your Spotify account.</p>
 {% else %}
@@ -13,6 +17,24 @@
   <button type="submit">Play now</button>
   <small class="hint">Needs Premium and Spotify open on one of your devices.</small>
 </form>
+
+{% if brief %}
+<details class="reading" open>
+  <summary>How Moodify read this</summary>
+  <p>{{ brief.summary }}</p>
+  {% if brief.sections | length > 1 %}
+  <ol>
+    {% for s in brief.sections %}
+    <li><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min{% endif %}{% if not loop.first and s.transition_in == "cut" %} <small>(straight in)</small>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+  {% if rules %}<p><small>Rules kept: {{ rules | join("; ") }}.</small></p>{% endif %}
+  <p class="muted"><small>You wrote: {{ playlist.prompt }}</small></p>
+  <p><a href="/?redo={{ playlist.id }}">Adjust and redo</a></p>
+</details>
+{% endif %}
+
 {% if tracks %}
 <ol class="list">
   {% for t in tracks %}

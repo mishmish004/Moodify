@@ -100,7 +100,7 @@ def user(test_settings):
 
 
 @pytest.fixture
-def logged_in(user, respx_mock):
+def logged_in(user, respx_mock, briefs):
     client = TestClient(app, follow_redirects=False)
     with client:
         state = parse_qs(urlsplit(client.post("/login").headers["location"]).query)["state"][0]
@@ -109,6 +109,7 @@ def logged_in(user, respx_mock):
         respx_mock.get(auth.ME_URL).respond(200, json={"id": "friend1", "display_name": "Friend One"})
         client.get("/callback", params={"code": "c", "state": state})
         respx_mock.routes.clear()
+        briefs.install(respx_mock)
         yield client
 
 

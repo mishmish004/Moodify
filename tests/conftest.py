@@ -1,5 +1,6 @@
 """Shared fixtures. Every test gets settings built from TEST_ENV alone, its own SQLite file,
 and no real network unless it's marked live."""
+import json
 import socket
 import time
 from pathlib import Path
@@ -39,6 +40,59 @@ def test_settings(request, monkeypatch, tmp_path) -> Settings:
     get_settings.cache_clear()
     yield get_settings()
     get_settings.cache_clear()
+
+
+CHAT_URL = "https://api.openai.com/v1/chat/completions"
+
+
+class BriefMock:
+    """Answers the brief call (src/brief.py) in offline tests, which builds make before suggesting songs.
+    By default: one section, titled with the request's first line. Set `answer` (a Brief dict), `raw`
+    (the reply text as is) or `status` (an HTTP error) to change it; `calls` holds the requests."""
+
+    def __init__(self):
+        self.answer: dict | None = None
+        self.raw: str | None = None
+        self.status = 200
+        self.calls: list = []
+
+    def install(self, respx_mock) -> None:
+        """Route brief calls here. Again after a test clears its routes."""
+        respx_mock.post(CHAT_URL, json__response_format__json_schema__name="Brief").mock(side_effect=self)
+
+    def __call__(self, request):
+        self.calls.append(request)
+        if self.status != 200:
+            return httpx.Response(self.status, json={"error": {"message": "mocked failure"}})
+        request_text = json.loads(request.content)["messages"][-1]["content"].split("Request: ", 1)[-1]
+        content = self.raw if self.raw is not None else json.dumps(
+            self.answer or default_brief(request_text.split("\n", 1)[0][:40]))
+        return httpx.Response(200, json={"id": "b", "object": "chat.completion", "created": 0, "model": "m", "choices": [
+            {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": content}}]})
+
+
+def default_brief(title: str, **changes) -> dict:
+    brief = {
+        "title": title or "Your mood", "summary": "Read as one mood.",
+        "sections": [{"label": "Your mood", "feeling": "as described", "energy": 5, "minutes": None, "activity": None,
+                      "transition_in": "blend"}],
+        "total_minutes": None,
+        "hard_rules": {"no_vocals": False, "no_explicit": False, "no_sudden_loud_changes": False, "steady_tempo": False,
+                       "languages": [], "avoid": [], "max_track_minutes": None, "min_track_minutes": None},
+        "familiarity": "default", "tags": [], "support_note": False,
+    }
+    return {**brief, **changes}
+
+
+@pytest.fixture(autouse=True)
+def briefs(request):
+    """Every offline test gets the brief route, ahead of any catch-all chat route a test adds later."""
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("docker"):
+        yield None
+        return
+    mock = BriefMock()
+    mock.install(request.getfixturevalue("respx_mock"))
+    yield mock
 
 
 @pytest.fixture(autouse=True)
