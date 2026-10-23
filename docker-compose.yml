@@ -1,31 +1,14 @@
-version: '3.8'
-
 services:
-  logic:
+  app:
     build: .
-    container_name: moodify-logic
+    container_name: moodify-app
     ports:
-      - "8000:8000"
+      # Host 9091 matches the Spotify redirect URI; uvicorn listens on 8000 inside the container
+      - "9091:8000"
+    # Settings come from the host's .env at runtime; .env is never copied into the image
+    env_file: .env
     volumes:
-      - ./app:/app
-    depends_on:
-      - redis
-      - qdrant
-    environment:
-      - REDIS_HOST=redis
-      - QDRANT_HOST=qdrant
+      - moodify-data:/app/data
 
-  redis:
-    image: redis:7-alpine
-    container_name: moodify-redis
-    ports:
-      - "6379:6379"
-
-  qdrant:
-    image: qdrant/qdrant:v1.7.0
-    container_name: moodify-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - ./.qdrant_storage:/qdrant/storage
+volumes:
+  moodify-data:

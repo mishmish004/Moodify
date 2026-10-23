@@ -33,9 +33,8 @@ COPY . .
 ENV PYTHONPATH=/app
 
 # Create a non-root user for security (Production Standard)
-RUN useradd -m moodify_user
+# /app/data is where the SQLite volume mounts; it must be writable by that user
+RUN useradd -m moodify_user && mkdir -p /app/data && chown moodify_user /app/data
 USER moodify_user
 
-# Default Command: Runs the Search API (when we get to FastAPI)
-# For now, it keeps the container alive or runs your script
-CMD ["python", "-m", "run_search"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -5,7 +5,3 @@ class MoodifyException(Exception):
 class DatabaseConnectionError(MoodifyException):
     """"""
     pass
-
-class AudioProcessingError(MoodifyException):
-    """CLAP processing failed"""
-    pass

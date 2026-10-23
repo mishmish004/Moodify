@@ -1,6 +1,7 @@
 # Secrets
 .env
 .env.*
+!.env.example
 
 # Environments
 .venv/
@@ -10,6 +11,9 @@ __pycache__/
 .pytest_cache/
 
 # Local data / state
+*.db
+*.db-wal
+*.db-shm
 .qdrant_storage/
 data/
 logs/

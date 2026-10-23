@@ -20,20 +20,20 @@ Friends-only Spotify mood-playlist app. One FastAPI process, one SQLite file, tw
 Goal: an empty-but-running app with the old pipeline gone and nothing lost.
 
 Build
-- [ ] `git add -A && git commit` the current state so the removal is reversible
-- [ ] Delete `src/services/{ai_engine,ingestion,query_engine,searcher}.py`, `src/schemas/{ingestion,songs}.py`, `src/api/v1/endpoints/ingest.py`, `scripts/`, `notebooks/`, `app/`
-- [ ] Delete `tests/checkup/` except the hygiene checks, which move to `tests/test_p0_reset.py`
-- [ ] `requirements.txt`: keep `fastapi`, `uvicorn`, `httpx`, `pydantic`, `pydantic-settings`, `openai`, `python-multipart`; add `jinja2`, `itsdangerous`; dev: `pytest`, `pytest-asyncio`, `respx`. Drop torch, laion-clap, qdrant-client, redis, tinytag, requests
-- [ ] `docker-compose.yml`: single `app` service, one volume for the SQLite file; remove redis and qdrant
-- [ ] `src/main.py`: FastAPI app with `GET /health` → `{"status": "ok"}`
-- [ ] `.env.example` listing every setting from Phase 1 with placeholder values
+- [x] `git add -A && git commit` the current state so the removal is reversible
+- [x] Delete `src/services/{ai_engine,ingestion,query_engine,searcher}.py`, `src/schemas/{ingestion,songs}.py`, `src/api/v1/endpoints/ingest.py`, `scripts/`, `notebooks/`, `app/`
+- [x] Delete `tests/checkup/` except the hygiene checks, which move to `tests/test_p0_reset.py`
+- [x] `requirements.txt`: keep `fastapi`, `uvicorn`, `httpx`, `pydantic`, `pydantic-settings`, `openai`, `python-multipart`; add `jinja2`, `itsdangerous`; dev: `pytest`, `pytest-asyncio`, `respx`. Drop torch, laion-clap, qdrant-client, redis, tinytag, requests
+- [x] `docker-compose.yml`: single `app` service, one volume for the SQLite file; remove redis and qdrant
+- [x] `src/main.py`: FastAPI app with `GET /health` → `{"status": "ok"}`
+- [x] `.env.example` listing every setting from Phase 1 with placeholder values
 
 Tests (`tests/test_p0_reset.py`)
-- [ ] no secrets in tracked files (`sk-`, `client_secret`, `.env` contents)
-- [ ] `.gitignore` covers `.env`, `*.db`, `.venv`
-- [ ] every module under `src/` imports without side effects
-- [ ] no banned import anywhere in `src/` (`torch`, `laion_clap`, `qdrant_client`, `redis`)
-- [ ] `GET /health` returns 200
+- [x] no secrets in tracked files (`sk-`, `client_secret`, `.env` contents)
+- [x] `.gitignore` covers `.env`, `*.db`, `.venv`
+- [x] every module under `src/` imports without side effects
+- [x] no banned import anywhere in `src/` (`torch`, `laion_clap`, `qdrant_client`, `redis`)
+- [x] `GET /health` returns 200
 
 Gate: `pytest tests/test_p0_reset.py` green and `pip install -r requirements.txt` finishes in under a minute on a clean venv.
 
@@ -44,18 +44,18 @@ Gate: `pytest tests/test_p0_reset.py` green and `pip install -r requirements.txt
 Goal: settings fail loudly, the database exists, nothing else.
 
 Build
-- [ ] `src/core/config.py` trimmed to: `ENV`, `SECRET_KEY`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `DB_PATH`, `BASE_URL`. Secrets as `SecretStr`
-- [ ] Decide `OPENAI_MODEL` (config currently says `gpt-6.1-sol`, notes say `gpt-5.4-mini`) and set the default once
-- [ ] `src/db.py`: stdlib `sqlite3`, `init_db()` runs `schema.sql`, WAL mode, `get_conn()` context manager
-- [ ] `schema.sql`: `users(spotify_id PK, display_name, refresh_token, onboarding_json, taste_summary, taste_updated_at, created_at)` and `playlists(id PK, spotify_id FK, prompt, spotify_url, track_uris_json, created_at)`
-- [ ] `init_db()` called on app startup
+- [x] `src/core/config.py` trimmed to: `ENV`, `SECRET_KEY`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `DB_PATH`, `BASE_URL`. Secrets as `SecretStr`
+- [x] Decide `OPENAI_MODEL` (config currently says `gpt-6.1-sol`, notes say `gpt-5.4-mini`) and set the default once
+- [x] `src/db.py`: stdlib `sqlite3`, `init_db()` runs `schema.sql`, WAL mode, `get_conn()` context manager
+- [x] `schema.sql`: `users(spotify_id PK, display_name, refresh_token, onboarding_json, taste_summary, taste_updated_at, created_at)` and `playlists(id PK, spotify_id FK, prompt, spotify_url, track_uris_json, created_at)`
+- [x] `init_db()` called on app startup
 
 Tests (`tests/test_p1_config.py`)
-- [ ] missing required setting raises `ValidationError`, never `sys.exit`
-- [ ] secrets don't appear in `repr(settings)`
-- [ ] `init_db()` twice on the same file is a no-op (idempotent)
-- [ ] insert → select round-trip for both tables using a `tmp_path` database
-- [ ] deleting a user cascades to their playlists
+- [x] missing required setting raises `ValidationError`, never `sys.exit`
+- [x] secrets don't appear in `repr(settings)`
+- [x] `init_db()` twice on the same file is a no-op (idempotent)
+- [x] insert → select round-trip for both tables using a `tmp_path` database
+- [x] deleting a user cascades to their playlists
 
 Gate: `pytest tests/test_p1_config.py` green.
 
@@ -71,7 +71,7 @@ Build
 - [ ] `GET /login` → redirect to Spotify; `GET /callback` → exchange, upsert user, set signed session cookie (Starlette `SessionMiddleware`)
 - [ ] `current_user` dependency: reads cookie, loads user, 401 → redirect to `/login`
 - [ ] `POST /disconnect`: delete the user's row and clear the cookie (Spotify requires deletion within 5 days of disconnect; we do it instantly)
-- [ ] Redirect URI uses `http://127.0.0.1:8000/callback` in dev (Spotify rejects `localhost`), HTTPS in prod
+- [ ] Redirect URI uses `http://127.0.0.1:9091/callback` in dev (Spotify rejects `localhost`; host port 8000 is taken by another project), HTTPS in prod. Both 9091 and 8888 are registered in the dashboard
 
 Tests (`tests/test_p2_auth.py`)
 - [ ] `authorize_url` contains `code_challenge`, `code_challenge_method=S256`, the configured scopes and `state`

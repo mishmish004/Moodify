@@ -3,7 +3,8 @@ import sys
 import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from src.core.config import settings  # <--- CRITICAL FIX: Missing Import
+# No settings import: modules create loggers at import time, and that must not
+# require a valid .env.
 
 class MoodifyLogger:
     # 1. Anchor Logs to Project Root (Not where script is run)
@@ -27,7 +28,7 @@ class MoodifyLogger:
         MoodifyLogger.setup()
 
         # Naming Convention: moodify.searcher, moodify.api, etc.
-        logger_name = f"{settings.PROJECT_NAME}.{service_name}"
+        logger_name = f"moodify.{service_name}"
         logger = logging.getLogger(logger_name)
 
         # 3. Idempotency Check (Prevent Duplicate Logs)
@@ -35,8 +36,8 @@ class MoodifyLogger:
         if logger.hasHandlers():
             return logger
 
-        # 4. Set Level based on Env
-        log_level = logging.DEBUG if settings.ENV == "dev" else logging.INFO
+        # 4. Debug goes to the file, the console stays at INFO (handlers below)
+        log_level = logging.DEBUG
         logger.setLevel(log_level)
 
         # 5. Formatter (Standardized)

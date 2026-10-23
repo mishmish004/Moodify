@@ -1,14 +1,32 @@
-venv/
-anaconda3/
-miniconda3/
-moodify/
-__pycache__/
-*.pyc
+# The image only needs requirements.txt and src/. Everything else stays out of the build context.
 
-.git/
-.gitignore/
+# VCS, environments, caches
+.git
+.gitignore
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
 
-qdrant_starage/
-*.log
-
+# Secrets: settings come from env_file at runtime
 .env
+.env.*
+
+# Local data / state (the SQLite file lives on a volume)
+data
+**/*.db
+**/*.db-wal
+**/*.db-shm
+logs
+**/*.log
+.qdrant_storage
+_archive
+_trash
+
+# Not needed to run the app
+tests
+docs
+notebooks
+playground
+plan.md

@@ -1,65 +1,48 @@
-import sys
-from typing import Optional
+"""
+App settings from the environment, falling back to .env at the project root.
+
+Nothing is read at import time: call get_settings(). A missing required setting
+raises pydantic's ValidationError naming the field; we never sys.exit() here,
+so tests and the app's startup can catch it.
+"""
 from functools import lru_cache
 from pathlib import Path
-'''
-Production anti-patterns: 
-Config scripts should rarely be asyncronous we need a linear script (syncronous), proper checks(i used pydantic v2 fuck if-else checks)
-Eventually when i need to deploy this i will use a async 
-'''
-from pydantic import(
-    ValidationError, Field, SecretStr,
-    model_validator, field_validator
-)
+from typing import Literal, Optional
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(PROJECT_ROOT))
+
+
 class Settings(BaseSettings):
-    PROJECT_NAME: str = Field("Moodify", description = "Name of the application")
-    ENV: str = Field(..., pattern = "^(dev|test|prod)")
+    ENV: Literal["dev", "test", "prod"] = "dev"
+    SECRET_KEY: SecretStr = Field(..., description="signs the session cookie")
 
-    #DB path
-    QDRANT_HOST: str = Field("localhost")
-    QDRANT_PORT: int = Field(6333)
-    QDRANT_API_KEY: Optional[SecretStr] = Field(None)
-    COLLECTION_NAME: str = Field(..., min_lengths=1)
-    QDRANT_URL : str = Field(..., description="db url")
+    # Spotify (Authorization Code + PKCE). PKCE doesn't need the client secret,
+    # so it's optional until something actually uses it.
+    SPOTIFY_CLIENT_ID: str = Field(..., min_length=1)
+    SPOTIFY_CLIENT_SECRET: Optional[SecretStr] = None
+    # Spotify rejects `localhost`; loopback must be 127.0.0.1, anything else HTTPS
+    SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:9091/callback"
 
+    # LLM that turns mood + taste into song suggestions
+    OPENAI_API_KEY: SecretStr = Field(...)
+    OPENAI_MODEL: str = "gpt-5.4-mini"
 
-
-    VECTOR_SIZE: int = Field(768, gt=0)
-
-    #LLM (query understanding)
-    OPENAI_API_KEY: Optional[SecretStr] = Field(None)
-    OPENAI_MODEL: str = Field("gpt-6.1-sol", description="mid-tier model used to parse user queries")
-
-    #data
-    DATA_DIR: Path = Field(default=PROJECT_ROOT / "data" / "fma_metadata")
-    AUDIO_DIR: Path = Field(default=PROJECT_ROOT / "data" / "fma_small")
+    DB_PATH: Path = PROJECT_ROOT / "data" / "moodify.db"
+    BASE_URL: str = "http://127.0.0.1:9091"
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
-        env_file_encoding = "utf-8",
+        env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="ignore"
+        extra="ignore",
+        # Otherwise a "field required" error prints every loaded value, API keys included
+        hide_input_in_errors=True,
     )
-    @field_validator("DATA_DIR", "AUDIO_DIR", mode="before")
-    @classmethod
-    def create_directories(cls, v: Path) -> Path:
-        path = Path(v)
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-    @model_validator(mode="after")
-    def check_prod_security(self) -> 'Settings':
-        if self.ENV == 'prod' and not self.QDRANT_API_KEY:
-            raise ValueError("api key required for production, update env file or anything related to the api key please dont hardcode it gang")
-        return self
-try:
-    settings = Settings()
-except ValidationError as e:
-    print("config error\n")
-    print(e)
-    sys.exit(1)
+
+
 @lru_cache()
-def get_settings():
-    return Settings()        
+def get_settings() -> Settings:
+    return Settings()
