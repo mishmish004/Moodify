@@ -33,8 +33,8 @@ COPY . .
 ENV PYTHONPATH=/app
 
 # Create a non-root user for security (Production Standard)
-# /app/data is where the SQLite volume mounts; it must be writable by that user
-RUN useradd -m moodify_user && mkdir -p /app/data && chown moodify_user /app/data
+# /app/data (the SQLite volume) and /app/logs (MoodifyLogger's file) must be writable by that user
+RUN useradd -m moodify_user && mkdir -p /app/data /app/logs && chown moodify_user /app/data /app/logs
 USER moodify_user
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -66,21 +66,21 @@ Gate: `pytest tests/test_p1_config.py` green.
 Goal: a friend clicks Login, lands back in the app, and we hold a refresh token for them.
 
 Build
-- [ ] `src/spotify/auth.py`: Authorization Code + PKCE. `authorize_url(state, verifier)`, `exchange_code(code, verifier)`, `refresh(refresh_token)`
-- [ ] Scopes: `user-top-read user-read-private playlist-modify-public playlist-modify-private user-modify-playback-state`
-- [ ] `GET /login` → redirect to Spotify; `GET /callback` → exchange, upsert user, set signed session cookie (Starlette `SessionMiddleware`)
-- [ ] `current_user` dependency: reads cookie, loads user, 401 → redirect to `/login`
-- [ ] `POST /disconnect`: delete the user's row and clear the cookie (Spotify requires deletion within 5 days of disconnect; we do it instantly)
-- [ ] Redirect URI uses `http://127.0.0.1:9091/callback` in dev (Spotify rejects `localhost`; host port 8000 is taken by another project), HTTPS in prod. Both 9091 and 8888 are registered in the dashboard
+- [x] `src/spotify/auth.py`: Authorization Code + PKCE. `authorize_url(state, verifier)`, `exchange_code(code, verifier)`, `refresh(refresh_token)`
+- [x] Scopes: `user-top-read user-read-private playlist-modify-public playlist-modify-private user-modify-playback-state`
+- [x] `GET /login` → redirect to Spotify; `GET /callback` → exchange, upsert user, set signed session cookie (Starlette `SessionMiddleware`)
+- [x] `current_user` dependency: reads cookie, loads user, 401 → redirect to `/login`
+- [x] `POST /disconnect`: delete the user's row and clear the cookie (Spotify requires deletion within 5 days of disconnect; we do it instantly)
+- [x] Redirect URI uses `http://127.0.0.1:9091/callback` in dev (Spotify rejects `localhost`; host port 8000 is taken by another project), HTTPS in prod. Both 9091 and 8888 are registered in the dashboard
 
 Tests (`tests/test_p2_auth.py`)
-- [ ] `authorize_url` contains `code_challenge`, `code_challenge_method=S256`, the configured scopes and `state`
-- [ ] `/callback` with a mismatched `state` → 400, nothing stored
-- [ ] `/callback` with mocked token + `/me` responses → user row exists, cookie set, redirect to `/`
-- [ ] `refresh()` with mocked 200 returns new access token; mocked `invalid_grant` raises `ReauthRequired` (refresh tokens expire after 6 months)
-- [ ] `/disconnect` deletes the row and a following request to a protected route redirects to `/login`
-- [ ] protected route without cookie → redirect to `/login`
-- [ ] `live` (manual, once): log in with your own account in a browser, confirm the row in SQLite
+- [x] `authorize_url` contains `code_challenge`, `code_challenge_method=S256`, the configured scopes and `state`
+- [x] `/callback` with a mismatched `state` → 400, nothing stored
+- [x] `/callback` with mocked token + `/me` responses → user row exists, cookie set, redirect to `/`
+- [x] `refresh()` with mocked 200 returns new access token; mocked `invalid_grant` raises `ReauthRequired` (refresh tokens expire after 6 months)
+- [x] `/disconnect` deletes the row and a following request to a protected route redirects to `/login`
+- [x] protected route without cookie → redirect to `/login`
+- [x] `live` (manual, once): log in with your own account in a browser, confirm the row in SQLite
 
 Gate: `pytest tests/test_p2_auth.py` green and one real login works end to end.
 

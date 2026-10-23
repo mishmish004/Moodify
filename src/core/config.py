@@ -8,8 +8,9 @@ so tests and the app's startup can catch it.
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -41,6 +42,15 @@ class Settings(BaseSettings):
         # Otherwise a "field required" error prints every loaded value, API keys included
         hide_input_in_errors=True,
     )
+
+    @model_validator(mode="after")
+    def check_redirect_uri(self) -> "Settings":
+        # Catch what Spotify would reject at login time, before anyone clicks Login
+        if urlsplit(self.SPOTIFY_REDIRECT_URI).hostname == "localhost":
+            raise ValueError("SPOTIFY_REDIRECT_URI: Spotify rejects localhost, use 127.0.0.1")
+        if self.ENV == "prod" and not self.SPOTIFY_REDIRECT_URI.startswith("https://"):
+            raise ValueError("SPOTIFY_REDIRECT_URI must use https:// in prod")
+        return self
 
 
 @lru_cache()

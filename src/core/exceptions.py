@@ -5,3 +5,14 @@ class MoodifyException(Exception):
 class DatabaseConnectionError(MoodifyException):
     """"""
     pass
+
+class SpotifyError(MoodifyException):
+    """A Spotify call failed. status is 0 when no response came back (timeout, DNS, ...)."""
+    def __init__(self, status: int, body: str):
+        super().__init__(f"Spotify returned {status}: {body[:200]}")
+        self.status = status
+        self.body = body
+
+class ReauthRequired(SpotifyError):
+    """The refresh token is dead (revoked, or past Spotify's 6-month limit); the user must log in again."""
+    pass

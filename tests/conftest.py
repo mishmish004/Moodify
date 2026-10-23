@@ -1,4 +1,6 @@
-"""Shared fixtures. Every test gets settings built from TEST_ENV alone and its own SQLite file."""
+"""Shared fixtures. Every test gets settings built from TEST_ENV alone, its own SQLite file,
+and no real network unless it's marked live."""
+import socket
 from pathlib import Path
 
 import pytest
@@ -26,3 +28,17 @@ def test_settings(monkeypatch, tmp_path) -> Settings:
     get_settings.cache_clear()
     yield get_settings()
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def no_network(request, monkeypatch):
+    """Fail any real connection. respx and TestClient answer before a socket is opened, so mocked
+    calls still work; a call that slipped past the mocks fails here instead of reaching Spotify."""
+    if request.node.get_closest_marker("live"):
+        return
+
+    def blocked(*args, **kwargs):
+        raise RuntimeError(f"real network access in an offline test: {args[1:] or args}")
+
+    monkeypatch.setattr(socket, "getaddrinfo", blocked)
+    monkeypatch.setattr(socket.socket, "connect", blocked)
