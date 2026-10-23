@@ -13,7 +13,7 @@ from src import jobs, playlists, taste, users
 from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
 from src.jobs import NO_TRACE, Trace
-from src.match import pick
+from src.match import pick, primary_artist
 from src.spotify.client import SpotifyClient, Track
 from src.suggest import Song, clean_mood, suggest_songs
 
@@ -110,7 +110,7 @@ def _resolve(
             candidates, uri = [from_pool], from_pool.uri
             trace.event("known", title=song.title, artist=song.artist, number=song.known)
         else:
-            candidates = sp.search_track(song.title, song.artist)
+            candidates = sp.search_track(song.title, primary_artist(song.artist))
             searched += 1
             uri = pick(song, candidates)
             trace.event(

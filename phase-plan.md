@@ -143,11 +143,11 @@ Tests (`tests/test_p10_spotify_data.py`)
 - [x] a user whose `granted_scopes` lacks a new scope is sent to `/login?reason=scopes`
 - [x] summary includes each data source and stays ≤3,000 chars; empty sources (new account) still give a valid summary
 - [x] a pool song picked by number skips search entirely (assert no `/search` call)
-- [ ] `live`: your account returns recent plays and Liked Songs, and the summary mentions artists from both
+- [x] `live`: your account returns recent plays and Liked Songs, and the summary mentions artists from both
 
 Gate: `pytest tests/test_p10_spotify_data.py` green, and after re-login a live playlist has ~30% songs from your library.
 
-Code and offline tests done 2026-10-23. Picks from the pool are checked against title and artist before use, so a wrong number from the LLM falls back to search. Moodify's own playlists are left out of the profile. Live checks wait for a re-login (`.venv/bin/python -m pytest -m live tests/test_p10_spotify_data.py -s`).
+Done 2026-10-23 after a re-login. Live: 50 recent plays, 200 liked, 9 follows, 47 playlists (56 tracks from owned ones). The first gate run gave 19 tracks, 26% known, but missed 11 of 25 searches: the known list showed "Title by Artist1, Artist2" and the model copied that format into `artist`. Fixed by listing only the main artist, searching the first listed artist and accepting any listed artist when matching. Rerun: 25 tracks, 8 known (32%), 17/17 searches matched. Also: summaries cached before Phase 10 (no pool) are now rebuilt instead of served for up to a day. Picks from the pool are checked against title and artist before use; Moodify's own playlists are left out of the profile.
 
 ---
 

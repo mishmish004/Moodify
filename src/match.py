@@ -27,6 +27,19 @@ def normalize_artist(artist: str) -> str:
     return _clean(_FEAT.sub("", artist))
 
 
+def listed_artists(artist: str) -> list[str]:
+    """The LLM sometimes names every artist, "Masego, FKJ". Keep the whole string too: some single
+    names contain a comma ("Tyler, The Creator")."""
+    parts = [p.strip() for p in _FEAT.sub("", artist).split(",")]
+    return list(dict.fromkeys([artist.strip(), *[p for p in parts if p]]))
+
+
+def primary_artist(artist: str) -> str:
+    """What to search for: the first listed artist. Spotify's artist: filter finds nothing for a list."""
+    names = listed_artists(artist)
+    return names[1] if len(names) > 1 else names[0]
+
+
 def _clean(text: str) -> str:
     text = unicodedata.normalize("NFKD", text)
     text = "".join(ch for ch in text if not unicodedata.combining(ch))  # "Björk" == "Bjork"
@@ -35,11 +48,12 @@ def _clean(text: str) -> str:
 
 
 def pick(song: Song, candidates: list[Track]) -> Optional[str]:
-    """URI of the first candidate with the same title and the suggested artist among its artists."""
-    want_title, want_artist = normalize_title(song.title), normalize_artist(song.artist)
-    if not want_title or not want_artist:
+    """URI of the first candidate with the same title and one of the suggested artists among its artists."""
+    want_title = normalize_title(song.title)
+    want_artists = {normalize_artist(a) for a in listed_artists(song.artist)} - {""}
+    if not want_title or not want_artists:
         return None
     for track in candidates:
-        if normalize_title(track.name) == want_title and any(normalize_artist(a) == want_artist for a in track.artists):
+        if normalize_title(track.name) == want_title and any(normalize_artist(a) in want_artists for a in track.artists):
             return track.uri
     return None

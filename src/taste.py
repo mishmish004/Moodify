@@ -136,7 +136,8 @@ def profile_for(user) -> Profile:
     cached, so the next build tries again. A dead refresh token (ReauthRequired) is passed up so
     the caller can send the user back to /login.
     """
-    if user["taste_summary"] and not _stale(user["taste_updated_at"]):
+    # No pool means a summary cached before Phase 10, built from top items only: rebuild it
+    if user["taste_summary"] and user["taste_pool_json"] is not None and not _stale(user["taste_updated_at"]):
         return Profile(user["taste_summary"], _load_pool(user["taste_pool_json"]))
     onboarding = json.loads(user["onboarding_json"] or "{}")
     listening = read_listening(user)

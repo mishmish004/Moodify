@@ -177,6 +177,17 @@ def test_a_failing_source_is_left_out_and_nothing_is_cached(user, respx_mock):
     assert users.get("friend1")["taste_summary"] is None  # tried again next time
 
 
+def test_summary_cached_before_phase_10_is_rebuilt(user, respx_mock):
+    # Fresh, but cached by Phase 4 code: no pool, and none of the new sources in it
+    users.set_taste_summary("friend1", "phase 4 summary", taste.datetime.now(taste.timezone.utc).strftime(taste.TIMESTAMP))
+    respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "expires_in": 3600})
+    respx_mock.get(f"{API_URL}/me/top/artists").respond(200, json={"items": [{"name": "Drake"}]})
+    respx_mock.get(f"{API_URL}/me/top/tracks").respond(200, json={"items": []})
+    mock_listening(respx_mock, liked=LIKED)
+    profile = taste.profile_for(users.get("friend1"))
+    assert profile.summary != "phase 4 summary" and LIKED[0] in profile.pool
+
+
 def test_new_account_with_no_listening_still_gets_a_summary(user, respx_mock):
     respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "expires_in": 3600})
     respx_mock.get(f"{API_URL}/me/top/artists").respond(200, json={"items": []})
@@ -234,6 +245,46 @@ def test_out_of_range_known_number_is_searched(logged_in, respx_mock):
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(9)}, liked=LIKED)
     _build(logged_in, "x")
     assert sp.search.call_count == 9 and len(sp.added_uris()) == 9
+
+
+# --- several artists in one field (the live run of 2026-10-23 missed 11 of 25 this way) ----------------
+
+@pytest.mark.parametrize("artist, track_artists, matches", [
+    ("Masego, FKJ", ("Masego", "FKJ"), True),
+    ("Masego, FKJ", ("FKJ",), True),
+    ("Calvin Harris, Frank Ocean, Migos", ("Calvin Harris", "Frank Ocean", "Migos"), True),
+    ("Drake, Tems", ("Drake", "Tems"), True),
+    ("Tyler, The Creator", ("Tyler, The Creator",), True),  # one name with a comma
+    ("Earth, Wind & Fire", ("Earth, Wind & Fire",), True),
+    ("Masego, FKJ", ("ABBA",), False),
+])
+def test_pick_accepts_any_listed_artist(artist, track_artists, matches):
+    from src.match import pick
+    from src.suggest import Song
+    found = pick(Song(title="Tadow", artist=artist), [Track("spotify:track:x", "Tadow", track_artists, 1)])
+    assert (found == "spotify:track:x") is matches
+
+
+@pytest.mark.parametrize("artist, query", [
+    ("Masego, FKJ", "Masego"), ("Drake feat. Rihanna", "Drake"), ("Queen", "Queen"), ("Simon & Garfunkel", "Simon & Garfunkel"),
+])
+def test_search_uses_the_first_listed_artist(artist, query):
+    from src.match import primary_artist
+    assert primary_artist(artist) == query
+
+
+def test_build_finds_songs_named_with_several_artists(logged_in, respx_mock):
+    songs = [{"title": f"Song {i}", "artist": f"Artist {i}, Guest {i}", "known": None} for i in range(10)]
+    respx_mock.post(CHAT_URL).respond(200, json=_completion(songs))
+    sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
+    _build(logged_in, "x")
+    assert all(c.request.url.params["q"].endswith(f"artist:Artist {i}") for i, c in enumerate(sp.search.calls))
+    assert len(sp.added_uris()) == 10
+
+
+def test_known_list_shows_only_the_main_artist():
+    prompt = user_prompt("x", "y", 30, [], [Track("spotify:track:a", "Slide", ("Calvin Harris", "Frank Ocean", "Migos"), 1)], 30)
+    assert "1. Slide by Calvin Harris\n" in prompt and "Frank Ocean" not in prompt
 
 
 # --- live ------------------------------------------------------------------------------------------

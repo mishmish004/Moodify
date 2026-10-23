@@ -74,7 +74,8 @@ def user_prompt(mood: str, taste_summary: str, n: int, exclude: list[Song], know
     consecutive builds share the longest possible prefix for OpenAI's prompt cache."""
     parts = [f"Listener's taste: {taste_summary}"]
     if known:
-        listed = "\n".join(f"{i}. {t.name} by {', '.join(t.artists)}" for i, t in enumerate(known, start=1))
+        # Main artist only: listing every artist taught the model to fill "artist" with lists (2026-10-23)
+        listed = "\n".join(f"{i}. {t.name} by {t.artists[0]}" for i, t in enumerate(known, start=1))
         parts.append(
             f"Songs the listener already knows:\n{listed}\n\nUnless the mood asks for only familiar or only new"
             f" songs, take about {familiar_percent}% of the answer from this list."
