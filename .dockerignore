@@ -1,4 +1,4 @@
-# The image only needs requirements.txt and src/. Everything else stays out of the build context.
+# The image only needs requirements.txt, src/, templates/ and static/. Everything else stays out of the build context.
 
 # VCS, environments, caches
 .git

@@ -2,6 +2,7 @@ services:
   app:
     build: .
     container_name: moodify-app
+    restart: unless-stopped
     ports:
       # Host 9091 matches the Spotify redirect URI; uvicorn listens on 8000 inside the container
       - "9091:8000"

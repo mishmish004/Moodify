@@ -39,8 +39,9 @@ def test_settings(request, monkeypatch, tmp_path) -> Settings:
 @pytest.fixture(autouse=True)
 def no_network(request, monkeypatch):
     """Fail any real connection. respx and TestClient answer before a socket is opened, so mocked
-    calls still work; a call that slipped past the mocks fails here instead of reaching Spotify."""
-    if request.node.get_closest_marker("live"):
+    calls still work; a call that slipped past the mocks fails here instead of reaching Spotify.
+    Docker tests are exempt: they talk to the container on 127.0.0.1."""
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("docker"):
         return
 
     def blocked(*args, **kwargs):

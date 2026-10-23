@@ -203,17 +203,17 @@ Gate: `pytest tests/test_p7_ui.py` green and the manual phone run works.
 Goal: a URL your friends can open.
 
 Build
-- [ ] `Dockerfile`: slim Python image, `uvicorn src.main:app`, SQLite on a mounted volume
+- [x] `Dockerfile`: slim Python image, `uvicorn src.main:app`, SQLite on a mounted volume. Single stage (every dependency has a wheel), copies only `src/`, `templates/`, `static/`; non-root; listens on `$PORT` (default 8000) with `--proxy-headers`; Docker `HEALTHCHECK` on `/health`
 - [ ] Host behind HTTPS (Spotify requires HTTPS redirect URIs outside loopback); set `SPOTIFY_REDIRECT_URI` and `BASE_URL` accordingly
 - [ ] Add the redirect URI in the Spotify dashboard; add each friend's Spotify email to the app's user allowlist (max 5)
-- [ ] `.env` on the host only, never in the image
-- [ ] Tell friends their listening data is sent to OpenAI to generate suggestions
+- [x] `.env` on the host only, never in the image (`.dockerignore` keeps it out of the build context; a test lists the image's `/app`)
+- [x] Tell friends their listening data is sent to OpenAI to generate suggestions (`login.html` says so before they log in)
 
 Tests (`tests/test_p8_deploy.py`, marked `docker`)
-- [ ] image builds and is under 400 MB
-- [ ] container starts, `GET /health` returns 200 within 10 s
-- [ ] data survives a container restart (write a row, restart, read it)
-- [ ] `live`: deployed `/health` returns 200 over HTTPS
+- [x] image builds and is under 400 MB (181 MB unpacked on 2026-10-23, measured with `du` inside the image)
+- [x] container starts, `GET /health` returns 200 within 10 s (about 1 s)
+- [x] data survives a container restart (write a row, restart, read it), and a fresh container on the same volume
+- [ ] `live`: deployed `/health` returns 200 over HTTPS (`MOODIFY_URL=https://... pytest -m live tests/test_p8_deploy.py`)
 - [ ] manual: one friend completes login → onboarding → playlist on the deployed URL
 
 Gate: a friend has a playlist in their account that they didn't make themselves.
