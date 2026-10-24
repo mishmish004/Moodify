@@ -25,6 +25,7 @@ _archive
 _trash
 
 # Not needed to run the app
+portfolio
 tests
 docs
 notebooks

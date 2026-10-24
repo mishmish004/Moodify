@@ -1,0 +1,91 @@
+---
+// The secret pages: warm dark ground, a glow in the corner, film grain.
+import CodeIcon from '../components/CodeIcon.astro';
+import { site } from '../site/site';
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  back: { href: string; label: string };
+}
+
+const { title, description, back } = Astro.props;
+---
+
+<Base title={title} description={description} theme="night" noindex>
+  <div class="night">
+    <div class="glow" aria-hidden="true"></div>
+    <svg class="grain" aria-hidden="true" width="100%" height="100%"><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter><rect width="100%" height="100%" filter="url(#grain)"></rect></svg>
+
+    <div class="layer">
+      <header class="hdr">
+        <div class="left">
+          <a class="box logo" href="/">amish</a>
+          <nav class="box" aria-label="Primary">
+            <a class="navlink" href="/#serious-work">serious-work</a>
+            <a class="navlink" href="/#dilly-dallying">dilly-dallying</a>
+            <a class="navlink" href="/yapping">yapping</a>
+            <a class="navlink gh" href={site.github.url} aria-label="GitHub"><CodeIcon /></a>
+          </nav>
+        </div>
+        <a class="box back" href={back.href}><span class="arrow arrow-back" aria-hidden="true">←</span> {back.label}</a>
+      </header>
+
+      <main id="main" tabindex="-1">
+        <slot />
+      </main>
+
+      <footer class="ftr">
+        <span>© {new Date().getFullYear()} amish</span>
+        <slot name="footer" />
+      </footer>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .night { position: relative; overflow: hidden; min-height: 100vh; min-height: 100svh; color: var(--ink); }
+  .glow {
+    position: absolute; top: -280px; right: -200px; width: 900px; height: 900px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(196, 112, 58, 0.34) 0%, rgba(196, 112, 58, 0.12) 38%, rgba(23, 17, 12, 0) 68%);
+  }
+  .grain { position: absolute; inset: 0; pointer-events: none; opacity: 0.16; mix-blend-mode: overlay; }
+  .layer { position: relative; min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; }
+  main { flex: 1 0 auto; }
+  main:focus { outline: none; }
+
+  .hdr { padding: 16px var(--gutter); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .left { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .box {
+    display: flex; flex-wrap: wrap; align-items: center; min-height: 52px; padding: 0 4px;
+    border: 1px solid var(--line); border-radius: 4px; color: var(--ink); text-decoration: none; font-size: 15px;
+  }
+  .logo { padding: 0 18px; font-family: var(--poster); font-size: 22px; letter-spacing: 0.02em; }
+  .back { padding: 0 18px; gap: 8px; transition: border-color 150ms ease, transform 160ms var(--ease-out); }
+  .back:active { transform: scale(0.97); }
+  .navlink {
+    text-decoration: none; color: var(--ink); min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center;
+    border-radius: 3px; transition: background-color 150ms ease;
+  }
+  .gh { min-width: 44px; justify-content: center; padding: 0; }
+  @media (hover: hover) and (pointer: fine) {
+    .navlink:hover { background: var(--wash); color: var(--ink); }
+    .back:hover { border-color: var(--ink); color: var(--ink); }
+    .logo:hover { color: #FFFFFF; }
+  }
+  @media (prefers-reduced-motion: reduce) { .back:active { transform: none; } }
+
+  .ftr {
+    padding: 0 var(--gutter) 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 8px 24px; font-size: 14px; color: var(--muted);
+  }
+
+  :global(.theme-night) :global(:focus-visible) { outline-color: var(--ink); border-radius: 4px; }
+  :global(.theme-night .rise) { animation: night-rise 720ms var(--ease-out) both; }
+  :global(.theme-night .d1) { animation-delay: 100ms; }
+  :global(.theme-night .d2) { animation-delay: 200ms; }
+  :global(.theme-night .d3) { animation-delay: 300ms; }
+  @keyframes night-rise { from { opacity: 0; transform: translateY(14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+  @media (prefers-reduced-motion: reduce) { :global(.theme-night .rise) { animation: fade 300ms ease both; } }
+</style>

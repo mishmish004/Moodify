@@ -1,0 +1,133 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import Site from '../../layouts/Site.astro';
+import { allPosts, capitalize, formatDate, incidentPosts, readMinutes, type Post } from '../../lib/content';
+import { site } from '../../site/site';
+
+export const getStaticPaths = (async () => {
+  const posts = await allPosts();
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}) satisfies GetStaticPaths;
+
+const { post } = Astro.props as { post: Post };
+const { Content } = await render(post);
+const d = post.data;
+const hasGlance = Boolean(d.impact || d.duration || d.detectedBy || d.rootCause);
+
+// Previous = older, next = newer, within the incident log
+const log = await incidentPosts();
+const i = log.findIndex((p) => p.id === post.id);
+const older = i >= 0 ? log[i + 1] : undefined;
+const newer = i > 0 ? log[i - 1] : undefined;
+---
+
+<Site title={`${d.title} — amish`} description={d.summary} current="yapping" banner type="article" image={d.image?.src}>
+  <article>
+    <header class="head narrow">
+      <a class="back" href={d.kind === 'incident' ? '/yapping' : '/good-morning'}><span class="arrow arrow-back" aria-hidden="true">←</span>{d.kind === 'incident' ? 'All write-ups' : 'Back to good morning'}</a>
+      <p class="meta rise"><span class="chip">{capitalize(d.category)}</span><time datetime={d.date.toISOString()}>{formatDate(d.date)}</time> · {readMinutes(post.body)} min read</p>
+      <h1 class="display rise d1">{d.title}</h1>
+      <p class="sum rise d2">{d.summary}</p>
+      <div class="byline rise d3">
+        {site.avatar && <img src={site.avatar} alt="" width="44" height="44" />}
+        <span><span class="who">amish</span><span class="role">{site.role}</span></span>
+      </div>
+    </header>
+
+    {d.image && (
+      <figure class="hero-fig">
+        <img src={d.image.src} alt={d.image.alt} width="1120" height="560" decoding="async" />
+        {d.image.caption && <figcaption>{d.image.caption}</figcaption>}
+      </figure>
+    )}
+
+    <div class="narrow body">
+      {hasGlance && (
+        <section class="panel glance-panel" aria-labelledby="glance-h">
+          <div class="glance-head">
+            <h2 id="glance-h">At a glance</h2>
+            {d.status && <span class="chip"><span class="dot" aria-hidden="true"></span>{d.status}</span>}
+          </div>
+          <dl class="glance">
+            {d.impact && <div><dt>Impact</dt><dd>{d.impact}</dd></div>}
+            {d.duration && <div><dt>Duration</dt><dd>{d.duration}</dd></div>}
+            {d.detectedBy && <div><dt>Detected by</dt><dd>{d.detectedBy}</dd></div>}
+            {d.rootCause && <div><dt>Root cause</dt><dd>{d.rootCause}</dd></div>}
+          </dl>
+        </section>
+      )}
+
+      {d.timeline.length > 0 && (
+        <section class="prose tl-sec" aria-labelledby="tl-h">
+          <h2 id="tl-h">Timeline</h2>
+          <ol class="timeline">
+            {d.timeline.map((t) => <li><span class="t">{t.time}</span><span>{t.event}</span></li>)}
+          </ol>
+        </section>
+      )}
+
+      <div class="prose content">
+        <Content />
+      </div>
+
+      {d.tags.length > 0 && (
+        <ul class="tags" aria-label="Tags">
+          {d.tags.map((t) => <li class="tag">{t}</li>)}
+        </ul>
+      )}
+    </div>
+  </article>
+
+  {(older || newer) && (
+    <nav class="more" aria-label="More write-ups">
+      {older && (
+        <a class="card" href={`/yapping/${older.id}`}>
+          <span class="label"><span class="arrow arrow-back" aria-hidden="true">←</span> Previous</span>
+          <span class="more-title">{older.data.title}</span>
+        </a>
+      )}
+      {newer && (
+        <a class="card next" href={`/yapping/${newer.id}`}>
+          <span class="label">Next <span class="arrow" aria-hidden="true">→</span></span>
+          <span class="more-title">{newer.data.title}</span>
+        </a>
+      )}
+    </nav>
+  )}
+</Site>
+
+<style>
+  .narrow { max-width: 760px; margin: 0 auto; padding-left: var(--gutter-wide); padding-right: var(--gutter-wide); }
+  .head { padding-top: clamp(40px, 6vw, 80px); padding-bottom: 48px; }
+  .back { text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--muted); min-height: 44px; }
+  .meta {
+    margin: 24px 0 20px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+  }
+  h1 { font-size: clamp(40px, 5.6vw, 80px); line-height: 0.98; letter-spacing: -0.02em; text-wrap: balance; }
+  .sum { margin-top: 24px; font-size: clamp(18px, 1.6vw, 21px); line-height: 1.55; color: var(--muted); }
+  .byline { margin-top: 32px; display: flex; align-items: center; gap: 12px; }
+  .byline img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+  .byline > span { display: flex; flex-direction: column; gap: 2px; }
+  .who { font-weight: 500; font-size: 15px; }
+  .role { font-size: 14px; color: var(--muted); }
+
+  .hero-fig { max-width: 1120px; margin: 0 auto; padding: 0 var(--gutter-wide); }
+  .hero-fig img { width: 100%; aspect-ratio: 2 / 1; object-fit: cover; border-radius: 28px; background: var(--tile); }
+  .hero-fig figcaption { margin-top: 12px; font-size: 14px; color: var(--muted); text-align: center; }
+
+  .body { padding-top: 64px; }
+  .glance-panel { border-radius: 24px; margin-bottom: 8px; }
+  .tl-sec { margin-top: 56px; }
+  .content { margin-top: 0; }
+  .tags { list-style: none; margin: 48px 0 0; padding: 32px 0 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .more {
+    max-width: 1120px; margin: 0 auto; padding: 80px var(--gutter-wide) 56px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px;
+  }
+  .more .card { border-radius: 24px; }
+  .next { text-align: right; }
+  .more-title { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.2; }
+</style>

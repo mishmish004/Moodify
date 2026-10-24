@@ -1,0 +1,6 @@
+# Applied by Cloudflare to every static page and file
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy: frame-ancestors 'none'

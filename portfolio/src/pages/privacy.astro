@@ -1,0 +1,273 @@
+---
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
+import Turnstile from '../components/Turnstile.astro';
+import Site from '../layouts/Site.astro';
+import { LIMITS } from '../lib/forms';
+import { moodifyAccess } from '../site/pages';
+import { site } from '../site/site';
+
+const waitlist = moodifyAccess.mode === 'waitlist';
+const loginUrl = `${site.moodify}/login`;
+
+const short = [
+  'No ads, and nothing that follows you around other sites.',
+  'No analytics, and no cookies from this site.',
+  'If you write to me, your message comes to me and nowhere else.',
+];
+
+type Section = { h: string; ps: string[]; link?: { href: string; label: string } };
+const sectionsA: Section[] = [
+  {
+    h: 'What this site collects',
+    ps: [
+      'Nothing just for visiting. There are no analytics, no tracking pixels and no fingerprinting.',
+      'Cloudflare hosts the site, so every request passes through Cloudflare on its way to you. Their privacy policy covers what they see.',
+    ],
+    link: { href: 'https://www.cloudflare.com/privacypolicy/', label: 'Cloudflare privacy policy' },
+  },
+  {
+    h: 'The contact form',
+    ps: [
+      'Your name, email, topic and message are saved in a private database that only I can read. I use them only to reply.',
+      'Want yours deleted? Ask, and I’ll delete it.',
+    ],
+  },
+  ...(PUBLIC_TURNSTILE_SITE_KEY
+    ? [{
+        h: 'Spam checks',
+        ps: ['Both forms use Cloudflare Turnstile to tell people from bots. Most of the time it works in the background and you never see it.'],
+        link: { href: 'https://www.cloudflare.com/turnstile-privacy-policy/', label: 'Turnstile privacy addendum' },
+      }]
+    : []),
+  {
+    h: 'Cookies',
+    ps: ['This site sets no cookies of its own. Some pages load things from other services, which may set theirs. Those are listed below.'],
+  },
+  {
+    h: 'Spotify players',
+    ps: ['A couple of pages have a Spotify player for songs I write about. When it loads or you press play, Spotify’s own privacy policy applies.'],
+    link: { href: 'https://www.spotify.com/legal/privacy-policy/', label: 'Spotify privacy policy' },
+  },
+  {
+    h: 'Moodify',
+    ps: ['Moodify, at moodify.mish4mish.com, is a separate app for me and a few friends. It has its own page explaining what it stores and how to delete it.'],
+    link: { href: loginUrl, label: 'What Moodify does with your data' },
+  },
+];
+
+const sectionsB: Section[] = [
+  { h: 'Links to other sites', ps: ['Links to GitHub, LinkedIn and others take you to their sites, where their rules apply.'] },
+  { h: 'Changes', ps: ['If anything here changes, I’ll update this page and the date at the top.'] },
+];
+---
+
+<Site title="Privacy — amish" description="What this site collects (almost nothing), and what happens to a message you send.">
+  <article class="doc">
+    <p class="label rise top">privacy · last updated Oct 24, 2026</p>
+    <h1 class="display rise d1">Privacy, in plain words.</h1>
+
+    <section class="panel shortv rise d2" aria-labelledby="short-h">
+      <h2 id="short-h">The short version</h2>
+      <ul>
+        {short.map((s) => (
+          <li><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg><span>{s}</span></li>
+        ))}
+      </ul>
+    </section>
+
+    <div class="body">
+      {sectionsA.map((s) => (
+        <section>
+          <h2 class="display">{s.h}</h2>
+          {s.ps.map((p) => <p>{p}</p>)}
+          {s.link && <a class="ext" href={s.link.href}>{s.link.label} <span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
+        </section>
+      ))}
+
+      <section id="moodify-access" class="panel access" aria-labelledby="access-h">
+        <div class="access-top">
+          <div class="access-text">
+            <p class="label">moodify · invite only</p>
+            <h2 id="access-h" class="display">Want to try Moodify?</h2>
+            <p class="ink3">
+              {waitlist
+                ? 'All the spots are taken right now. Spotify lets an app in developer mode have only a handful of users, so join the waitlist and I’ll add you when one opens.'
+                : 'Moodify runs in Spotify’s developer mode, so only a few Spotify accounts I add by hand can log in. Send me the email on your Spotify account and I’ll add you if there’s a spot.'}
+            </p>
+          </div>
+          <div class="access-btns">
+            <button class="btn btn-dark btn-pill btn-md req-btn" type="button" aria-controls="access-form" aria-expanded="false" data-open-access>{waitlist ? 'Join the waitlist' : 'Request access'}</button>
+            {moodifyAccess.demos && (
+              <a class="btn btn-line btn-pill btn-md demos" href={moodifyAccess.demos}>
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6.5 4.5v11l9-5.5z"></path></svg>
+                Watch the demos<span class="arrow arrow-up" aria-hidden="true">&#160;↗</span>
+              </a>
+            )}
+          </div>
+        </div>
+        {moodifyAccess.demos && <p class="muted small demos-note">No spot? The demos are a YouTube playlist of different people using Moodify, start to finish.</p>}
+
+        <form id="access-form" class="access-form" action="/api/moodify-access" method="post" aria-labelledby="access-h" data-access>
+          <div class="alert" role="alert" hidden data-failed>
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#B42318" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"></circle><path d="M10 5.5v5.5M10 13.8v.3"></path></svg>
+            <span><strong>That didn't send.</strong> Try again in a moment, or <a href="/contact">write to me</a> instead.</span>
+          </div>
+          <div class="field-wrap">
+            <label for="ra-name">Your name</label>
+            <input id="ra-name" class="field" name="name" type="text" autocomplete="name" maxlength={LIMITS.name} />
+          </div>
+          <div class="field-wrap">
+            <label for="ra-email">Email on your Spotify account</label>
+            <input id="ra-email" class="field" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required maxlength={LIMITS.email} aria-describedby="ra-email-err ra-email-hint" />
+            <span id="ra-email-err" class="field-err" data-error-for="email" hidden></span>
+            <p id="ra-email-hint" class="field-hint">Find it in Spotify under Account › Email. If you sign in to Spotify with Google, it’s usually that Gmail address.</p>
+          </div>
+          <div class="field-wrap full">
+            <label for="ra-note">How do you know me? <span class="muted opt">(optional)</span></label>
+            <input id="ra-note" class="field" name="note" type="text" maxlength={LIMITS.note} />
+          </div>
+          <div class="hp" aria-hidden="true">
+            <label for="ra-company">Company</label>
+            <input id="ra-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+          </div>
+          <div class="full"><Turnstile /></div>
+          <div class="full send-row">
+            <button class="btn btn-dark btn-pill btn-md" type="submit" data-send>
+              <span class="spin" aria-hidden="true" hidden data-spin></span>
+              <span data-send-label>{waitlist ? 'Join the waitlist' : 'Send request'}</span>
+            </button>
+            <p class="muted small">I only use this to add you and email you once. It comes to me and nowhere else.</p>
+          </div>
+        </form>
+
+        <div class="done" role="status" hidden data-sent>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg>
+          <p>
+            {waitlist
+              ? 'You’re on the waitlist. I’ll email you when a spot opens and your account is added, then you can log in at'
+              : 'Request sent. I’ll email you once your Spotify account is added, usually within a few days. Then log in at'}
+            {' '}<a href={loginUrl}>moodify.mish4mish.com</a>
+          </p>
+        </div>
+      </section>
+
+      {sectionsB.map((s) => (
+        <section>
+          <h2 class="display">{s.h}</h2>
+          {s.ps.map((p) => <p>{p}</p>)}
+        </section>
+      ))}
+    </div>
+
+    <p class="end muted">Questions, or want something deleted? <a href="/contact">Say hello</a> and I'll sort it out.</p>
+  </article>
+</Site>
+
+<style>
+  .doc { max-width: 820px; margin: 0 auto; padding: clamp(32px, 5vw, 72px) var(--gutter-wide) 40px; }
+  .top { margin-bottom: 20px; }
+  h1 { font-size: clamp(44px, 6vw, 88px); line-height: 0.95; letter-spacing: -0.025em; }
+  .shortv { margin-top: 40px; }
+  .shortv h2 { margin-bottom: 16px; font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .shortv ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; font-size: 18px; line-height: 1.5; }
+  .shortv li { display: flex; gap: 12px; align-items: flex-start; }
+  .shortv svg { flex: 0 0 20px; margin-top: 4px; }
+
+  .body { font-size: 18px; line-height: 1.7; color: var(--ink-2); }
+  .body > section > h2 { margin: 56px 0 14px; font-size: clamp(26px, 2.6vw, 34px); line-height: 1.12; letter-spacing: -0.015em; color: var(--ink); }
+  .body > section > p { margin-bottom: 16px; }
+  .ext { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; }
+
+  .access { margin-top: 28px; font-size: 16px; line-height: 1.55; }
+  .access-top { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 32px; }
+  .access-text { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .access-text h2 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.15; letter-spacing: -0.015em; color: var(--ink); }
+  .ink3 { color: var(--ink-3); }
+  .access-btns { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .req-btn { display: none; font-weight: 500; }
+  :global(.js) .req-btn { display: inline-flex; }
+  .req-btn[aria-expanded='true'] { display: none !important; }
+  .demos { border-color: var(--field-line); font-weight: 500; }
+  .small { font-size: 14px; }
+  .demos-note { margin-top: 14px; }
+
+  .access-form {
+    margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 18px 20px;
+  }
+  :global(.js) .access-form:not(.open) { display: none; }
+  .access-form .field-wrap { gap: 6px; }
+  .access-form label { font-size: 15px; }
+  .access-form .field { min-height: 48px; padding: 0 14px; border-radius: 10px; font-size: 16px; }
+  .opt { font-weight: 400; }
+  .full { grid-column: 1 / -1; }
+  .alert { grid-column: 1 / -1; }
+  .access-form[hidden], .alert[hidden], .field-err[hidden], .done[hidden] { display: none; }
+  .send-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .send-row p { flex: 1 1 260px; }
+  .send-row [hidden] { display: none; }
+
+  .done { margin-top: 24px; padding: 18px 20px; border-radius: 12px; background: var(--wash); display: flex; gap: 12px; align-items: flex-start; color: var(--ink); }
+  .done svg { flex: 0 0 20px; margin-top: 3px; }
+
+  .end { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 15px; }
+</style>
+
+<script>
+  import { validateAccess } from '../lib/forms';
+  import { setFieldError, submitForm } from '../scripts/submit';
+
+  const form = document.querySelector<HTMLFormElement>('[data-access]')!;
+  const openBtn = document.querySelector<HTMLButtonElement>('[data-open-access]')!;
+  const done = document.querySelector<HTMLElement>('[data-sent]')!;
+  const failed = form.querySelector<HTMLElement>('[data-failed]')!;
+  const send = form.querySelector<HTMLButtonElement>('[data-send]')!;
+  const spin = form.querySelector<HTMLElement>('[data-spin]')!;
+  const label = form.querySelector<HTMLElement>('[data-send-label]')!;
+  const idleLabel = label.textContent;
+  let tried = false;
+  let busy = false;
+  form.noValidate = true;
+
+  openBtn.addEventListener('click', () => {
+    form.classList.add('open');
+    openBtn.setAttribute('aria-expanded', 'true');
+    form.querySelector<HTMLInputElement>('#ra-name')?.focus();
+  });
+
+  const check = () => {
+    const r = validateAccess(Object.fromEntries(new FormData(form).entries()));
+    setFieldError(form, 'email', r.ok ? undefined : r.errors.email);
+    return r;
+  };
+  form.addEventListener('input', () => { if (tried) check(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    tried = true;
+    const r = check();
+    if (!r.ok) { form.querySelector<HTMLInputElement>('#ra-email')?.focus(); return; }
+    failed.hidden = true;
+    busy = true;
+    send.setAttribute('aria-busy', 'true');
+    send.setAttribute('aria-disabled', 'true');
+    spin.hidden = false;
+    label.textContent = 'Sending…';
+    const res = await submitForm(form);
+    busy = false;
+    send.setAttribute('aria-busy', 'false');
+    send.setAttribute('aria-disabled', 'false');
+    spin.hidden = true;
+    label.textContent = idleLabel;
+    if (res.ok) {
+      form.classList.remove('open');
+      form.hidden = true;
+      done.hidden = false;
+    } else if (res.kind === 'invalid') {
+      setFieldError(form, 'email', res.errors.email);
+    } else {
+      failed.hidden = false;
+    }
+  });
+</script>

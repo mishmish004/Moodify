@@ -1,0 +1,24 @@
+---
+// The dark strip announcing the newest write-up. Renders nothing until there is one.
+import { latestPost } from '../lib/content';
+
+const post = await latestPost();
+---
+
+{post && (
+  <div class="banner no-print">
+    <span>New write-up: {post.data.title}</span>
+    <a href={`/yapping/${post.id}`}>Read it <span class="arrow" aria-hidden="true">→</span></a>
+  </div>
+)}
+
+<style>
+  .banner {
+    background: #1C1B1B; color: #FDFDFC;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px;
+    padding: 9px var(--gutter); font-size: 15px; letter-spacing: 0.01em;
+  }
+  span { min-width: 0; }
+  a { flex-shrink: 0; color: #FDFDFC; min-height: 32px; display: inline-flex; align-items: center; gap: 4px; }
+  a:hover { color: #FDFDFC; }
+</style>

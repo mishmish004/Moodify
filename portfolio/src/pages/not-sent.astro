@@ -1,0 +1,19 @@
+---
+// Where a form lands when a submit without JavaScript fails.
+import Site from '../layouts/Site.astro';
+import { site } from '../site/site';
+---
+
+<Site title="That didn't send — amish" noindex>
+  <section class="msg">
+    <div class="alert" role="alert">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#B42318" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"></circle><path d="M10 5.5v5.5M10 13.8v.3"></path></svg>
+      <span><strong>That didn't send.</strong> Go back and check every field is filled in, or email me directly at <a href={`mailto:${site.email}`}>{site.email}</a>.</span>
+    </div>
+    <a class="btn btn-line btn-sm" href="/contact"><span class="arrow arrow-back" aria-hidden="true">←</span> Back to the form</a>
+  </section>
+</Site>
+
+<style>
+  .msg { max-width: 760px; padding: clamp(32px, 5vw, 72px) var(--gutter) 40px; display: flex; flex-direction: column; gap: 20px; align-items: flex-start; }
+</style>

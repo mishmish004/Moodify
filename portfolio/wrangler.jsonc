@@ -1,0 +1,16 @@
+// The Worker that serves mish4mish.com. The Astro adapter fills in `main` and the ASSETS binding.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mish4mish",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  // Attaches the Worker to the apex domain and creates its DNS record on deploy. The zone must be
+  // in the same Cloudflare account, and mish4mish.com must not already have an A, AAAA or CNAME
+  // record. www is redirected to the apex by a Redirect Rule (see README).
+  "routes": [{ "pattern": "mish4mish.com", "custom_domain": true }]
+  // Email yourself a copy of each form message. Needs Email Routing switched on for mish4mish.com
+  // with destination_address verified there, and the NOTIFY_FROM secret (an address on
+  // mish4mish.com, e.g. forms@mish4mish.com). destination_address must match `email` in
+  // src/site/site.ts. Uncomment to switch it on:
+  // , "send_email": [{ "name": "NOTIFY_EMAIL", "destination_address": "amish.shah.work@gmail.com" }]
+}

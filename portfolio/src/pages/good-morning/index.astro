@@ -1,0 +1,231 @@
+---
+// The secret page: seven taps on the logo. Press a title and it fills up as its clip plays.
+import Night from '../../layouts/Night.astro';
+import { formatMonth, offTheRecordPosts, readMinutes, songs as getSongs } from '../../lib/content';
+import { life } from '../../site/pages';
+
+const songs = await getSongs();
+const posts = await offTheRecordPosts();
+const gm = life.goodMorning;
+---
+
+<Night title="amish — good morning" back={{ href: '/', label: 'back to the serious stuff' }}>
+  <section class="top pad">
+    <div class="gm-wrap">
+      <h1 class="rise d1">
+        <button class="gm clip" type="button" aria-pressed="false"
+          aria-label="good morning. Play Good Morning by Kanye West"
+          data-clip="gm" data-title="Good Morning by Kanye West"
+          data-spotify={gm.spotify} data-start={gm.start} data-end={gm.end}>
+          <span class="fill-text">good morning.<span class="lit" aria-hidden="true">good morning.</span></span>
+        </button>
+      </h1>
+    </div>
+
+    {songs.length > 0 && (
+      <aside class="songs rise d3" aria-labelledby="top-h">
+        <h2 id="top-h" class="sr-only">my top travis songs</h2>
+        <ol>
+          {songs.map((s) => (
+            <li>
+              <button class="si clip" type="button" aria-pressed="false" aria-label={`Play ${s.data.title}`}
+                data-clip={s.id} data-title={s.data.title}
+                data-spotify={s.data.spotify ?? ''} data-start={s.data.start} data-end={s.data.end}>
+                <span class="fill-text">{s.data.title}<span class="lit" aria-hidden="true">{s.data.title}</span></span>
+              </button>
+              <a class="docs" href={`/good-morning/${s.id}`} aria-label={`My take on ${s.data.title}`}>docs</a>
+            </li>
+          ))}
+        </ol>
+      </aside>
+    )}
+    <div class="player" hidden data-player><div data-player-mount></div></div>
+    <p class="sr-only" aria-live="polite" data-status></p>
+  </section>
+
+  {posts.length > 0 && (
+    <section class="otr pad rise d3" aria-labelledby="life-h">
+      <h2 id="life-h">off the record</h2>
+      <div class="otr-list">
+        {posts.map((p) => (
+          <a class="row" href={`/yapping/${p.id}`}>
+            <time datetime={p.data.date.toISOString()}>{formatMonth(p.data.date)}</time>
+            <span class="what"><span class="row-title">{p.data.title}</span><span class="muted">{p.data.line ?? p.data.summary}</span></span>
+            <span class="mins">{readMinutes(p.body)} min</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <span slot="footer" class="after-dark">it's lit after dark</span>
+</Night>
+
+<style>
+  .pad { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .top { padding-top: 4px; padding-bottom: clamp(56px, 7vw, 96px); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 48px clamp(32px, 4vw, 72px); }
+  .gm-wrap { flex: 999 1 560px; min-width: 0; }
+  h1 { margin: 0; }
+
+  .clip { margin: 0; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: var(--ink); font-family: var(--poster); font-weight: 400; }
+  .gm { display: flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: clamp(30px, 3.36vw, 53px); line-height: 0.95; letter-spacing: -0.005em; transform-origin: 0 50%; transition: transform 160ms var(--ease-out); }
+  .gm:active { transform: scale(0.98); }
+  /* Two copies of the title: the dim one underneath, the lit one revealed left to right */
+  .fill-text { position: relative; display: inline-block; }
+  .lit { position: absolute; inset: 0; white-space: nowrap; color: var(--ink); clip-path: inset(0 100% 0 0); }
+  .clip.on .fill-text { color: var(--dim); }
+  .clip.on .lit { clip-path: inset(0 var(--remain, 100%) 0 0); transition: clip-path 250ms linear; }
+
+  .songs { flex: 1 1 300px; max-width: 420px; min-width: 0; }
+  .songs ol { list-style: none; margin: 0; padding: 0; }
+  .songs li { min-height: 44px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+  .si { display: inline-flex; align-items: center; min-width: 0; min-height: 44px; font-size: 28px; line-height: 1; transform-origin: 0 50%; transition: opacity 200ms ease, transform 160ms var(--ease-out); }
+  .si:active { transform: scale(0.97); }
+  .si .fill-text { white-space: normal; }
+  .si .lit { white-space: normal; }
+  .docs { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .player { flex: 1 1 100%; max-width: 560px; margin-left: auto; border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .player[hidden] { display: none; }
+
+  .otr { padding-bottom: 104px; }
+  .otr h2 { margin: 0 0 8px; font-family: var(--mono); font-weight: 400; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .otr-list { border-bottom: 1px solid var(--line); }
+  .row { text-decoration: none; color: var(--ink); display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 40px; padding: 28px 0; border-top: 1px solid var(--line); }
+  .row time { flex: 0 0 120px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .what { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .row-title { font-family: var(--poster); font-size: clamp(26px, 2.6vw, 38px); line-height: 1.05; letter-spacing: 0.005em; transition: color 150ms ease; }
+  .mins { flex: 0 0 auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .after-dark { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .si:hover, .gm:hover { opacity: 0.85; }
+    .docs:hover { color: var(--ink); }
+    .row:hover { color: var(--ink); }
+    .row:hover .row-title { color: var(--accent); }
+  }
+  @media (prefers-reduced-motion: reduce) { .gm:active, .si:active { transform: none; } }
+</style>
+
+<script>
+  // One clip plays at a time. With a Spotify track ID the clip plays through Spotify's embed
+  // (its script loads on the first press, never before); without one, the title still fills
+  // over the clip's length, as in the design.
+  type Clip = { el: HTMLButtonElement; title: string; spotify: string; start: number; end: number };
+  type PlaybackEvent = { data: { isPaused: boolean; position: number } };
+  type Controller = {
+    loadUri: (uri: string) => void;
+    play: () => void;
+    pause: () => void;
+    seek: (seconds: number) => void;
+    addListener: (event: string, cb: (e: PlaybackEvent) => void) => void;
+  };
+  type IFrameAPI = { createController: (el: Element, opts: object, cb: (c: Controller) => void) => void };
+
+  const clips: Clip[] = Array.from(document.querySelectorAll<HTMLButtonElement>('.clip')).map((el) => ({
+    el,
+    title: el.dataset.title!,
+    spotify: el.dataset.spotify ?? '',
+    start: Number(el.dataset.start) || 0,
+    end: Number(el.dataset.end) || 30,
+  }));
+  const status = document.querySelector<HTMLElement>('[data-status]')!;
+  const player = document.querySelector<HTMLElement>('[data-player]')!;
+
+  let playing: Clip | null = null;
+  let t = 0;
+  let ticking = false;
+  let timer: number | undefined;
+  let controller: Promise<Controller> | null = null;
+  // Set when a Spotify clip is asked to play; cleared once it is audibly playing
+  let pending: Clip | null = null;
+
+  const length = (c: Clip) => Math.max(1, c.end - c.start);
+
+  function paint() {
+    clips.forEach((c) => {
+      const on = c === playing;
+      c.el.classList.toggle('on', on);
+      c.el.setAttribute('aria-pressed', String(on));
+      c.el.setAttribute('aria-label', `${on ? 'Stop' : 'Play'} ${c.title}`);
+      const pct = on ? Math.min(100, (t / length(c)) * 100) : 0;
+      c.el.style.setProperty('--remain', `${100 - pct}%`);
+    });
+  }
+
+  function stop() {
+    window.clearInterval(timer);
+    const wasSpotify = Boolean(playing?.spotify);
+    ticking = false;
+    pending = null;
+    playing = null;
+    t = 0;
+    status.textContent = '';
+    paint();
+    if (wasSpotify && controller) controller.then((c) => c.pause());
+  }
+
+  function startTicking() {
+    if (ticking) return;
+    ticking = true;
+    window.clearInterval(timer);
+    timer = window.setInterval(() => {
+      if (!playing) return;
+      t += 0.25;
+      if (t >= length(playing)) { stop(); return; }
+      paint();
+    }, 250);
+  }
+
+  function spotify(uri: string): Promise<Controller> {
+    return new Promise((resolve) => {
+      (window as unknown as { onSpotifyIframeApiReady: (api: IFrameAPI) => void }).onSpotifyIframeApiReady = (api) => {
+        api.createController(player.querySelector('[data-player-mount]')!, { uri, width: '100%', height: 80 }, (c) => {
+          c.addListener('ready', () => { if (pending) c.play(); });
+          c.addListener('playback_update', (e) => {
+            if (!playing?.spotify) return;
+            if (e.data.isPaused) {
+              // Paused from the embed's own button
+              if (ticking && !pending) stop();
+              return;
+            }
+            if (pending) {
+              const from = pending.start;
+              pending = null;
+              if (from > 0 && e.data.position / 1000 < from - 1) c.seek(from);
+            }
+            startTicking();
+          });
+          resolve(c);
+        });
+      };
+      const s = document.createElement('script');
+      s.src = 'https://open.spotify.com/embed/iframe-api/v1';
+      s.async = true;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function playOnSpotify(c: Clip) {
+    const uri = `spotify:track:${c.spotify}`;
+    pending = c;
+    player.hidden = false;
+    if (!controller) {
+      controller = spotify(uri);
+      return; // the first `ready` plays it
+    }
+    (await controller).loadUri(uri); // `ready` fires again and plays it
+  }
+
+  clips.forEach((c) => {
+    c.el.addEventListener('click', () => {
+      if (playing === c) { stop(); return; }
+      if (playing) stop();
+      playing = c;
+      t = 0;
+      status.textContent = `Playing ${c.title}`;
+      paint();
+      if (c.spotify) playOnSpotify(c);
+      else startTicking();
+    });
+  });
+</script>

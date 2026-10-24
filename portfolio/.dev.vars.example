@@ -1,0 +1,18 @@
+# Copy to .dev.vars for `npm run preview`. In production these are Worker secrets
+# (Cloudflare dashboard > Workers > mish4mish > Settings > Variables and secrets).
+
+# Supabase > Project Settings > API: the project URL and the publishable key (sb_publishable_...).
+# Never the secret or service_role key; the site only inserts rows.
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
+
+# Optional spam check on both forms (Cloudflare dashboard > Turnstile). Leave both unset to skip it.
+# PUBLIC_TURNSTILE_SITE_KEY is a build variable; TURNSTILE_SECRET_KEY is a Worker secret.
+# PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAAA...
+# TURNSTILE_SECRET_KEY=0x4AAAAAAA...
+
+# Optional email copy of each message; also needs the send_email binding in wrangler.jsonc.
+# NOTIFY_FROM=forms@mish4mish.com
+
+# Show draft posts, projects and songs in a build (always shown in `npm run dev`)
+# PUBLIC_SHOW_DRAFTS=true
