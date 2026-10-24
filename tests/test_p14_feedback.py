@@ -256,7 +256,7 @@ def test_playlist_page_works_without_javascript(logged_in):
     assert f'<form id="rating" class="mf-rate" method="post" action="/playlists/{pid}/rating" data-feedback="rating">' in page
     for n in range(1, 11):
         assert f'name="rating" value="{n}"' in page
-    assert '<script src="/static/feedback.js"></script>' in page
+    assert '<script src="/static/feedback.js?v=' in page
     assert '<p id="toast" class="mf-toast" role="status"></p>' in page  # empty: hidden by CSS
     assert logged_in.get("/static/feedback.js").status_code == 200
 

@@ -149,7 +149,7 @@ def test_energy_falls_back_to_the_brief(user):
 def test_page_and_static_files(logged_in):
     _playlist("friend1", "Mine")
     page = logged_in.get("/activity").text
-    assert '<script src="/static/activity.js"></script>' in page and 'data-day="' in page
+    assert '<script src="/static/activity.js?v=' in page and 'data-day="' in page
     assert "Replay the week" in page and 'aria-label="Previous day"' in page and 'aria-label="Next day"' in page
     assert logged_in.get("/static/activity.js").status_code == 200
     assert 'href="/activity"' in logged_in.get("/friends").text

@@ -140,7 +140,7 @@ def test_someone_with_nothing_judged_yet(logged_in):
 def test_page_and_static_files(logged_in):
     page = logged_in.get("/map")
     assert page.status_code == 200
-    assert '<script src="/static/map.js"></script>' in page.text and 'href="/static/map.css"' in page.text
+    assert '<script src="/static/map.js?v=' in page.text and 'href="/static/map.css?v=' in page.text
     assert 'data-src="/map.json"' in page.text and "As a table" not in page.text  # tables are built by map.js
     for path in ("/static/map.js", "/static/map.css"):
         assert logged_in.get(path).status_code == 200

@@ -2,7 +2,7 @@
 {% from "_spotify.html" import logo %}
 {% set nav = "friends" %}
 {% block title %}Moodify · taste map{% endblock %}
-{% block head %}<link rel="stylesheet" href="/static/map.css">{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ "/static/map.css" | fingerprint }}">{% endblock %}
 {% block content %}
 <div class="mf-stack-6">
   <div class="mf-stack-2" style="max-width: 760px">
@@ -49,4 +49,4 @@
   <p class="mf-xs mf-muted mf-sp-attrib">Only you and friends who switched on "Show my taste to friends" are on the map. They can see that you looked. Song details from {{ logo() }}</p>
 </div>
 {% endblock %}
-{% block scripts %}<script src="/static/map.js"></script>{% endblock %}
+{% block scripts %}<script src="{{ "/static/map.js" | fingerprint }}"></script>{% endblock %}

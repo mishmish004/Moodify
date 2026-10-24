@@ -1,7 +1,10 @@
+import hashlib
 import json
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, Form, Query, Request
@@ -27,6 +30,21 @@ SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
 templates.env.filters["day"] = pages.day
 templates.env.filters["duration"] = pages.duration
+
+
+@lru_cache(maxsize=64)
+def _digest(path: Path, mtime_ns: int) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:8]
+
+
+def _fingerprint(url: str) -> str:
+    """/static/style.css -> /static/style.css?v=<8 hex of its contents>. Cloudflare and browsers keep static files
+    for hours, so without this a new page could arrive with the old stylesheet or script."""
+    path = PROJECT_ROOT / url.lstrip("/")
+    return f"{url}?v={_digest(path, path.stat().st_mtime_ns)}"
+
+
+templates.env.filters["fingerprint"] = _fingerprint
 
 
 def _user_agent(context) -> str:

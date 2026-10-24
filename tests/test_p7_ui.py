@@ -1,4 +1,5 @@
 """Phase 7: the Jinja pages. OpenAI and Spotify mocked over HTTP, with the Phase 6 helpers."""
+import hashlib
 import json
 import re
 from datetime import date
@@ -40,7 +41,7 @@ def test_pages_are_200_for_an_onboarded_user(logged_in, respx_mock, path):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert '<meta name="viewport" content="width=device-width, initial-scale=1' in resp.text
-    assert '<link rel="stylesheet" href="/static/style.css">' in resp.text
+    assert '<link rel="stylesheet" href="/static/style.css?v=' in resp.text
 
 
 def test_playlist_and_message_pages_use_the_layout(logged_in, respx_mock):
@@ -174,6 +175,13 @@ def test_templates_only_reference_static_files_that_exist(anon):
     assert not missing, f"referenced but not in static/: {missing}"
     for ref in refs:
         assert anon.get(f"/static/{ref}").status_code == 200
+
+
+def test_stylesheet_and_scripts_are_fingerprinted(anon):
+    """A new version of a static file gets a new URL, so a cached old copy is never paired with a new page."""
+    digest = hashlib.sha256((STATIC / "style.css").read_bytes()).hexdigest()[:8]
+    assert f'<link rel="stylesheet" href="/static/style.css?v={digest}">' in anon.get("/login").text
+    assert anon.get(f"/static/style.css?v={digest}").status_code == 200
 
 
 def test_static_files_are_served_with_their_types(anon):

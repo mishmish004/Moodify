@@ -203,7 +203,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}<script src="/static/feedback.js"></script>
+{% block scripts %}<script src="{{ "/static/feedback.js" | fingerprint }}"></script>
 {% if auto_open %}
 <script>
   // Phase 17: just built, on a phone: open the Spotify app on this playlist, once. A browser may block it
