@@ -1,0 +1,33 @@
+---
+import { footerNav, site } from '../site/site';
+import CodeIcon from './CodeIcon.astro';
+
+interface Props {
+  /** Drop the top rule and margin (the home page puts its own block above) */
+  bare?: boolean;
+}
+
+const { bare = false } = Astro.props;
+---
+
+<footer class:list={['ftr', 'no-print', { bare }]}>
+  <span class="copy">© {new Date().getFullYear()} amish</span>
+  <nav aria-label="Footer">
+    {footerNav.map((l) => <a href={l.href}>{l.label}</a>)}
+    <a class="gh" href={site.github.url} aria-label="GitHub"><CodeIcon size={18} /></a>
+    <a href={site.linkedin.url}>LinkedIn</a>
+  </nav>
+</footer>
+
+<style>
+  .ftr {
+    padding: 40px var(--gutter) 28px; margin-top: 40px; border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 24px;
+    font-size: 14px; color: var(--muted);
+  }
+  .ftr.bare { margin-top: 0; padding: 16px 0 0; }
+  .copy { padding: 12px 0; }
+  nav { display: flex; flex-wrap: wrap; gap: 0 24px; max-width: 760px; justify-content: flex-end; }
+  nav a { padding: 12px 0; min-height: 44px; display: inline-flex; align-items: center; }
+  @media (max-width: 640px) { nav { justify-content: flex-start; gap: 0 20px; } }
+</style>

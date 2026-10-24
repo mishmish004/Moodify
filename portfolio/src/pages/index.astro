@@ -1,0 +1,283 @@
+---
+import Footer from '../components/Footer.astro';
+import Site from '../layouts/Site.astro';
+import { hasCaseStudy, hindiNumber, latestPost, projects as getProjects } from '../lib/content';
+import { home } from '../site/pages';
+import { site } from '../site/site';
+
+const projects = await getProjects();
+const post = await latestPost();
+const photos = home.photos;
+---
+
+<Site title="amish — I try to build at scale" banner secretLogo footer={false}>
+  <section class="intro wrap" aria-label="Intro">
+    <h1 class="display big rise">
+      <span>I try to build</span>
+      <span>at {photos.length > 0 && (
+        <span class="photos" data-interval={home.photoIntervalMs}>
+          {photos.map((p, n) => <img class:list={['frame', { on: n === 0 }]} src={p.src} alt={p.alt} width="160" height="200" loading="eager" decoding="async" />)}
+        </span>
+      )}scale,</span>
+    </h1>
+
+    <div class="centre rise d1">
+      <p class="display">I write up every production bug</p>
+      <a class="btn btn-dark" href="#serious-work">See the serious-work</a>
+    </div>
+
+    <div class="bottom">
+      {post && (
+        <a class="latest rise d3" href={`/yapping/${post.id}`}>
+          <span class="label">Latest write-up</span>
+          <span class="latest-title"><span>{post.data.title}</span><span class="arrow" aria-hidden="true">→</span></span>
+        </a>
+      )}
+      <p class="display big right rise d2"><span>then it breaks,</span><span>I yap about it.</span></p>
+    </div>
+  </section>
+
+  <section id="serious-work" class="sect wrap rule" aria-labelledby="projects-h">
+    <div class="sect-head">
+      <h2 id="projects-h" class="display">serious-work</h2>
+      <p class="muted">(Things I do to get a job)</p>
+    </div>
+
+    {projects.length > 0 ? (
+      <div class="projects">
+        {projects.map((p, n) => (
+          <article class="prow">
+            <span lang="hi" class="deva-num num">{hindiNumber(n + 1)}</span>
+            <div class="pbody">
+              <h3 class="display">{p.data.title}</h3>
+              <button class="desc" type="button" data-open={`p-${p.id}`} aria-haspopup="dialog">
+                {p.data.en} <span class="desc-more" aria-hidden="true">expand ↗</span>
+              </button>
+              {p.data.stack.length > 0 && <p class="mono stack">{p.data.stack.join(' · ')}</p>}
+              <div class="plinks">
+                {hasCaseStudy(p) && <a class="strong" href={`/projects/${p.id}`}>Case study <span class="arrow" aria-hidden="true">→</span></a>}
+                {p.data.repo && <a href={p.data.repo}>Repo <span class="arrow arrow-up" aria-hidden="true">↗</span></a>}
+                {p.data.live && <a href={p.data.live}>Live <span class="arrow arrow-up" aria-hidden="true">↗</span></a>}
+              </div>
+            </div>
+            {p.data.image && (
+              <div class="pimg"><img class="ph" src={p.data.image.src} alt={p.data.image.alt} width="420" height="315" loading="lazy" decoding="async" /></div>
+            )}
+          </article>
+        ))}
+      </div>
+    ) : (
+      <p class="empty muted">Nothing here yet. The first project is on its way.</p>
+    )}
+  </section>
+
+  <section id="dilly-dallying" class="sect wrap" aria-labelledby="dd-h">
+    <div class="sect-head">
+      <h2 id="dd-h" class="display">dilly-dallying</h2>
+      <p class="muted">Side quests, experiments and things I made for fun.</p>
+    </div>
+    {home.sideQuests.length > 0 ? (
+      <div class="cards">
+        {home.sideQuests.map((c) => {
+          const Tag = c.href ? 'a' : 'article';
+          return (
+            <Tag class="qcard" href={c.href}>
+              {c.image && <img class="ph" src={c.image.src} alt={c.image.alt} width="320" height="320" loading="lazy" decoding="async" />}
+              <div class="qhead">
+                <h3>{c.title}{c.href && <span class="arrow arrow-up" aria-hidden="true"> ↗</span>}</h3>
+                {c.year && <span class="mono year">{c.year}</span>}
+              </div>
+              {c.line && <p class="qline">{c.line}</p>}
+            </Tag>
+          );
+        })}
+      </div>
+    ) : (
+      <p class="muted">Nothing here yet. Back soon with something silly.</p>
+    )}
+  </section>
+
+  <div class="contact wrap" id="contact">
+    <div class="contact-row">
+      <p class="display hello">Say hello.</p>
+      <a class="btn btn-dark email" href={`mailto:${site.email}`}>{site.email}</a>
+    </div>
+    <Footer bare />
+  </div>
+
+  {projects.map((p, n) => (
+    <dialog id={`p-${p.id}`} class="pdialog" aria-labelledby={`p-${p.id}-title`} data-lang-scope data-lang="en">
+      <div class="dhead">
+        <span lang="hi" class="deva-num dnum">{hindiNumber(n + 1)}</span>
+        <button class="xbtn" type="button" data-close aria-label="Close">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <h2 id={`p-${p.id}-title`} class="display dtitle">{p.data.title}</h2>
+      <div class="swap-grid dtext">
+        <p lang="en">{p.data.en}</p>
+        {p.data.hi && <p lang="hi" aria-hidden="true">{p.data.hi}</p>}
+      </div>
+      <div class="dfoot">
+        {p.data.hi && <button class="lang-pill" type="button" data-lang-toggle aria-pressed="false">hindi mai</button>}
+        {p.data.stack.length > 0 && <span class="mono dstack">{p.data.stack.join(' · ')}</span>}
+        {hasCaseStudy(p) && <a href={`/projects/${p.id}`}>Case study <span class="arrow" aria-hidden="true">→</span></a>}
+      </div>
+    </dialog>
+  ))}
+</Site>
+
+<style>
+  .wrap { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .big { font-size: clamp(31px, 5.24vw, 76px); line-height: 0.9; letter-spacing: -0.02em; }
+  .big > span { display: block; }
+
+  .intro {
+    min-height: min(800px, calc(100svh - 100px)); padding-top: clamp(24px, 3vw, 40px); padding-bottom: clamp(24px, 3vw, 40px);
+    display: flex; flex-direction: column; justify-content: space-between; gap: 56px;
+  }
+  .photos {
+    position: relative; display: inline-block; vertical-align: top; width: 1.6em; height: 2em;
+    margin: 0.06em 0.18em 0; border-radius: 4px; overflow: hidden; background: var(--tile);
+  }
+  .frame {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; filter: blur(2px); transition: opacity 220ms ease, filter 220ms ease;
+  }
+  .frame.on { opacity: 1; filter: none; }
+  .centre { display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; }
+  .centre p { font-size: clamp(18px, 1.6vw, 22px); line-height: 1.3; }
+  .bottom { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 32px; }
+  .latest { text-decoration: none; flex: 0 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+  .latest-title { font-size: 17px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .right { flex: 1 1 auto; text-align: right; margin: 0; }
+
+  .sect { padding-top: clamp(72px, 8vw, 120px); padding-bottom: 40px; }
+  .rule { border-top: 1px solid var(--line); }
+  .sect-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 32px; }
+  .sect-head h2 { font-size: clamp(40px, 4.8vw, 72px); line-height: 1; letter-spacing: -0.02em; }
+
+  .projects { border-bottom: 1px solid var(--line); }
+  .prow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 40px; padding: 32px 0; border-top: 1px solid var(--line); }
+  .num { flex: 0 0 56px; font-size: 32px; padding-top: 2px; }
+  .pbody { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .pbody h3 { font-size: clamp(28px, 2.8vw, 40px); line-height: 1.05; letter-spacing: -0.015em; text-wrap: balance; }
+  .desc {
+    margin: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
+    max-width: 540px; color: var(--muted); transition: color 150ms ease;
+  }
+  .desc-more {
+    display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink); white-space: nowrap; opacity: 0.55; transition: opacity 150ms ease, transform 200ms var(--ease-out);
+  }
+  .stack { font-size: 12px; color: var(--muted); }
+  .plinks { display: flex; flex-wrap: wrap; gap: 0 24px; font-size: 15px; }
+  .plinks a { padding: 10px 0; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+  .strong { font-weight: 500; }
+  .pimg { flex: 1 1 280px; max-width: 420px; min-width: 0; }
+  .ph { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: var(--tile); transition: transform 320ms var(--ease-out); }
+  .empty { padding: 32px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 32px 16px; }
+  .qcard { display: flex; flex-direction: column; gap: 10px; min-width: 0; text-decoration: none; color: var(--ink); }
+  .qcard .ph { aspect-ratio: 1 / 1; }
+  .qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .qhead h3 { min-width: 0; font-size: 17px; font-weight: 500; }
+  .year { flex-shrink: 0; font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .qline {
+    font-size: 15px; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  .contact { padding-top: clamp(72px, 8vw, 120px); padding-bottom: 28px; display: flex; flex-direction: column; gap: 72px; }
+  .contact-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
+  .hello { font-size: clamp(44px, 6vw, 88px); line-height: 0.95; letter-spacing: -0.02em; }
+  .email { max-width: 100%; padding: 10px 18px; }
+  .contact :global(.ftr) { border-top: 1px solid var(--line); }
+
+  @media (hover: hover) and (pointer: fine) {
+    .desc:hover { color: var(--ink); }
+    .desc:hover .desc-more { opacity: 1; transform: translateX(2px); }
+    .prow:hover .ph, .qcard:hover .ph { transform: translateY(-4px); }
+    .qcard:hover { color: var(--ink); }
+    .qcard:hover h3 { color: var(--muted); }
+  }
+
+  /* The project panel */
+  .pdialog {
+    width: calc(100% - 32px); max-width: 640px; max-height: calc(100svh - 32px); margin: auto; overflow: auto;
+    padding: clamp(24px, 4vw, 40px); background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 64px rgba(28, 27, 27, 0.14);
+    opacity: 0; transform: translateY(8px) scale(0.96);
+    transition: opacity 180ms ease, transform 180ms ease, overlay 180ms allow-discrete, display 180ms allow-discrete;
+  }
+  .pdialog[open] { opacity: 1; transform: none; transition-duration: 240ms; transition-timing-function: var(--ease-out); }
+  @starting-style { .pdialog[open] { opacity: 0; transform: translateY(8px) scale(0.96); } }
+  .pdialog::backdrop {
+    background: rgba(253, 253, 252, 0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
+    transition: background 180ms ease, backdrop-filter 180ms ease, overlay 180ms allow-discrete, display 180ms allow-discrete;
+  }
+  .pdialog[open]::backdrop { background: rgba(253, 253, 252, 0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  @starting-style { .pdialog[open]::backdrop { background: rgba(253, 253, 252, 0); backdrop-filter: blur(0); } }
+  :global(html:has(dialog[open])) { overflow: hidden; }
+  .dhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .dnum { font-size: 40px; }
+  .xbtn {
+    flex: 0 0 auto; width: 44px; height: 44px; margin: -6px -6px 0 0; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: transform 160ms var(--ease-out), background-color 150ms ease;
+  }
+  .xbtn:active { transform: scale(0.94); }
+  @media (hover: hover) and (pointer: fine) { .xbtn:hover { background: var(--wash); } }
+  .dtitle { margin-top: 20px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.05; letter-spacing: -0.015em; text-wrap: balance; }
+  .dtext { margin-top: 16px; font-size: 20px; line-height: 1.55; color: var(--ink-3); }
+  .dtext [lang='hi'] { font-size: 22px; }
+  .dfoot { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .dfoot a { min-height: 44px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+  .dstack { min-width: 0; font-size: 12px; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pdialog, .pdialog::backdrop { transition: none; }
+    .xbtn:active { transform: none; }
+    .prow:hover .ph, .qcard:hover .ph { transform: none; }
+  }
+</style>
+
+<script>
+  import { initLangToggles, setLang } from '../scripts/lang';
+
+  initLangToggles();
+
+  // Project panels: open from the description, close on ×, Escape (built in) or a click outside
+  document.querySelectorAll<HTMLButtonElement>('[data-open]').forEach((btn) => {
+    const dialog = document.getElementById(btn.dataset.open!) as HTMLDialogElement | null;
+    if (!dialog) return;
+    btn.addEventListener('click', () => {
+      setLang(dialog, false);
+      dialog.showModal();
+    });
+  });
+  document.querySelectorAll<HTMLDialogElement>('.pdialog').forEach((dialog) => {
+    dialog.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (e) => {
+      // A click on the dialog box itself (not its content) is a click on the backdrop
+      if (e.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) dialog.close();
+    });
+  });
+
+  // Rotating photos in the headline
+  const box = document.querySelector<HTMLElement>('.photos');
+  const frames = box ? Array.from(box.querySelectorAll('.frame')) : [];
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (box && frames.length > 1 && !still) {
+    let i = 0;
+    setInterval(() => {
+      frames[i].classList.remove('on');
+      i = (i + 1) % frames.length;
+      frames[i].classList.add('on');
+    }, Number(box.dataset.interval) || 1500);
+  }
+</script>

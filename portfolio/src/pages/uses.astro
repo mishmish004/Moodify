@@ -1,0 +1,59 @@
+---
+import Site from '../layouts/Site.astro';
+import { hindiNumber } from '../lib/content';
+import { uses } from '../site/pages';
+
+const groups = uses.groups.filter((g) => g.items.length > 0);
+---
+
+<Site title="Uses — amish" description="The gear and software Amish actually uses, and why each one stayed.">
+  <section class="hero pad" aria-labelledby="u-h">
+    <div class="hero-text">
+      <p class="label rise">uses · updated {uses.updated}</p>
+      <h1 id="u-h" class="display rise d1">What's on my desk, and in my terminal.</h1>
+    </div>
+    <p class="muted lede rise d2">The gear and software I actually use, and why each one stayed. Nothing here is sponsored.</p>
+  </section>
+
+  {groups.map((g, i) => {
+    const id = `u-${g.title.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+    return (
+      <section class="group pad" aria-labelledby={id}>
+        <div class="group-head">
+          <span lang="hi" aria-hidden="true" class="deva-num">{hindiNumber(i + 1)}</span>
+          <h2 id={id} class="display">{g.title}</h2>
+        </div>
+        <ul class="items">
+          {g.items.map((item) => (
+            <li>
+              <span class="name">{item.name}</span>
+              {item.why && <span class="muted why">{item.why}</span>}
+              {item.href && <a href={item.href}>{item.linkLabel ?? item.href} <span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  })}
+
+  <p class="tell pad muted">Got a tool I should try? <a href="/contact">Tell me <span class="arrow" aria-hidden="true">→</span></a></p>
+</Site>
+
+<style>
+  .pad { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .hero { padding-top: clamp(32px, 5vw, 72px); padding-bottom: clamp(40px, 5vw, 64px); display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
+  .hero-text { display: flex; flex-direction: column; gap: 24px; max-width: 900px; }
+  h1 { font-size: clamp(44px, 6.4vw, 96px); line-height: 0.92; letter-spacing: -0.025em; }
+  .lede { max-width: 380px; font-size: 17px; line-height: 1.55; }
+
+  .group { padding-top: 40px; padding-bottom: 48px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 24px 40px; }
+  .group-head { flex: 1 1 240px; display: flex; align-items: baseline; gap: 16px; }
+  .group-head .deva-num { font-size: 32px; }
+  .group-head h2 { font-size: clamp(28px, 2.8vw, 40px); line-height: 1.05; letter-spacing: -0.015em; }
+  .items { flex: 999 1 640px; min-width: 0; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 28px 32px; }
+  .items li { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .name { font-size: 18px; font-weight: 500; line-height: 1.3; }
+  .why { font-size: 15px; line-height: 1.5; }
+  .items a { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; }
+  .tell { padding-top: 32px; border-top: 1px solid var(--line); font-size: 15px; }
+</style>

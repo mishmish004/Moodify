@@ -1,0 +1,39 @@
+---
+// A daytime page: header, the page itself, footer.
+import Banner from '../components/Banner.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import type { NavKey } from '../site/site';
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  current?: NavKey;
+  /** The "New write-up" strip above the header */
+  banner?: boolean;
+  /** Home only: the logo becomes the secret-page button */
+  secretLogo?: boolean;
+  /** Leave the footer out (the home page draws its own) */
+  footer?: boolean;
+  noindex?: boolean;
+  image?: string;
+  type?: 'website' | 'article';
+}
+
+const { current, banner = false, secretLogo = false, footer = true, ...base } = Astro.props;
+---
+
+<Base {...base}>
+  <slot name="head" slot="head" />
+  {banner && <Banner />}
+  <Header current={current} secretLogo={secretLogo} />
+  <main id="main" tabindex="-1">
+    <slot />
+  </main>
+  {footer && <Footer />}
+</Base>
+
+<style>
+  main:focus { outline: none; }
+</style>

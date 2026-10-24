@@ -1,0 +1,16 @@
+---
+// Cloudflare's spam check. Invisible unless Cloudflare wants a click. Renders nothing until
+// PUBLIC_TURNSTILE_SITE_KEY is set at build time.
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
+---
+
+{PUBLIC_TURNSTILE_SITE_KEY && (
+  <>
+    <div class="cf-turnstile" data-sitekey={PUBLIC_TURNSTILE_SITE_KEY} data-appearance="interaction-only" data-size="flexible"></div>
+    <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  </>
+)}
+
+<style>
+  .cf-turnstile:empty { display: none; }
+</style>
