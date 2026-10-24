@@ -1,6 +1,6 @@
-# Moodify phase plan: Phases 9–17
+# Moodify phase plan: Phases 9–24
 
-The next build plan, written 2026-10-23 after the first real run. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
+The next build plan, written 2026-10-23 after the first real run. Part 2 (Phases 18–24, friends) starts after Phase 17. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
 
 ```bash
 .venv/bin/python -m pytest -m "not live and not docker"   # fast, every commit
@@ -348,6 +348,247 @@ Gate: `pytest tests/test_p17_mobile.py` green, and both manual phone checks pass
 
 ---
 
+# Part 2: Friends (Phases 18–24)
+
+Asked on 2026-10-23: everyone on Moodify knows each other, so put everyone's music and taste in one central database; show each person's activity and a multi-dimensional graph of what they listen to, with animations; let anyone make a **Moodify Blend** from a prompt and several friends' tastes; and let someone use a friend's taste to hear "what they would listen to".
+
+These phases need only Phases 9–13, which are done, so they can be built before 14–17. Phase 24 also shows likes and ratings once Phase 14 exists. Real multi-person checks need friends on the app, so they need the HTTPS deploy (plan.md Phase 8) and each friend on the Spotify allowlist. Until then, live tests pair your account with a **synthetic friend**: a stored taste profile with no Spotify account behind it. Blends and "hear it like a friend" read only stored profiles, never a friend's Spotify token, so a synthetic friend exercises the same code.
+
+| Request | Read as | Phase |
+|---|---|---|
+| (needed by everything below) | Nothing about a person reaches anyone else until they switch it on. They can see who used their taste, and undo it | 18 |
+| All music options and taste in a central database | One shared library: each person's tracks from every source (top, recent, liked, own playlists, Moodify's), weighted, refreshed daily, never kept indefinitely | 19 |
+| Moodify Blend: pick people, type a prompt | One playlist from several friends' tastes plus a prompt, with a fair share for each person, saved in the requester's account | 20 |
+| Use someone else's account to understand what they'd listen to | "Hear it like a friend": a playlist built from a friend's taste, saved in your own account. Never their login, never their account | 21 |
+| A multi-dimensional graph of what each person listens to | Every track scored on a few sound dimensions (energy, mood, texture, groove, vocals, era, genres), per-person profiles and taste-match scores | 22 |
+| (the graph itself) | The taste map: per-dimension dot rows, per-person track maps, a match grid and genre bars, animated | 23 |
+| Animations showing each user's activity | An activity feed and mood timeline per person, with a "replay the week" animation | 24 |
+
+Open questions (defaults stand until answered):
+5. Should a Blend be created **public**, so its members can open the link? Spotify has no "shared with these people" setting, and a private playlist only opens for its owner. Default: private, with a checkbox to make it public.
+6. Keep the name **Moodify Blend**? Spotify has a feature called Blend. No rule forbids the word, but Policy III.11 bans replicating a Spotify experience without "independent value". The prompt, sections and lengths are that value (Phase 20). Default: keep it.
+
+## Rules Part 2 is built around
+
+Read on 2026-10-23 from Spotify's Developer Policy (effective 15 May 2025), Developer Terms v10 and the Web API reference:
+- **Consent to share between users** (Terms V.4): "you must obtain explicit consent from the user who provided the data to us before using it for any purpose other than displaying it back to the user on your SDA." Showing Sam's taste to Amish, or using it in Amish's blend, is such a purpose. Phase 18 makes that consent explicit, per use, and revocable.
+- **No indefinite storage** (Terms IV.3.1.1): "Do not store Spotify Content indefinitely", and no "databases of Spotify Content, other than as strictly necessary to operate your SDA". The central library expires after 30 days without a refresh and is deleted on disconnect (Phase 19).
+- **Independent value** (Policy III.11): "Do not build products or services that mimic, or replicate or attempt to replace a core user experience of Spotify... must add independent value." The Blend is prompt-driven, sectioned and length-aware; Spotify's isn't (Phase 20).
+- **Attribution** (Policy II.4): every track shown, including points on charts and tooltips, links back to Spotify with its icon.
+- **Profiling and AI** (Policy III.13 and III.14) apply even more here: taste profiles are shown to other people, and track data goes to the LLM for scoring. This is covered by the 2026-10-22 decision for the friends-only build; revisit it if Moodify grows beyond friends.
+- **Genres:** the artist object's `genres` is marked Deprecated, and Get Several Artists is removed (Feb 2026), so genres would cost one call per artist and may disappear. The LLM tags genres instead (Phase 22).
+- **At most 5 users** in Development Mode, so a blend has 2 to 5 people and the charts never show more than 5.
+
+## Charts: how they're drawn
+
+Phases 23–24 follow the `dataviz` skill:
+- The form is picked by the data's job before any colour.
+- Categorical hues come in a fixed order, and the palette is checked with the skill's validator (`scripts/validate_palette.js`) for both light and dark surfaces.
+- Scatter-type charts cap at 3 colours. With up to 5 people, each person gets a small-multiple panel, or one person is in the accent colour and the rest are grey.
+- Radar charts are not used: their areas distort comparisons and their shape depends on axis order. Dot rows on one shared axis do the job instead.
+- Every chart has hover tooltips with hit areas of at least 24 px, a legend plus direct labels, and a table view.
+- Animation explains change (points move to their new place); it never carries data on its own. It is off under `prefers-reduced-motion`.
+- Everything is drawn in SVG by one small vanilla JS file per page, keeping plan.md's no-framework rule, with no CDN.
+
+---
+
+## Phase 18: Sharing, only with consent
+
+Goal: nothing about a person reaches another person unless they switched it on, and they can see every use and take it back.
+
+Build
+- [ ] `sharing(spotify_id PK, show_taste, allow_blends, allow_listen_as, updated_at)`: three switches, all **off** for every user, existing and new (migration)
+- [ ] `/sharing`: the three switches in plain words, each saying exactly what it shares:
+  - **Show my taste to friends:** taste profile, top artists, the taste map and activity feed (playlist titles, never prompts)
+  - **Let friends include me in Blends:** stored taste and library used in their blend playlists
+  - **Let friends hear music like me:** stored taste used for playlists saved in their account
+- [ ] Friends are the other people on this Moodify (at most 5) with at least one switch on. `/friends` lists them and what each shares
+- [ ] `taste_access(id, owner, viewer, kind, playlist_id, at)` logs every use of someone's data: a map view, a blend, a "hear it like". The owner sees "Who used my taste" on `/sharing`; nobody else sees it
+- [ ] "Hide from friends" on any playlist. Playlists whose brief has `support_note` are **never** shown to anyone else; that is enforced in the query, not the template
+- [ ] Never shared, whatever the switches say: prompts, reviews and ratings (Phases 14–15), memory lessons (Phase 16), support-note playlists, Spotify tokens
+- [ ] Switching off works on the next request. Playlists already in someone else's Spotify stay there (they're theirs); the switch text says so
+- [ ] Disconnect deletes the user's sharing row and the access log in both directions
+- [ ] One permission check, `sharing.allowed(owner, viewer, kind)`, used by every Part 2 route
+
+Tests (`tests/test_p18_sharing.py`)
+- [ ] a new user, and every user who existed before the migration, has all three switches off and appears nowhere: friends list, map data, blend picker, "hear it like"
+- [ ] table test, switch × feature: each switch grants exactly its own feature, and the others still answer 403
+- [ ] switching off → the next request is refused and the person is gone from every list
+- [ ] a support-note playlist never appears in any friend-facing query, with `show_taste` on and the playlist not hidden
+- [ ] a hidden playlist never appears to friends, but still appears to its owner
+- [ ] every use writes one `taste_access` row; only the owner can read their log
+- [ ] disconnect leaves no sharing or access rows mentioning the user, in either column
+
+Gate: `pytest tests/test_p18_sharing.py` green, and you read `/sharing` and agree it says plainly what is shared.
+
+---
+
+## Phase 19: The shared music library (central database)
+
+Goal: one place holding each person's music (what they play, save and keep), in a shape that compares across people, without keeping Spotify data longer than the app needs it.
+
+Build
+- [ ] `tracks(uri PK, name, artists_json, duration_ms, explicit, first_seen, last_seen)`: track details stored once, shared by everyone who has the track
+- [ ] `library(spotify_id, uri, source, weight, refreshed_at)`. Sources: `top_short`, `top_long`, `recent`, `liked`, `own_playlist`, `moodify` (tracks in playlists Moodify made for them). Default weights 3, 2, 2, 1, 1, 1, kept in one table in `src/library.py`
+- [ ] Filled from Phase 10's reads at each taste rebuild, with **no extra Spotify calls**. A user's rows are replaced in one transaction, so a song removed from Liked Songs leaves the library
+- [ ] At most 600 rows per user, the heaviest kept
+- [ ] Retention: rows not refreshed for 30 days are deleted at startup; tracks no one references are deleted with them; disconnect deletes the user's rows, and orphan tracks follow
+- [ ] `library.for_user(id)`, `library.top_artists(id, n)`, `library.common(a, b)`: shared tracks and artists, weighted
+- [ ] The known-songs pool (Phase 10) reads from the library instead of its own JSON copy, one source of truth (migration drops `users.taste_pool_json` after the switch)
+
+Tests (`tests/test_p19_library.py`)
+- [ ] a rebuild writes every source with its weight; a track in several sources keeps one row per source and its weights add up in `for_user`
+- [ ] a refresh replaces: a song gone from Liked Songs is gone from the library
+- [ ] the 600-row cap keeps the heaviest
+- [ ] `common(a, b) == common(b, a)`; no overlap gives an empty list
+- [ ] rows 31 days old are pruned at startup, rows 29 days old stay; orphan tracks go too
+- [ ] disconnect leaves no library rows for the user and no orphan tracks
+- [ ] the Spotify call count of a rebuild is the same as in Phase 10 (assert per route)
+- [ ] the pool built from the library equals the Phase 10 pool for the same reads
+- [ ] `live`: your rebuild prints rows per source and stays at or under 600
+
+Gate: `pytest tests/test_p19_library.py` green, and your library's counts per source look right to you.
+
+---
+
+## Phase 20: Moodify Blend
+
+Goal: pick friends, type a prompt, get one playlist that fits the prompt and everyone's taste fairly.
+
+Build
+- [ ] `/blend`: choose 1–4 friends who allow blends (you are always in it), and a prompt box with the same tolerance as Phase 11. Optionally lean toward one person: equal by default
+- [ ] Blend taste: each member's summary condensed to at most 600 characters, labelled with their first name. The blended known-songs list puts **common ground** first (tracks in two or more members' libraries), then each member's heaviest tracks in turn, each labelled with whose they are
+- [ ] Hard rules are the **union** of all members': if anyone avoids country, the blend avoids it; anyone's "no explicit" applies to everyone. Familiarity refers to the blended list
+- [ ] Brief and sections work as in Phases 11–13. Each suggested song says who it's mainly for (`for`: a member, or `everyone`)
+- [ ] Fair share: each member's songs, counting their own and shared ones, fill at least (1/n − 10%) of the minutes. A member below that gets one top-up call, as short sections do
+- [ ] Saved **only in the requester's account**, as "Moodify Blend: Amish × Sam × Priya: <title>", with members named in the description. Members' Spotify tokens are never used, only their stored library and profile
+- [ ] `blends(id, playlist_id, owner)` and `blend_members(blend_id, spotify_id)`; each member's access log gets a row; members see "Amish made a blend with you" in their activity (Phase 24)
+- [ ] Blend page: each track marked with whose taste it came from (initials) or "common ground"; a share bar per member (the dataviz rules apply: one colour per member in a fixed order)
+- [ ] Public/private as in open question 5
+
+Tests (`tests/test_p20_blend.py`)
+- [ ] only friends who allow blends can be picked; anyone else → 403, nothing built
+- [ ] **no member's refresh token is ever used**: the token route sees only the requester's
+- [ ] the union of avoid rules reaches the brief and suggestion prompts; one member's "no explicit" filters explicit tracks
+- [ ] common-ground songs come first in the known list, each member's songs are labelled
+- [ ] fair share holds within tolerance; an under-served member triggers exactly one top-up call, for that member
+- [ ] playlist name and description list every member; one access-log row per member
+- [ ] a member who switched off before the build can no longer be picked; the build checks consent once, at the start
+- [ ] `live`: you plus a synthetic friend whose taste is very different (jazz and classical) with "sunday cooking" → each of you at least 40% of the minutes, judged by whose list each track came from
+
+Gate: `pytest tests/test_p20_blend.py` green, the live blend passes, and once a real friend is on the deployed app, one real blend sounds fair to both of you.
+
+---
+
+## Phase 21: Hear it like a friend
+
+Goal: "what would Sam put on for this?": a playlist built from a friend's taste, saved in your account, without touching theirs.
+
+Build
+- [ ] On `/friends/{id}`, if they allow it: "Make a playlist the way Sam would hear it" with a prompt box
+- [ ] The build swaps in the friend's profile: their summary, their known songs from the library, their avoid rules. Your onboarding answers don't apply; familiarity means songs *they* know
+- [ ] Only their taste profile and library are used. Their prompts, reviews, ratings, lessons and support-note playlists are never read (the build takes a `Profile`, nothing else)
+- [ ] Saved in **your** account as "Moodify: <title> (as Sam hears it)"; the page says whose taste was used
+- [ ] Logged for the friend: "Amish made 'Sunday cooking' the way you'd hear it"
+- [ ] The friend's Spotify token is never used, and nothing is written to their account
+
+Tests (`tests/test_p21_listen_as.py`)
+- [ ] needs `allow_listen_as`; otherwise 403 and nothing built
+- [ ] the brief and suggestion prompts contain the friend's summary and **not** yours (assert both); the known list is the friend's
+- [ ] the friend's avoid rules apply; yours don't
+- [ ] only your token is used; the playlist name ends "(as Sam hears it)"; one access-log row
+- [ ] the build function cannot receive anything but a `Profile` (signature test), so private data can't leak in later phases
+- [ ] `live`: a synthetic jazz-and-classical friend, prompt "gym": print the tracks for a manual look, and check the suggestion prompt carried the friend's taste
+
+Gate: `pytest tests/test_p21_listen_as.py` green, and the live result sounds like the synthetic friend, not like you.
+
+---
+
+## Phase 22: Taste dimensions
+
+Goal: every track in the library gets a few numbers that describe how it sounds, so people can be compared, matched and drawn.
+
+Build
+- [ ] Dimensions, judged by the LLM because Spotify's audio features are deprecated:
+  - **energy** 1–10
+  - **mood**: 1 dark to 10 bright
+  - **texture**: 1 acoustic to 10 electronic
+  - **groove**: 1 still to 10 danceable
+  - **vocals**: 1 instrumental to 10 vocal-led
+  - **era**: the decade of release
+  - up to 3 **genre tags**, and the main **language**
+- [ ] `track_features(uri PK, energy, mood, texture, groove, vocals, era, genres_json, language, model, judged_at)`, judged in batches of 50 new tracks per structured call through `prompts.ask`. A track is judged once; features go when their track goes (Phase 19 retention)
+- [ ] A batch that fails isn't cached; its tracks are retried at the next refresh. Values outside their range are clamped, and nonsense genres are dropped
+- [ ] Per person: the weighted mean and spread of each dimension over their library, genre shares (top 6 plus Other), and a decade histogram. Pure functions over at most 600 rows, computed on demand
+- [ ] Taste match between two people, 0–100: cosine similarity of the standardized dimension means, combined with the weighted overlap of genre shares. Pure, symmetric
+- [ ] Phase 13's ordering may use judged energy for known tracks later; out of scope here
+
+Tests (`tests/test_p22_dimensions.py`)
+- [ ] 120 unjudged tracks → 3 calls of at most 50; already-judged tracks → 0 calls
+- [ ] out-of-range values clamped, unknown fields ignored, a failed batch leaves its tracks unjudged
+- [ ] table tests for weighted mean, spread, genre shares and the decade histogram
+- [ ] match: identical people 100, opposite profiles near 0, `match(a, b) == match(b, a)`
+- [ ] features are deleted with their track
+- [ ] `live`: 12 well-known tracks with obvious orderings ("Clair de Lune" calmer than "Till I Collapse"; "Blinding Lights" more electronic than "Fast Car"; "Hey Ya!" more danceable than "Hurt") → at least 90% of the pairwise orderings right
+
+Gate: `pytest tests/test_p22_dimensions.py` green and the live ordering check passes.
+
+---
+
+## Phase 23: The taste map
+
+Goal: one page that shows at a glance what each friend listens to and where tastes overlap.
+
+Build (rules in "Charts: how they're drawn")
+- [ ] `/map` (you plus friends who show their taste), data from `GET /map.json`, drawn by `static/map.js` in SVG
+- [ ] **Profiles**: one row per dimension (energy, mood, texture, groove, vocals, era) on a shared axis, one dot per person with a thin spread bar; the selected person in the accent colour, the others grey; tap a name to switch
+- [ ] **Track map**: tracks on two chosen dimensions (default energy × mood), one small panel per person; point size by weight, common-ground tracks ringed. Nearest-point hover; the tooltip shows the track and artist with the Spotify icon and link
+- [ ] **Match**: the taste-match grid (at most 5 × 5) as a heatmap in one sequential hue, with values written in the cells, plus a "common ground" list of shared artists and tracks per pair
+- [ ] **Genres**: one horizontal stacked bar per person, top 6 genres plus Other
+- [ ] A table view for every chart; legend plus direct labels; dark mode with its own validated colours
+- [ ] Animation: on load, dots glide from the centre to their places (about 400 ms, eased); changing axes or the selected person morphs points to their new positions. Under `prefers-reduced-motion`, everything appears in place at once
+- [ ] Opening the map logs one `view` row per person shown
+
+Tests (`tests/test_p23_map.py`)
+- [ ] `/map.json` holds only you and people with `show_taste` on; switching it off removes them on the next request
+- [ ] no prompts, reviews, ratings or support-note data anywhere in the JSON (key and value scan)
+- [ ] every track in the JSON carries an `open.spotify.com` link; values are inside their ranges
+- [ ] the page is 200 when logged in and redirects to `/login` when logged out; its static files exist
+- [ ] `map.css` has a `prefers-reduced-motion` rule that turns off transitions
+- [ ] the palette in `map.css` passes the dataviz validator for light and dark (the test runs `node scripts/validate_palette.js` when Node is installed, and is skipped with a message otherwise)
+- [ ] screenshots at phone and desktop width, light and dark, checked by eye for collisions and overflow (headless Chrome, as in Phase 7)
+
+Gate: `pytest tests/test_p23_map.py` green, the validator passes in both modes, and the screenshots look right.
+
+---
+
+## Phase 24: Activity, animated
+
+Goal: see what everyone has been up to (playlists, moods over time, blends), with a replay that makes it feel alive.
+
+Build
+- [ ] `/activity`, newest first, for you plus friends who show their taste:
+  - "Sam made *Summer morning → workout → lock in* · 58 min · 3 parts" (the title, never the prompt)
+  - blends you're in
+  - "Amish made a playlist the way you'd hear it" (shown to that friend only)
+  - your own likes and ratings once Phase 14 exists (yours only)
+- [ ] **Mood timeline**: one strip per person over the last 30 days; each playlist is a mark placed by date, sized by length and shaded by average energy (sequential, one hue); hover shows the title
+- [ ] **Replay the week**: plays the feed and timelines day by day over about 3 seconds, with pause and step buttons that work from the keyboard; respects `prefers-reduced-motion` (step only)
+- [ ] Built from existing tables (`playlists`, `playlist_tracks`, `blends`, `taste_access`); no new storage beyond Phase 18's hide flag
+- [ ] Never shown: prompts, support-note playlists, hidden playlists, reviews, ratings of others
+
+Tests (`tests/test_p24_activity.py`)
+- [ ] the feed holds only consenting people's visible playlists, newest first
+- [ ] support-note and hidden playlists never appear; prompt text never appears in the HTML or JSON (only titles)
+- [ ] "the way you'd hear it" items appear to that friend only
+- [ ] timeline data: dates within 30 days, energy within 1–10
+- [ ] reduced-motion rule present; the page is 200 when logged in and redirects when logged out
+- [ ] screenshots as in Phase 23
+
+Gate: `pytest tests/test_p24_activity.py` green, and the replay looks good on a phone.
+
+---
+
 ## Later, only if needed
 
 - [ ] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones
@@ -355,6 +596,8 @@ Gate: `pytest tests/test_p17_mobile.py` green, and both manual phone checks pass
 - [ ] Per-section LLM calls run in parallel, if builds regularly take over 2 minutes
 - [ ] Per-track 1–10 ratings, if playlist ratings turn out too coarse
 - [ ] Energy check from a second source, if the LLM's energy judgements turn out unreliable in Phase 13 listening tests
+- [ ] "Compare": the same prompt as you'd hear it and as a friend would, side by side (Phase 21 twice), if friends ask for it
+- [ ] Judged energy from Phase 22 feeding Phase 13's ordering, if the per-build energy guesses disagree with it
 - [ ] Replace a playlist's songs in place for "Fix it" (check that Spotify's replace-items endpoint still works for Dev Mode first), if v1/v2 copies pile up
 
 ## Sources
@@ -369,6 +612,11 @@ Google
 Meta
 - [Learning Personalized Agents from Human Feedback (PAHF)](https://ai.meta.com/research/publications/learning-personalized-agents-from-human-feedback/) ([arXiv 2602.16173](https://arxiv.org/abs/2602.16173)), Meta Superintelligence Labs, 2026: pre-action clarification, memory-grounded action, post-action feedback updating per-user memory when preferences drift
 - [Agent Learning via Early Experience](https://arxiv.org/abs/2510.08558), Meta, 2025: self-reflection grounded in observed outcomes
+
+Spotify (Part 2)
+- [Developer Policy](https://developer.spotify.com/policy) (effective 15 May 2025): II.4 attribution, III.11 independent value, III.13 analysis and profiles, III.14 AI
+- [Developer Terms v10](https://developer.spotify.com/terms): IV.3.1 storage, V.4 consent to share, V.7 processing only as long as needed, Appendix A 5(c) deletion within 5 days
+- [Get Artist](https://developer.spotify.com/documentation/web-api/reference/get-an-artist) (`genres` deprecated) and the [February 2026 changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026) (Get Several Artists removed)
 
 Model provider (the cache mechanics Moodify actually runs on)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), OpenAI: 1,024-token minimum, stable prefix first, compaction resets the cache, `prompt_cache_key` and retention options by model generation, cached-token usage fields
