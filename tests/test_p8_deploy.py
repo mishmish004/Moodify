@@ -26,6 +26,8 @@ CONTAINER_ENV = {
     "SPOTIFY_CLIENT_ID": "docker-test-client",
     "OPENAI_API_KEY": "docker-test-key",
     "SPOTIFY_REDIRECT_URI": "https://moodify.example/callback",
+    "GOOGLE_CLIENT_ID": "docker-test-google-client",
+    "GOOGLE_CLIENT_SECRET": "docker-test-google-secret",
     "BASE_URL": "https://moodify.example",
 }
 
@@ -111,8 +113,10 @@ def test_container_serves_health_within_10_s(image, volume):
         wait_for_health(name, url)
         assert httpx.get(f"{url}/health").json() == {"status": "ok"}
         assert httpx.get(f"{url}/static/style.css").status_code == 200
-        login = httpx.get(f"{url}/login")
-        assert login.status_code == 200 and "Log in with Spotify" in login.text
+        # Every page waits behind the Google sign-in, the Spotify login included
+        assert httpx.get(f"{url}/login").headers["location"] == "/signin"
+        signin = httpx.get(f"{url}/signin")
+        assert signin.status_code == 200 and "Sign in with Google" in signin.text
         assert in_container(name, "import os; print(os.getuid())") != "0"
 
 

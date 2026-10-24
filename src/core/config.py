@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # Spotify rejects `localhost`; loopback must be 127.0.0.1, anything else HTTPS
     SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:9091/callback"
 
+    # Google sign-in, required before the Spotify login. Any Google account gets in (src/google_auth.py)
+    GOOGLE_CLIENT_ID: str = Field(..., min_length=1)
+    GOOGLE_CLIENT_SECRET: SecretStr = Field(...)
+    # Must match an Authorized redirect URI of the Google client exactly.
+    # Unset: /signin/callback on SPOTIFY_REDIRECT_URI's host, where the session cookie lives
+    GOOGLE_REDIRECT_URI: Optional[str] = None
+
     # LLM that turns mood + taste into song suggestions
     OPENAI_API_KEY: SecretStr = Field(...)
     OPENAI_MODEL: str = "gpt-5.4-mini"
@@ -52,6 +59,8 @@ class Settings(BaseSettings):
             raise ValueError("SPOTIFY_REDIRECT_URI: Spotify rejects localhost, use 127.0.0.1")
         if self.ENV == "prod" and not self.SPOTIFY_REDIRECT_URI.startswith("https://"):
             raise ValueError("SPOTIFY_REDIRECT_URI must use https:// in prod")
+        if self.ENV == "prod" and self.GOOGLE_REDIRECT_URI and not self.GOOGLE_REDIRECT_URI.startswith("https://"):
+            raise ValueError("GOOGLE_REDIRECT_URI must use https:// in prod")
         return self
 
 

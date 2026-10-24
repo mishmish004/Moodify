@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Playlists for the mood you're in</h1>
+<p>Describe how you feel or what you're doing. Moodify picks songs that fit, in the style you like, and saves them as a private playlist in your Spotify account.</p>
+{# POST, not a link: starting the Google sign-in from a GET lets prefetchers and crawlers use up the one-time state #}
+<form method="post" action="/signin">
+  <button type="submit" class="wide">Sign in with Google</button>
+</form>
+<p><small>Step 1 of 2: sign in with any Google account, then log in with Spotify. Google tells Moodify your email address; it stays in this browser's login cookie, and Moodify doesn't save it.</small></p>
+{% endblock %}

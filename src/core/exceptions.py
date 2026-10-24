@@ -21,3 +21,7 @@ class SpotifyQuotaExceeded(SpotifyError):
     """Spotify wants us to back off: the Dev Mode quota is used up, or a 429 persists or asks
     for a longer wait than a request can sit through. Show a message; don't retry."""
     pass
+
+class GoogleSignInError(MoodifyException):
+    """Google sign-in failed after the user came back: the code exchange failed, or the ID token didn't check out."""
+    pass

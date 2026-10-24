@@ -10,10 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, playlist, playlists, search_cache, taste, users
+from src import google_auth, jobs, playlist, playlists, search_cache, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
-from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
+from src.core.exceptions import GoogleSignInError, ReauthRequired, SpotifyError, SpotifyQuotaExceeded
 from src.core.logger import MoodifyLogger
 from src.db import init_db
 from src.spotify import auth
@@ -74,10 +74,25 @@ def _redirect_to_login(request: Request, exc: LoginRequired) -> RedirectResponse
     return RedirectResponse(f"/login?reason={exc.reason}" if exc.reason else "/login", status_code=303)
 
 
+class GoogleSignInRequired(Exception):
+    """Raised by google_account; answered with a redirect to /signin."""
+
+
+@app.exception_handler(GoogleSignInRequired)
+def _redirect_to_signin(request: Request, exc: GoogleSignInRequired) -> RedirectResponse:
+    return RedirectResponse("/signin", status_code=303)
+
+
+def _forget_spotify(request: Request) -> None:
+    """Drop the Spotify login from the cookie but keep the Google sign-in, so logging in again is one step."""
+    request.session.pop("spotify_id", None)
+    request.session.pop("oauth", None)
+
+
 @app.exception_handler(ReauthRequired)
 def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
     # The stored refresh token is dead (revoked, or past 6 months): a fresh login replaces it
-    request.session.clear()
+    _forget_spotify(request)
     return RedirectResponse("/login", status_code=303)
 
 
@@ -95,13 +110,22 @@ def _message(request: Request, title: str, text: str, status_code: int = 200, **
     )
 
 
-def any_user(request: Request) -> sqlite3.Row:
+def google_account(request: Request) -> dict:
+    """The Google account signed in on this browser, {"sub", "email"}. Every page but /health and
+    /signin needs one, the Spotify login included."""
+    account = request.session.get("google")
+    if not account:
+        raise GoogleSignInRequired()
+    return account
+
+
+def any_user(request: Request, _: dict = Depends(google_account)) -> sqlite3.Row:
     """The logged-in user, whatever Spotify access they granted. Only /disconnect settles for this."""
     spotify_id = request.session.get("spotify_id")
     user = users.get(spotify_id) if spotify_id else None
     if user is None:
-        # No cookie, or the row is gone (disconnected): drop whatever the cookie held
-        request.session.clear()
+        # No Spotify login yet, or the row is gone (disconnected): drop whatever Spotify login the cookie held
+        _forget_spotify(request)
         raise LoginRequired()
     return user
 
@@ -109,7 +133,7 @@ def any_user(request: Request) -> sqlite3.Row:
 def current_user(request: Request, user: sqlite3.Row = Depends(any_user)) -> sqlite3.Row:
     if auth.missing_scopes(user["granted_scopes"]):
         # Logged in before Moodify asked for more access (Phase 10). One new login grants it; data stays
-        request.session.clear()
+        _forget_spotify(request)
         raise LoginRequired("scopes")
     return user
 
@@ -119,19 +143,49 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/signin")
+def signin_page(request: Request):
+    if request.session.get("google"):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "signin.html")
+
+
+@app.post("/signin")
+def signin(request: Request) -> RedirectResponse:
+    state, nonce, verifier = secrets.token_urlsafe(16), secrets.token_urlsafe(16), auth.new_verifier()
+    request.session["google_oauth"] = {"state": state, "nonce": nonce, "verifier": verifier}
+    return RedirectResponse(google_auth.authorize_url(state, nonce, verifier), status_code=303)
+
+
+@app.get("/signin/callback")
+def signin_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    flow = request.session.pop("google_oauth", None)  # one use only, even when it fails
+    if error:
+        return _message(request, "Sign-in cancelled", "Google sign-in was cancelled or refused.", status_code=400)
+    if not flow or not code or not secrets.compare_digest(state.encode(), flow["state"].encode()):
+        return _message(request, "Sign-in expired", "This sign-in link is stale or didn't start here. Please sign in again.",
+                        status_code=400)
+    try:
+        request.session["google"] = google_auth.sign_in(code, flow["verifier"], flow["nonce"])
+    except GoogleSignInError as exc:
+        MoodifyLogger.get_logger("auth").warning("google sign-in failed: %s", exc)
+        return _message(request, "Sign-in failed", "Google sign-in failed. Please try again.", status_code=502)
+    return RedirectResponse("/", status_code=303)
+
+
 @app.get("/login")
-def login_page(request: Request, reason: str = ""):
-    return templates.TemplateResponse(request, "login.html", {"reason": reason})
+def login_page(request: Request, reason: str = "", account: dict = Depends(google_account)):
+    return templates.TemplateResponse(request, "login.html", {"reason": reason, "account": account})
 
 
-@app.post("/login")
+@app.post("/login", dependencies=[Depends(google_account)])
 def login(request: Request) -> RedirectResponse:
     state, verifier = secrets.token_urlsafe(16), auth.new_verifier()
     request.session["oauth"] = {"state": state, "verifier": verifier}
     return RedirectResponse(auth.authorize_url(state, verifier), status_code=303)
 
 
-@app.get("/callback")
+@app.get("/callback", dependencies=[Depends(google_account)])
 def callback(request: Request, code: str = "", state: str = "", error: str = ""):
     oauth = request.session.pop("oauth", None)  # one use only, even when it fails
     if error:
@@ -211,7 +265,7 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
         return RedirectResponse(f"/playlists/{job['playlist_id']}", status_code=303)
     if job["status"] == "failed":
         if job["error"] == jobs.REAUTH:
-            request.session.clear()
+            _forget_spotify(request)
             return RedirectResponse("/login", status_code=303)
         title, text = BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR])
         return _message(request, title, text, user=user)

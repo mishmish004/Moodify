@@ -13,7 +13,7 @@ from src.main import app
 
 from .conftest import ROOT, TEST_ENV
 
-REQUIRED = ["SECRET_KEY", "SPOTIFY_CLIENT_ID", "OPENAI_API_KEY"]
+REQUIRED = ["SECRET_KEY", "SPOTIFY_CLIENT_ID", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "OPENAI_API_KEY"]
 
 
 # --- settings ----------------------------------------------------------------
@@ -35,7 +35,7 @@ def test_empty_spotify_client_id_is_rejected(monkeypatch):
 def test_secrets_hidden_from_repr(monkeypatch):
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "test-spotify-secret")
     settings = Settings()
-    secrets = [TEST_ENV["SECRET_KEY"], TEST_ENV["OPENAI_API_KEY"], "test-spotify-secret"]
+    secrets = [TEST_ENV["SECRET_KEY"], TEST_ENV["OPENAI_API_KEY"], TEST_ENV["GOOGLE_CLIENT_SECRET"], "test-spotify-secret"]
     for secret in secrets:
         assert secret not in repr(settings)
         assert secret not in str(settings)

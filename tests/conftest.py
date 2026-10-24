@@ -11,6 +11,7 @@ import httpx
 
 from src import jobs
 from src.core.config import Settings, get_settings
+from src.main import app, google_account
 from src.spotify.client import API_URL, Track
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,8 +20,11 @@ TEST_ENV = {
     "ENV": "test",
     "SECRET_KEY": "test-secret-key",
     "SPOTIFY_CLIENT_ID": "test-client-id",
+    "GOOGLE_CLIENT_ID": "test-google-client.apps.googleusercontent.com",
+    "GOOGLE_CLIENT_SECRET": "test-google-secret",
     "OPENAI_API_KEY": "test-openai-key",
 }
+GOOGLE_ACCOUNT = {"sub": "google-1", "email": "friend@example.com"}
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +44,18 @@ def test_settings(request, monkeypatch, tmp_path) -> Settings:
     get_settings.cache_clear()
     yield get_settings()
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def google_signed_in(request):
+    """Every page needs a Google sign-in first (src/main.py google_account). Tests of the rest of the
+    app start signed in; tests marked google_gate meet the real check (tests/test_google_signin.py)."""
+    if request.node.get_closest_marker("google_gate"):
+        yield
+        return
+    app.dependency_overrides[google_account] = lambda: GOOGLE_ACCOUNT
+    yield
+    app.dependency_overrides.pop(google_account, None)
 
 
 CHAT_URL = "https://api.openai.com/v1/chat/completions"
