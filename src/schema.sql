@@ -208,3 +208,18 @@ CREATE TABLE IF NOT EXISTS blend_credits (
     PRIMARY KEY (blend_id, position, spotify_id)
 );
 CREATE INDEX IF NOT EXISTS blend_members_by_user ON blend_members (spotify_id);
+
+-- Phase 22: how each library track sounds, judged by the LLM (src/features.py); goes when its track goes
+CREATE TABLE IF NOT EXISTS track_features (
+    uri          TEXT PRIMARY KEY REFERENCES tracks(uri) ON DELETE CASCADE,
+    energy       INTEGER NOT NULL CHECK (energy BETWEEN 1 AND 10),
+    mood         INTEGER NOT NULL CHECK (mood BETWEEN 1 AND 10),
+    texture      INTEGER NOT NULL CHECK (texture BETWEEN 1 AND 10),
+    groove       INTEGER NOT NULL CHECK (groove BETWEEN 1 AND 10),
+    vocals       INTEGER NOT NULL CHECK (vocals BETWEEN 1 AND 10),
+    era          INTEGER NOT NULL,
+    genres_json  TEXT NOT NULL DEFAULT '[]',
+    language     TEXT NOT NULL,
+    model        TEXT NOT NULL,
+    judged_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

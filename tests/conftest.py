@@ -96,6 +96,14 @@ def briefs(request):
 
 
 @pytest.fixture(autouse=True)
+def no_background_judging(monkeypatch):
+    """A taste refresh queues judging of new library tracks (Phase 22), which would make LLM calls in a background
+    thread of whichever test refreshed a profile. Tests of judging call src/features.py directly."""
+    from src import features
+    monkeypatch.setattr(features, "judge_soon", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def no_leftover_builds():
     """A build thread that outlived its test would write into the next test's database."""
     yield

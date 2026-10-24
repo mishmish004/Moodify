@@ -545,7 +545,7 @@ Done 2026-10-24 apart from your listen. Live: "gym" the way a synthetic jazz-and
 Goal: every track in the library gets a few numbers that describe how it sounds, so people can be compared, matched and drawn.
 
 Build
-- [ ] Dimensions, judged by the LLM because Spotify's audio features are deprecated:
+- [x] Dimensions, judged by the LLM because Spotify's audio features are deprecated:
   - **energy** 1–10
   - **mood**: 1 dark to 10 bright
   - **texture**: 1 acoustic to 10 electronic
@@ -553,21 +553,23 @@ Build
   - **vocals**: 1 instrumental to 10 vocal-led
   - **era**: the decade of release
   - up to 3 **genre tags**, and the main **language**
-- [ ] `track_features(uri PK, energy, mood, texture, groove, vocals, era, genres_json, language, model, judged_at)`, judged in batches of 50 new tracks per structured call through `prompts.ask`. A track is judged once; features go when their track goes (Phase 19 retention)
-- [ ] A batch that fails isn't cached; its tracks are retried at the next refresh. Values outside their range are clamped, and nonsense genres are dropped
-- [ ] Per person: the weighted mean and spread of each dimension over their library, genre shares (top 6 plus Other), and a decade histogram. Pure functions over at most 600 rows, computed on demand
-- [ ] Taste match between two people, 0–100: cosine similarity of the standardized dimension means, combined with the weighted overlap of genre shares. Pure, symmetric
-- [ ] Phase 13's ordering may use judged energy for known tracks later; out of scope here
+- [x] `track_features(uri PK, energy, mood, texture, groove, vocals, era, genres_json, language, model, judged_at)`, judged in batches of 50 new tracks per structured call through `prompts.ask`. A track is judged once; features go when their track goes (Phase 19 retention)
+- [x] A batch that fails isn't cached; its tracks are retried at the next refresh. Values outside their range are clamped, and nonsense genres are dropped
+- [x] Per person: the weighted mean and spread of each dimension over their library, genre shares (top 6 plus Other), and a decade histogram. Pure functions over at most 600 rows, computed on demand
+- [x] Taste match between two people, 0–100: cosine similarity of the standardized dimension means, combined with the weighted overlap of genre shares. Pure, symmetric
+- [ ] (Out of scope, as planned) Phase 13's ordering may use judged energy for known tracks later
 
 Tests (`tests/test_p22_dimensions.py`)
-- [ ] 120 unjudged tracks → 3 calls of at most 50; already-judged tracks → 0 calls
-- [ ] out-of-range values clamped, unknown fields ignored, a failed batch leaves its tracks unjudged
-- [ ] table tests for weighted mean, spread, genre shares and the decade histogram
-- [ ] match: identical people 100, opposite profiles near 0, `match(a, b) == match(b, a)`
-- [ ] features are deleted with their track
-- [ ] `live`: 12 well-known tracks with obvious orderings ("Clair de Lune" calmer than "Till I Collapse"; "Blinding Lights" more electronic than "Fast Car"; "Hey Ya!" more danceable than "Hurt") → at least 90% of the pairwise orderings right
+- [x] 120 unjudged tracks → 3 calls of at most 50; already-judged tracks → 0 calls
+- [x] out-of-range values clamped, unknown fields ignored, a failed batch leaves its tracks unjudged
+- [x] table tests for weighted mean, spread, genre shares and the decade histogram
+- [x] match: identical people 100, opposite profiles near 0, `match(a, b) == match(b, a)`
+- [x] features are deleted with their track
+- [x] `live`: 12 well-known tracks with obvious orderings ("Clair de Lune" calmer than "Till I Collapse"; "Blinding Lights" more electronic than "Fast Car"; "Hey Ya!" more danceable than "Hurt") → at least 90% of the pairwise orderings right
 
 Gate: `pytest tests/test_p22_dimensions.py` green and the live ordering check passes.
+
+Done 2026-10-24. Live: 18 of 18 obvious orderings right on `gpt-6.1-sol` (Till I Collapse energy 9 > Clair de Lune 2; Blinding Lights texture 9 > Fast Car 3; Hey Ya! groove 10 > Hurt 2; Levels era 2010 > Fast Car 1980), from one call of 12 tracks. How it works: judging runs in the background after each library refresh (`features.judge_soon`), never inside a playlist build. One run at a time; the most widely held tracks go first. `OPENAI_FEATURES_MODEL` can name a cheaper model. Genres are cleaned to at most 3 plausible names (lowercase, short, no sentences or URLs). Era is clamped to 1900 through the current decade. The taste match is 60% how close the standardized dimension means are (cosine, mapped to 0–1) and 40% the overlap of genre shares; identical people score 100, opposite ones about 0. Migration 14 adds `track_features` (cascades with `tracks`). Tests don't judge in the background unless they ask to (a conftest fixture). 26 tests.
 
 ---
 

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-5.4-mini"
     # Reads the prompt into a brief (Phase 11); a smaller, faster model can do this. Unset: OPENAI_MODEL
     OPENAI_BRIEF_MODEL: Optional[str] = None
+    # Judges how library tracks sound, 50 a call, in the background (Phase 22). Unset: OPENAI_MODEL
+    OPENAI_FEATURES_MODEL: Optional[str] = None
 
     DB_PATH: Path = PROJECT_ROOT / "data" / "moodify.db"
     BASE_URL: str = "http://127.0.0.1:9091"

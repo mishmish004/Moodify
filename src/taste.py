@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional, TypeVar
 
-from src import library, users
+from src import features, library, users
 from src.core.exceptions import ReauthRequired, SpotifyError
 from src.core.logger import MoodifyLogger
 from src.spotify.client import SpotifyClient, Track
@@ -168,6 +168,7 @@ def profile_for(user) -> Profile:
     profile = Profile(build_summary(onboarding, listening), known_pool(listening))
     if listening.complete:
         library.replace(user["spotify_id"], library_sources(listening))
+        features.judge_soon()  # new library tracks get their taste dimensions in the background (Phase 22)
         users.set_taste_summary(user["spotify_id"], profile.summary, datetime.now(timezone.utc).strftime(TIMESTAMP))
     return profile
 
