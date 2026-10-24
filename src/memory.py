@@ -10,7 +10,9 @@ preferences drift (Meta's PAHF); a superseded lesson stays, pointing at the one 
 At most MAX_ACTIVE lasting lessons stay active per user. Every query filters by spotify_id.
 """
 import json
+import re
 import sqlite3
+from dataclasses import dataclass
 from typing import Literal, Optional
 
 from pydantic import BaseModel
@@ -22,7 +24,7 @@ from src.db import get_conn
 from src.jobs import NO_TRACE, Trace
 
 MAX_ACTIVE = 40       # active lasting lessons per user; past that, consolidation merges
-LESSONS_CHARS = 1500  # what a build's prompt gets (Phase 15: all active lessons; Phase 16 recalls)
+LESSONS_CHARS = 1500  # what a build's prompt gets: memory block and recalled lessons together (Phase 16)
 EVIDENCE_CHARS = 500
 
 log = MoodifyLogger.get_logger("memory")
@@ -119,7 +121,7 @@ def render(rows: list[sqlite3.Row], limit: int = LESSONS_CHARS) -> str:
     """Lessons as prompt lines, most recent first, whole lines only, within `limit` characters."""
     lines, used = [], 0
     for row in rows:
-        line = f"- {row['title']}: {row['content']}"
+        line = f"- {' '.join(row['title'].split())}: {' '.join(row['content'].split())}"
         if used + len(line) + 1 > limit:
             break
         lines.append(line)
@@ -127,10 +129,214 @@ def render(rows: list[sqlite3.Row], limit: int = LESSONS_CHARS) -> str:
     return "\n".join(lines)
 
 
-def lessons_block(spotify_id: str) -> str:
-    """The lessons a build's prompt gets: every active lasting lesson, within LESSONS_CHARS. Empty when none."""
-    text = render(active(spotify_id))
-    return f"What Moodify learned from the listener's reviews:\n{text}" if text else ""
+# --- recalling (Phase 16) ------------------------------------------------------------------------------
+# Step 6 of the loop. Each build's prompt gets two parts:
+#   - the memory block, user-wide: recent preference lessons, liked songs and artists, playlists rated 8+.
+#     Rendered once and cached in users.memory_block until feedback changes it, so the per-user prompt
+#     block stays byte-identical between builds and hits OpenAI's prompt cache (caching layers 2 and 3)
+#   - recalled lessons, per request: lessons whose tags overlap the request, ranked by overlap then
+#     recency. Tag overlap, not embeddings: a user has at most MAX_ACTIVE lessons (see "Later")
+
+RECALL_LESSONS = 8        # lessons per build, block and recalled together
+BLOCK_PREFERENCES = 4     # preference lessons in the memory block
+BLOCK_CHARS = 1000
+LIKED_SONGS = 8
+LIKED_ARTISTS = 6
+RATED_PLAYLISTS = 4
+GOOD_RATING = 8
+EXPIRE_AFTER_DAYS = 180   # pitfall and strategy lessons nobody recalled for this long expire; preferences don't
+
+BLOCK_HEADER = "What Moodify knows from the listener's feedback:"
+RECALL_HEADER = "What Moodify learned from the listener's reviews that fits this request:"
+
+
+def memory_block(spotify_id: str) -> str:
+    """The user-wide memory text, from the cache when nothing changed since it was rendered."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT memory_block FROM users WHERE spotify_id = ?", (spotify_id,)).fetchone()
+        if row is None:
+            return ""
+        if row["memory_block"] is not None:
+            return row["memory_block"]
+        text = _render_block(conn, spotify_id)
+        conn.execute("UPDATE users SET memory_block = ?, memory_version = memory_version + 1 WHERE spotify_id = ?",
+                     (text, spotify_id))
+        return text
+
+
+def invalidate(conn: sqlite3.Connection, spotify_id: str) -> None:
+    """Lessons, likes or ratings changed: the memory block is rendered again on the next build."""
+    conn.execute("UPDATE users SET memory_block = NULL WHERE spotify_id = ?", (spotify_id,))
+
+
+def _block_preferences(conn: sqlite3.Connection, spotify_id: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM lessons WHERE spotify_id = ? AND status = 'active' AND scope = 'lasting' AND kind = 'preference'"
+        " ORDER BY id DESC LIMIT ?",
+        (spotify_id, BLOCK_PREFERENCES),
+    ).fetchall()
+
+
+def _render_block(conn: sqlite3.Connection, spotify_id: str) -> str:
+    parts = []
+    preferences = render(_block_preferences(conn, spotify_id), limit=500)
+    if preferences:
+        parts.append(f"Preferences from their reviews:\n{preferences}")
+    liked = conn.execute(
+        "SELECT l.uri, min(t.name) AS name, min(t.artists_json) AS artists_json, max(l.liked_at) AS at"
+        " FROM track_likes l JOIN playlist_tracks t ON t.uri = l.uri JOIN playlists p ON p.id = t.playlist_id"
+        " AND p.spotify_id = l.spotify_id WHERE l.spotify_id = ? GROUP BY l.uri ORDER BY at DESC, l.uri",
+        (spotify_id,),
+    ).fetchall()
+    if liked:
+        counts: dict[str, int] = {}
+        for row in liked:
+            for artist in json.loads(row["artists_json"])[:1]:
+                counts[artist] = counts.get(artist, 0) + 1
+        top = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:LIKED_ARTISTS]
+        parts.append("Lean toward the artists they liked most: " + ", ".join(f"{a} ({n})" for a, n in top) + ".")
+        songs = [f"{r['name']} by {json.loads(r['artists_json'])[0]}" for r in liked[:LIKED_SONGS]]
+        parts.append("Songs they liked: " + "; ".join(songs) + ".")
+    rated = conn.execute(
+        "SELECT prompt, rating FROM playlists WHERE spotify_id = ? AND rating >= ? ORDER BY rated_at DESC, id DESC LIMIT ?",
+        (spotify_id, GOOD_RATING, RATED_PLAYLISTS),
+    ).fetchall()
+    if rated:
+        parts.append("This worked for these moods (playlists they rated 8 or more): " + "; ".join(
+            f"\"{_short(r['prompt'])}\" ({r['rating']}/10)" for r in rated) + ".")
+    if not parts:
+        return ""
+    text = "\n".join([BLOCK_HEADER, *parts])
+    return text if len(text) <= BLOCK_CHARS else text[: BLOCK_CHARS - 1] + "…"
+
+
+def _short(prompt: str, limit: int = 80) -> str:
+    line = " ".join(prompt.split())
+    return line if len(line) <= limit else line[: limit - 1] + "…"
+
+
+# Everyday words -> the shared tags lessons use, so "gym session" recalls a lesson tagged "workout".
+# A word can belong to several groups (a run is a workout too). Reflection is asked to prefer these tags.
+TAG_GROUPS = {
+    "workout": {"workout", "gym", "lift", "lifting", "training", "exercise", "cardio", "hiit", "run", "running", "spin"},
+    "running": {"running", "run", "jog", "jogging", "runner", "marathon"},
+    "focus": {"focus", "study", "studying", "coding", "code", "programming", "work", "working", "lock-in", "concentrate",
+              "concentration", "homework", "exam", "exams", "deep-work"},
+    "sleep": {"sleep", "sleeping", "bed", "bedtime", "asleep", "nap", "insomnia"},
+    "party": {"party", "pregame", "club", "clubbing", "dance", "dancing", "rave"},
+    "chill": {"chill", "relax", "relaxing", "calm", "unwind", "lazy", "cozy", "cosy"},
+    "commute": {"commute", "drive", "driving", "car", "roadtrip", "road-trip", "bus", "train", "travel"},
+    "cooking": {"cooking", "cook", "kitchen", "dinner", "baking"},
+    "reading": {"reading", "read", "book", "books"},
+    "morning": {"morning", "sunrise", "wake", "breakfast"},
+    "night": {"night", "late-night", "midnight", "evening"},
+    "sad": {"sad", "heartbreak", "heartbroken", "crying", "melancholy", "breakup"},
+    "energy": {"energy", "hype", "hyped", "intense", "slow", "fast", "tempo", "upbeat", "pace"},
+}
+_GROUPS_OF: dict[str, set[str]] = {}
+for _tag, _members in TAG_GROUPS.items():
+    for _word in _members | {_tag}:
+        _GROUPS_OF.setdefault(_word, set()).add(_tag)
+
+
+def expand(terms) -> set[str]:
+    """Terms plus the shared tags they belong to."""
+    out = set(terms)
+    for term in terms:
+        out |= _GROUPS_OF.get(term, set())
+    return out
+
+
+def words(text: str) -> set[str]:
+    """Lowercase words of a prompt or brief, each also without a plural s, plus their shared tags,
+    for matching against lesson tags."""
+    out = set()
+    for word in re.findall(r"[^\W_]+(?:-[^\W_]+)*", text.casefold()):
+        out.add(word)
+        if len(word) > 3 and word.endswith("s"):
+            out.add(word[:-1])
+    return expand(out)
+
+
+def recall(spotify_id: str, wanted: set[str], limit: Optional[int] = None) -> list[sqlite3.Row]:
+    """Active lasting lessons sharing a tag with `wanted`, not already in the memory block, most overlap first,
+    then newest. At most `limit` (RECALL_LESSONS less the preferences the block holds)."""
+    with get_conn() as conn:
+        in_block = {r["id"] for r in _block_preferences(conn, spotify_id)}
+    if limit is None:
+        limit = RECALL_LESSONS - len(in_block)
+    scored = []
+    wanted = expand(wanted)
+    for row in active(spotify_id):
+        overlap = len(wanted & expand(tags(row)))
+        if overlap and row["id"] not in in_block:
+            scored.append((overlap, row["id"], row))
+    scored.sort(key=lambda item: (-item[0], -item[1]))
+    return [row for _, _, row in scored[:max(limit, 0)]]
+
+
+@dataclass(frozen=True)
+class Parts:
+    """Memory for one LLM call: the user-wide block (per-user prompt part) and the lessons recalled for this
+    request (per-request part), together at most LESSONS_CHARS characters and RECALL_LESSONS lessons."""
+    block: str
+    recalled: str
+    ids: tuple[int, ...]  # the recalled lessons, for mark_used()
+
+
+def prompt_parts(spotify_id: str, wanted: set[str]) -> Parts:
+    expire_unused(spotify_id)
+    block = memory_block(spotify_id)
+    rows = recall(spotify_id, wanted)
+    room = LESSONS_CHARS - len(block) - len(RECALL_HEADER) - 2
+    text = render(rows, limit=room) if room > 0 else ""
+    if not text:
+        return Parts(block, "", ())
+    return Parts(block, f"{RECALL_HEADER}\n{text}", tuple(r["id"] for r in rows[: text.count("\n") + 1]))
+
+
+def memory_for(spotify_id: str, brief) -> str:
+    """Everything a build recalls for this brief, as one text (the memory page shows it this way)."""
+    parts = prompt_parts(spotify_id, brief_words(brief))
+    return "\n\n".join(p for p in (parts.block, parts.recalled) if p)
+
+
+def mark_used(spotify_id: str, ids) -> None:
+    """Lesson upkeep: recalled lessons get last_used_at and use_count, which keep them from expiring."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE lessons SET last_used_at = CURRENT_TIMESTAMP, use_count = use_count + 1"
+            f" WHERE spotify_id = ? AND id IN ({','.join('?' * len(ids))})",
+            (spotify_id, *ids),
+        )
+
+
+def brief_words(brief) -> set[str]:
+    """What a brief is about, for recall: its tags, title, section labels, feelings and activities."""
+    text = " ".join([brief.title, *brief.tags, *(f"{s.label} {s.feeling} {s.activity or ''}" for s in brief.sections)])
+    return words(text) | expand(brief.tags)
+
+
+def expire_unused(spotify_id: Optional[str] = None) -> int:
+    """pitfall and strategy lessons not recalled for EXPIRE_AFTER_DAYS become expired (Memory Bank-style TTL).
+    Preferences never expire; they can only be superseded. For one user, or everyone at startup."""
+    with get_conn() as conn:
+        return conn.execute(
+            "UPDATE lessons SET status = 'expired' WHERE status = 'active' AND kind IN ('pitfall', 'strategy')"
+            " AND coalesce(last_used_at, created_at) < datetime('now', ?)" + (" AND spotify_id = ?" if spotify_id else ""),
+            (f"-{EXPIRE_AFTER_DAYS} days", *((spotify_id,) if spotify_id else ())),
+        ).rowcount
+
+
+def delete_lesson(spotify_id: str, lesson_id: int) -> bool:
+    with get_conn() as conn:
+        gone = conn.execute("DELETE FROM lessons WHERE id = ? AND spotify_id = ?", (lesson_id, spotify_id)).rowcount == 1
+        if gone:
+            invalidate(conn, spotify_id)
+        return gone
 
 
 # --- consolidating ------------------------------------------------------------------------------------
@@ -141,9 +347,9 @@ def candidates(spotify_id: str, drafts: list[Draft], source_playlist_id: Optiona
     existing = active(spotify_id)
     if len(existing) + len(drafts) > MAX_ACTIVE:
         return existing
-    wanted = {t for d in drafts for t in d.tags}
+    wanted = expand({t for d in drafts for t in d.tags})
     return [row for row in existing
-            if wanted & set(tags(row)) or (source_playlist_id is not None and row["source_playlist_id"] == source_playlist_id)]
+            if wanted & expand(tags(row)) or (source_playlist_id is not None and row["source_playlist_id"] == source_playlist_id)]
 
 
 def consolidate(spotify_id: str, drafts: list[Draft], source_playlist_id: Optional[int],
@@ -235,6 +441,7 @@ def store(conn: sqlite3.Connection, spotify_id: str, source_playlist_id: Optiona
         )
         touched.append(merged)
     _enforce_cap(conn, spotify_id, keep=set(touched))
+    invalidate(conn, spotify_id)
     return touched
 
 

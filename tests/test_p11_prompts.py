@@ -158,8 +158,12 @@ def test_every_call_puts_static_then_per_user_then_per_request(test_settings, re
     read_prompt("first prompt", "taste A", spotify_id="a")
     read_prompt("second, different prompt", "taste B", spotify_id="b")
     first, second = (json.loads(c.content)["messages"] for c in briefs.calls)
-    assert first[0] == second[0] == {"role": "system", "content": SYSTEM_PROMPT}  # byte-identical, first
-    assert first[1]["content"] == "Listener's taste: taste A\n\nRequest: first prompt"
+    # The static rules come first and are byte-identical; the per-user part follows them in the system message
+    # (where gpt-6.1-sol's cache reaches, see src/prompts.py); the request alone is the user message
+    assert first[0]["role"] == second[0]["role"] == "system"
+    assert first[0]["content"] == SYSTEM_PROMPT + prompts.PER_USER_HEADER + "Listener's taste: taste A"
+    assert second[0]["content"] == SYSTEM_PROMPT + prompts.PER_USER_HEADER + "Listener's taste: taste B"
+    assert first[1] == {"role": "user", "content": "Request: first prompt"}
     assert [json.loads(c.content)["prompt_cache_key"] for c in briefs.calls] == ["moodify:brief:a", "moodify:brief:b"]
 
 
@@ -219,7 +223,7 @@ def test_brief_and_both_kinds_of_avoid_reach_the_song_picker(logged_in, respx_mo
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(10)))
     FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(10)})
     _build(logged_in, "gym")
-    content = _suggest_request(chat)["messages"][-1]["content"]
+    content = prompts.sent_text(_suggest_request(chat)["messages"])
     assert "Avoid: no sad songs" in content  # onboarding, via the taste summary
     assert "Hard rules, never break them: no explicit lyrics; no country." in content  # the brief
     assert _suggest_request(chat)["prompt_cache_key"] == "moodify:suggest:friend1"

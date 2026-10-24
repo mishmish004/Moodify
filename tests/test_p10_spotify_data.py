@@ -226,7 +226,7 @@ def test_known_picks_skip_search_and_count_as_known(logged_in, respx_mock):
     assert sp.added_uris()[:4] == [t.uri for t in LIKED[:4]]
     built = [e for e in jobs.events(int(post.headers["location"].rsplit("/", 1)[1])) if e["kind"] == "built"][0]
     assert built["known"] == 4 and built["tracks"] == 12
-    assert "Liked 0 by Liker 0" in json.loads(chat.calls.last.request.content)["messages"][-1]["content"]
+    assert "Liked 0 by Liker 0" in json.loads(chat.calls.last.request.content)["messages"][0]["content"]
 
 
 def test_a_wrong_known_number_falls_back_to_search(logged_in, respx_mock):

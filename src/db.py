@@ -115,6 +115,11 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS lessons_by_user ON lessons (spotify_id, status);
     """,
+    # 8 (Phase 16): the rendered memory block and how often it was rebuilt
+    """
+    ALTER TABLE users ADD COLUMN memory_block TEXT;
+    ALTER TABLE users ADD COLUMN memory_version INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

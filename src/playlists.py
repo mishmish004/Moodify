@@ -4,6 +4,7 @@ import sqlite3
 from typing import Optional
 
 from src.db import get_conn
+from src.memory import invalidate
 from src.spotify.client import Track
 
 
@@ -85,10 +86,13 @@ def track_at(playlist_id: int, position: int) -> Optional[sqlite3.Row]:
 def set_rating(playlist_id: int, spotify_id: str, rating: int) -> bool:
     """1-10, replacing any earlier rating. False if the playlist isn't this user's."""
     with get_conn() as conn:
-        return conn.execute(
+        changed = conn.execute(
             "UPDATE playlists SET rating = ?, rated_at = CURRENT_TIMESTAMP WHERE id = ? AND spotify_id = ?",
             (rating, playlist_id, spotify_id),
         ).rowcount == 1
+        if changed:
+            invalidate(conn, spotify_id)
+        return changed
 
 
 # What set_review did
@@ -114,6 +118,7 @@ def set_review(playlist_id: int, spotify_id: str, text: str) -> Optional[str]:
             return SAVED
         conn.execute("UPDATE playlists SET review = NULL, reviewed_at = NULL, review_verdict = NULL WHERE id = ?", (playlist_id,))
         conn.execute("DELETE FROM lessons WHERE spotify_id = ? AND source_playlist_id = ?", (spotify_id, playlist_id))
+        invalidate(conn, spotify_id)
         return CLEARED
 
 
@@ -140,6 +145,26 @@ def fixes(playlist_id: int, spotify_id: str) -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute("SELECT id, created_at FROM playlists WHERE parent_id = ? AND spotify_id = ? ORDER BY id",
                             (playlist_id, spotify_id)).fetchall()
+
+
+def forget(playlist_id: int, spotify_id: str) -> bool:
+    """Delete a playlist from Moodify's memory: its row, tracks, rating, review and, by cascade, the likes made
+    there and the lessons learned from it. The playlist stays in Spotify. False if it isn't this user's."""
+    with get_conn() as conn:
+        gone = conn.execute("DELETE FROM playlists WHERE id = ? AND spotify_id = ?", (playlist_id, spotify_id)).rowcount == 1
+        if gone:
+            invalidate(conn, spotify_id)
+        return gone
+
+
+def recent_tracks(spotify_id: str, last: int = 3, skip: Optional[int] = None) -> list[sqlite3.Row]:
+    """Every playlist_tracks row of the user's `last` newest playlists, leaving out playlist `skip`; newest first."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT t.* FROM playlist_tracks t WHERE t.playlist_id IN (SELECT id FROM playlists WHERE spotify_id = ?"
+            " AND id IS NOT ? ORDER BY id DESC LIMIT ?) ORDER BY t.playlist_id DESC, t.position",
+            (spotify_id, skip, last),
+        ).fetchall()
 
 
 ORDERS = {

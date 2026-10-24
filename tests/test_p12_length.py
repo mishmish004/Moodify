@@ -173,11 +173,19 @@ def test_a_song_searched_again_within_7_days_comes_from_the_cache(logged_in, res
     briefs.answer = _brief(None, total=7)  # two songs
     respx_mock.post(CHAT_URL).respond(200, json=_completion([{"title": f"Song {i}", "artist": f"Artist {i}"} for i in range(2)]))
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(2)})
+
+    def forget_playlists():  # Phase 16 doesn't reuse songs from recent playlists; this test is about the cache
+        with get_conn() as conn:
+            conn.execute("DELETE FROM playlists")
+
     _build(logged_in, "first")
+    assert len(_playlist_rows()) == 1
+    forget_playlists()
     _build(logged_in, "second")
     assert sp.search.call_count == 2  # the second build hit the cache
-    assert len(_playlist_rows()) == 2
+    assert len(_playlist_rows()) == 1
 
+    forget_playlists()
     with get_conn() as conn:  # 8 days later
         conn.execute("UPDATE search_cache SET fetched_at = datetime('now', '-8 days')")
     _build(logged_in, "third")

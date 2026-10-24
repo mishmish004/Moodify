@@ -84,7 +84,7 @@
 </form>
 
 <form id="review" class="review" method="post" action="/playlists/{{ playlist.id }}/review">
-  <label for="review-text">How was it? Say it in your own words</label>
+  <label for="review-text">Tell Moodify how it went, in your own words</label>
   <textarea id="review-text" name="review" maxlength="2000" rows="4" placeholder="e.g. the workout part dragged · loved the first 10 minutes · too much Drake · the switch to focus was perfect">{{ playlist.review or "" }}</textarea>
   <small class="hint">A word, a list or a whole paragraph, however you like. Moodify learns from it for your next playlists. To delete it, empty the box and save.</small>
   <button type="submit">Save review</button>
@@ -110,6 +110,10 @@
   </form>
 </div>
 {% endif %}
+<form method="post" action="/playlists/{{ playlist.id }}/more" data-busy="Starting…">
+  <button type="submit">More like this</button>
+  <small class="hint">A new playlist in the same spirit, with new songs. Uses your likes{% if playlist.review %} and your review{% endif %}.</small>
+</form>
 <p><a class="button" href="/">Make another</a></p>
 {% endblock %}
 

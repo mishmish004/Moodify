@@ -12,6 +12,7 @@ from typing import Optional
 from src.core.exceptions import ReauthRequired, SpotifyError
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
+from src.memory import invalidate
 from src.spotify.client import SpotifyClient
 
 log = MoodifyLogger.get_logger("likes")
@@ -38,6 +39,8 @@ def like(user: sqlite3.Row, uri: str, playlist_id: int) -> str:
             "INSERT OR IGNORE INTO track_likes (spotify_id, uri, playlist_id) VALUES (?, ?, ?)",
             (user["spotify_id"], uri, playlist_id),
         ).rowcount
+        if new:
+            invalidate(conn, user["spotify_id"])
     if not new:
         return UNCHANGED
     if not user["likes_to_spotify"]:
@@ -63,6 +66,8 @@ def unlike(user: sqlite3.Row, uri: str) -> str:
     with get_conn() as conn:
         row = conn.execute("DELETE FROM track_likes WHERE spotify_id = ? AND uri = ? RETURNING added_to_spotify",
                            (user["spotify_id"], uri)).fetchone()
+        if row is not None:
+            invalidate(conn, user["spotify_id"])
     if row is None:
         return UNCHANGED
     if not row["added_to_spotify"]:

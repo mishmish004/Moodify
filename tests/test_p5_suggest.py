@@ -57,7 +57,7 @@ def test_request_carries_mood_taste_model_and_schema(chat, test_settings):
     assert body["model"] == test_settings.OPENAI_MODEL == "gpt-5.4-mini"
     user_message = body["messages"][-1]["content"]
     assert "Mood: rainy sunday, nostalgic" in user_message
-    assert TASTE in user_message
+    assert TASTE in body["messages"][0]["content"]  # per user: after the static rules, in the system message
     assert "25 songs" in user_message
     assert body["messages"][0]["role"] == "system"
     assert "real, released songs" in body["messages"][0]["content"]

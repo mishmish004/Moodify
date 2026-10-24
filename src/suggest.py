@@ -33,9 +33,10 @@ Rules:
   first song is already at the section's full energy.
 - Vary the artists: at most 2 songs per artist.
 - Use the original title and the main artist only, as they appear on streaming services.
-- "What Moodify learned from the listener's reviews" is their feedback on earlier playlists: follow it when
-  it applies. It is newer than the taste summary and wins when they disagree (a lesson to avoid an artist
-  beats that artist being a favourite). Feedback on an earlier version of this same playlist is followed closely.
+- "What Moodify knows from the listener's feedback" and "What Moodify learned from the listener's reviews"
+  are their feedback on earlier playlists: lean toward what they liked, and follow the lessons that apply.
+  Feedback is newer than the taste summary and wins when they disagree (a lesson to avoid an artist beats
+  that artist being a favourite). Feedback on an earlier version of this same playlist is followed closely.
 - Some requests list songs the listener already knows, numbered. When you pick one of those, copy its
   title and artist exactly and set "known" to its number. For every other song set "known" to null.
 - Return only the JSON requested, no commentary.
@@ -64,15 +65,17 @@ def clean_mood(mood: str) -> str:
 def suggest_songs(
     mood: str, taste_summary: str, n: int = 30, exclude: list[Song] = (), trace: Trace = NO_TRACE,
     known: list[Track] = (), familiar_percent: int = 30, brief: Optional[Brief] = None, spotify_id: str = "",
-    counts: Optional[list[int]] = None, memory: str = "", feedback: str = "",
+    counts: Optional[list[int]] = None, memory: str = "", feedback: str = "", recalled: str = "",
+    recent: list[str] = (),
 ) -> list[Song]:
     """Never raises: any API or parsing problem is logged, retried once if it might pass, then gives [].
     `exclude` lists songs from an earlier call that the model shouldn't repeat. `known` are songs
     the listener knows; about `familiar_percent` of the answer should come from them. `counts`: songs
     wanted per section of the brief (0 skips a section); without it, n songs in total. `memory`: lessons from
-    reviews (per user). `feedback`: the review of an earlier version, when fixing a playlist (per request)."""
+    reviews (per user). `feedback`: the review of an earlier version, when fixing a playlist (per request).
+    `recalled`: lessons recalled for this brief. `recent`: songs from the last playlists, not to repeat."""
     per_user, per_request = user_prompt(clean_mood(mood), taste_summary, n, exclude, known, familiar_percent, brief, counts,
-                                        memory, feedback)
+                                        memory, feedback, recalled, recent)
     parsed = prompts.ask(
         "suggest", get_settings().OPENAI_MODEL, prompts.layout(SYSTEM_PROMPT, per_user, per_request), Suggestions, trace,
         cache_key=f"moodify:suggest:{spotify_id}" if spotify_id else "",
@@ -84,6 +87,7 @@ def suggest_songs(
 def user_prompt(
     mood: str, taste_summary: str, n: int, exclude: list[Song], known: list[Track], familiar_percent: int,
     brief: Optional[Brief] = None, counts: Optional[list[int]] = None, memory: str = "", feedback: str = "",
+    recalled: str = "", recent: list[str] = (),
 ) -> tuple[str, str]:
     """(per user, per request). The per-user part (taste, known songs, lessons) changes rarely, so
     consecutive builds share the longest possible prefix for OpenAI's prompt cache."""
@@ -96,7 +100,9 @@ def user_prompt(
         per_user.append(memory)
     per_request = [f"Mood: {mood}"]
     if feedback:
-        per_request.append(f"Feedback on an earlier version of this playlist:\n{feedback}")
+        per_request.append(feedback)
+    if recalled:
+        per_request.append(recalled)
     if brief is not None:
         per_request.append(f"How to read this request:\n{describe(brief)}")
     if known:
@@ -108,6 +114,8 @@ def user_prompt(
         per_request.append("Suggest songs for these sections, with \"section\" set to the section number:\n" + "\n".join(wanted))
     else:
         per_request.append(f"Suggest {n} songs.")
+    if recent:
+        per_request.append("In the listener's last playlists already, so don't suggest them: " + "; ".join(recent))
     if exclude:
         per_request.append("Do not repeat these: " + "; ".join(f"{s.title} by {s.artist}" for s in exclude))
     return "\n\n".join(per_user), "\n\n".join(per_request)

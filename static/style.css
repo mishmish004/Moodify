@@ -127,3 +127,10 @@ footer.page { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--l
 .review { margin-top: 2rem; }
 .learned { margin-top: 1rem; padding: .25rem 1rem 1rem; border: 1px solid var(--line); border-radius: .5rem; }
 .learned ul { padding-left: 1.25rem; }
+
+/* Phase 16: what Moodify remembers */
+.memory-block { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .9rem; padding: .75rem 1rem; border: 1px solid var(--line); border-radius: .5rem; }
+.lessons { list-style: none; padding: 0; }
+.lessons li { padding: .75rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+button.small { min-height: 2.75rem; margin-top: .5rem; padding: .3rem 1rem; font-size: .9rem; }
+.forget li form button { margin: 0; }

@@ -14,7 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
     granted_scopes    TEXT,
     taste_pool_json   TEXT,
     -- Phase 14: a like in Moodify also saves the song to Spotify's Liked Songs (the user's setting)
-    likes_to_spotify  INTEGER NOT NULL DEFAULT 1
+    likes_to_spotify  INTEGER NOT NULL DEFAULT 1,
+    -- Phase 16: the memory text every build's prompt gets (src/memory.py), NULL until rendered again
+    -- after feedback changes; memory_version counts the renders
+    memory_block      TEXT,
+    memory_version    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS playlists (

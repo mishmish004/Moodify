@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
     if interrupted := jobs.fail_interrupted():
         MoodifyLogger.get_logger("jobs").warning("%d build(s) interrupted by a restart", interrupted)
     search_cache.prune()
+    memory.expire_unused()
     yield
 
 
@@ -346,6 +347,48 @@ def fix_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends
     if job is None:
         jobs.start(playlist.run, job_id, user["spotify_id"], row["prompt"], playlist_id)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+# --- memory (Phase 16) --------------------------------------------------------------------------------------
+
+@app.post("/playlists/{playlist_id}/more")
+def more_like_this(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
+    """A new playlist seeded with this one's brief, liked songs and review, with new songs."""
+    row = playlists.get(playlist_id, user["spotify_id"])
+    if row is None:
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    job = jobs.running_for(user["spotify_id"])
+    job_id = job["id"] if job else jobs.create(user["spotify_id"], row["prompt"])
+    if job is None:
+        jobs.start(playlist.run, job_id, user["spotify_id"], row["prompt"], None, playlist_id)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@app.get("/memory")
+def memory_page(request: Request, user: sqlite3.Row = Depends(current_user)):
+    lessons = memory.active(user["spotify_id"])
+    sources = {r["id"]: r for r in playlists.recent(user["spotify_id"], limit=-1)}
+    return templates.TemplateResponse(request, "memory.html", {
+        "user": user, "block": memory.memory_block(user["spotify_id"]), "lessons": lessons, "sources": sources,
+        "tags": {r["id"]: memory.tags(r) for r in lessons}, "notice": request.session.pop("notice", None),
+        "rows": list(sources.values()),
+    })
+
+
+@app.post("/memory/lessons/{lesson_id}/delete")
+def delete_lesson(request: Request, lesson_id: int, user: sqlite3.Row = Depends(current_user)):
+    if not memory.delete_lesson(user["spotify_id"], lesson_id):
+        return _message(request, "Not found", "That lesson isn't yours or is already gone.", status_code=404, user=user)
+    request.session["notice"] = "Lesson deleted."
+    return RedirectResponse("/memory#lessons", status_code=303)
+
+
+@app.post("/playlists/{playlist_id}/forget")
+def forget_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
+    if not playlists.forget(playlist_id, user["spotify_id"]):
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    request.session["notice"] = "Moodify forgot that playlist. It's still in your Spotify."
+    return RedirectResponse("/memory#playlists", status_code=303)
 
 
 @app.get("/history")

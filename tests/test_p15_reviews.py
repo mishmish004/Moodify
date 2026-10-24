@@ -5,7 +5,7 @@ import time
 import httpx
 import pytest
 
-from src import memory, playlists, reflect, users
+from src import memory, playlists, prompts, reflect, users
 from src.db import get_conn
 from src.memory import Consolidation, Draft, Merge, Operation
 from src.spotify import auth
@@ -49,7 +49,7 @@ class ChatMock:
         return _reply(self.answer)
 
     def prompt(self, n: int = -1) -> str:
-        return self.calls[n]["messages"][-1]["content"]
+        return prompts.sent_text(self.calls[n]["messages"])
 
 
 def _lesson(title="Workout sections need more energy", tags=("workout", "energy"), kind="pitfall", scope="lasting",
@@ -320,19 +320,20 @@ def test_the_next_build_gets_active_lessons_not_superseded_ones(logged_in, respx
     from .conftest import finish_build
     finish_build(logged_in, logged_in.post("/playlist", data={"mood": "gym"}))
 
-    brief_prompt = json.loads(briefs.calls[-1].content)["messages"][-1]["content"]
-    suggest_prompt = json.loads(chat.calls.last.request.content)["messages"][-1]["content"]
+    brief_prompt = prompts.sent_text(json.loads(briefs.calls[-1].content)["messages"])
+    suggest_prompt = prompts.sent_text(json.loads(chat.calls.last.request.content)["messages"])
     for prompt, request_marker in ((brief_prompt, "Request: gym"), (suggest_prompt, "Mood: gym")):
         per_user = prompt.split(request_marker)[0]
         assert "- Skip long intros: No long intros." in per_user
         assert "Loves long intros" not in prompt
 
 
-def test_lessons_block_fits_1500_chars(user):
-    _store("friend1", [Draft(**_lesson(title=f"Lesson {i}", content="x" * 120)) for i in range(30)])
-    block = memory.lessons_block("friend1")
-    assert len(block) <= 1500 + len("What Moodify learned from the listener's reviews:\n")
-    assert block.splitlines()[1].startswith("- Lesson 29")  # newest first
+def test_lessons_reach_builds_within_1500_chars(user):
+    # Phase 16 replaced "every active lesson" with recall; the limit stayed
+    _store("friend1", [Draft(**_lesson(title=f"Lesson {i}", content="x" * 300)) for i in range(30)])
+    parts = memory.prompt_parts("friend1", {"workout"})
+    assert len(parts.block) + len(parts.recalled) <= 1500
+    assert parts.recalled.splitlines()[1].startswith("- Lesson 29")  # newest first
 
 
 def test_fix_it_builds_a_linked_new_version_with_the_review_as_a_correction(logged_in, respx_mock, briefs):
@@ -355,12 +356,12 @@ def test_fix_it_builds_a_linked_new_version_with_the_review_as_a_correction(logg
     assert json.loads(sp.create.calls.last.request.content)["name"].endswith("(v2)")
     assert "A fixed version" in logged_in.get(f"/playlists/{pid}").text
 
-    brief_prompt = json.loads(briefs.calls[-1].content)["messages"][-1]["content"]
+    brief_prompt = prompts.sent_text(json.loads(briefs.calls[-1].content)["messages"])
     correction = brief_prompt.split("Correction:\n", 1)[1]
     assert f"What the listener said after hearing it: {WORKOUT_REVIEW}" in correction
     assert "Earlier brief: " in correction and "Lock in" in correction
     assert "- Morning part too short: Give the morning part its full length." in correction
-    suggest_prompt = json.loads(chat.calls[0].request.content)["messages"][-1]["content"]
+    suggest_prompt = prompts.sent_text(json.loads(chat.calls[0].request.content)["messages"])
     assert f"Feedback on an earlier version of this playlist:\nWhat the listener said after hearing it: {WORKOUT_REVIEW}" in suggest_prompt
     assert "Songs they liked in it (keep them if they still fit): Song 5 by Artist 5" in suggest_prompt
 
