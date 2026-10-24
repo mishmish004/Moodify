@@ -23,7 +23,7 @@
 </details>
 
 <footer class="page">
-  <p class="muted">Logged in as {{ user.display_name or user.spotify_id }}.</p>
+  <p class="muted">Logged in as {{ user.display_name or user.spotify_id }}. <a href="/settings">Settings</a></p>
   <form method="post" action="/disconnect" onsubmit="return confirm('Delete everything Moodify stored about you?')">
     <button type="submit" class="quiet">Disconnect and delete my data</button>
   </form>

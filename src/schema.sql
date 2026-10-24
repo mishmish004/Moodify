@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
     created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- Phase 10: space-separated scopes from the last login, and the cached known-songs pool (src/taste.py)
     granted_scopes    TEXT,
-    taste_pool_json   TEXT
+    taste_pool_json   TEXT,
+    -- Phase 14: a like in Moodify also saves the song to Spotify's Liked Songs (the user's setting)
+    likes_to_spotify  INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS playlists (
@@ -24,7 +26,10 @@ CREATE TABLE IF NOT EXISTS playlists (
     track_uris_json  TEXT NOT NULL,
     created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- Phase 11: how Moodify read the prompt (src/brief.py Brief as JSON)
-    brief_json       TEXT
+    brief_json       TEXT,
+    -- Phase 14: the user's 1-10 rating, changeable any time
+    rating           INTEGER CHECK (rating BETWEEN 1 AND 10),
+    rated_at         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS playlists_by_user ON playlists (spotify_id, created_at);
@@ -77,4 +82,17 @@ CREATE TABLE IF NOT EXISTS search_cache (
     tracks_json  TEXT NOT NULL,
     fetched_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (spotify_id, query)
+);
+
+-- Phase 14: songs the user liked. Per song, not per playlist row: a song liked in one playlist shows
+-- liked in every playlist. added_to_spotify is 1 when Moodify put it in the user's Liked Songs, so an
+-- unlike only takes out of Spotify what Moodify put there (src/likes.py)
+CREATE TABLE IF NOT EXISTS track_likes (
+    spotify_id        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    uri               TEXT NOT NULL,
+    -- where it was liked; deleting that playlist deletes the like (Phase 16's "delete from memory")
+    playlist_id       INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+    added_to_spotify  INTEGER NOT NULL DEFAULT 0,
+    liked_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (spotify_id, uri)
 );

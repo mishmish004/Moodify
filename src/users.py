@@ -35,6 +35,11 @@ def set_taste_summary(spotify_id: str, summary: str, updated_at: str, pool_json:
         )
 
 
+def set_likes_to_spotify(spotify_id: str, on: bool) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET likes_to_spotify = ? WHERE spotify_id = ?", (int(on), spotify_id))
+
+
 def set_refresh_token(spotify_id: str, refresh_token: str) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE users SET refresh_token = ? WHERE spotify_id = ?", (refresh_token, spotify_id))
@@ -46,6 +51,6 @@ def get(spotify_id: str) -> Optional[sqlite3.Row]:
 
 
 def delete(spotify_id: str) -> None:
-    """Remove the user and, through ON DELETE CASCADE, their playlists."""
+    """Remove the user and, through ON DELETE CASCADE, everything stored about them."""
     with get_conn() as conn:
         conn.execute("DELETE FROM users WHERE spotify_id = ?", (spotify_id,))

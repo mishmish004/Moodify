@@ -91,3 +91,34 @@ details { margin-top: 2rem; }
 .section-head { margin: 1.5rem 0 .25rem; }
 summary { cursor: pointer; padding: .6rem 0; }
 footer.page { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+
+/* Phase 14: the ♥ beside each track row, the 1-10 rating, the toast */
+.list li { display: flex; align-items: center; gap: .25rem; }
+.list li > a { flex: 1; min-width: 0; }
+.like button {
+  display: grid; place-items: center; width: 44px; height: 44px; min-height: 0; margin: 0; padding: 0;
+  color: var(--text); background: none; border-radius: 50%;
+}
+.like svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.like [aria-pressed="true"] svg { fill: currentColor; }
+.like button:focus-visible, .scale button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.rating fieldset { margin: 2rem 0 0; padding: 0; border: 0; }
+.rating legend { font-weight: 600; padding: 0; }
+.scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; margin-top: .5rem; }
+@media (min-width: 30rem) { .scale { grid-template-columns: repeat(10, 1fr); } }
+.scale button {
+  min-height: 44px; margin: 0; padding: 0; color: var(--text); background: none;
+  border: 1px solid var(--line); border-radius: .5rem;
+}
+.scale [aria-pressed="true"] { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
+
+.check { display: flex; align-items: center; gap: .6rem; font-weight: 400; }
+.check input { width: 1.25rem; height: 1.25rem; flex: none; margin: 0; accent-color: var(--accent); }
+.sort a[aria-current] { font-weight: 600; text-decoration: none; }
+
+.toast {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 40rem; margin: 0 auto; padding: .75rem 1rem;
+  color: var(--bg); background: var(--text); border-radius: .5rem;
+}
+.toast:empty { display: none; }

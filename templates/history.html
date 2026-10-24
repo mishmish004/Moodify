@@ -4,6 +4,9 @@
 {% block content %}
 <h1>Your playlists</h1>
 {% if rows %}
+<p class="sort">Sort by
+  <a href="/history" {% if sort == "new" %}aria-current="page"{% endif %}>newest</a> ·
+  <a href="/history?sort=rating" {% if sort == "rating" %}aria-current="page"{% endif %}>your rating</a></p>
 {{ playlist_list(rows) }}
 {% else %}
 <p>Nothing yet. <a href="/">Make your first playlist</a>.</p>

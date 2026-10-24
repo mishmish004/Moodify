@@ -66,12 +66,37 @@ def section_minutes(playlist_id: int) -> dict[int, float]:
     return {int(section): minutes for section, minutes in rows}
 
 
-def recent(spotify_id: str, limit: int = 5) -> list[sqlite3.Row]:
-    """Newest first, with track_count. limit=-1 means all of them (SQLite's "no limit")."""
+def track_at(playlist_id: int, position: int) -> Optional[sqlite3.Row]:
+    """One row of playlist_tracks. Check the playlist's owner with get() first."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title"
-            " FROM playlists"
-            " WHERE spotify_id = ? ORDER BY id DESC LIMIT ?",
+            "SELECT * FROM playlist_tracks WHERE playlist_id = ? AND position = ?", (playlist_id, position)
+        ).fetchone()
+
+
+def set_rating(playlist_id: int, spotify_id: str, rating: int) -> bool:
+    """1-10, replacing any earlier rating. False if the playlist isn't this user's."""
+    with get_conn() as conn:
+        return conn.execute(
+            "UPDATE playlists SET rating = ?, rated_at = CURRENT_TIMESTAMP WHERE id = ? AND spotify_id = ?",
+            (rating, playlist_id, spotify_id),
+        ).rowcount == 1
+
+
+ORDERS = {
+    "new": "id DESC",
+    "rating": "rating IS NULL, rating DESC, id DESC",  # unrated last
+}
+
+
+def recent(spotify_id: str, limit: int = 5, order: str = "new") -> list[sqlite3.Row]:
+    """With track_count and like_count (its songs the user liked, wherever they liked them).
+    Newest first, or by `order` (a key of ORDERS). limit=-1 means all of them (SQLite's "no limit")."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title,"
+            " (SELECT count(*) FROM playlist_tracks t JOIN track_likes l ON l.spotify_id = playlists.spotify_id"
+            "  AND l.uri = t.uri WHERE t.playlist_id = playlists.id) AS like_count"
+            f" FROM playlists WHERE spotify_id = ? ORDER BY {ORDERS[order]} LIMIT ?",
             (spotify_id, limit),
         ).fetchall()

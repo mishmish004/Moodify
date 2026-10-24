@@ -244,21 +244,23 @@ Listening check (yours): did the switches feel right?
 Goal: quick signals on what landed, per track and per playlist.
 
 Build
-- [ ] `track_likes(spotify_id, uri, playlist_id, liked_at)`. A ♥ button per track row on the playlist page: a plain POST form that redirects back, with a small JS enhancement so the page doesn't reload
-- [ ] Like also saves to Spotify Liked Songs via `PUT /me/library` (`user-library-modify`). Unlike removes from Moodify, and from Liked Songs only if Moodify added it. Setting: "Also add likes to my Spotify Liked Songs" (default on)
-- [ ] `playlists.rating` (1–10): a row of 1–10 buttons on the playlist page, changeable any time. The written review is Phase 15
-- [ ] History shows rating and number of likes, and can sort by rating
-- [ ] All endpoints owner-only: `POST /playlists/{id}/rating`, `POST /playlists/{id}/tracks/{position}/like` and `/unlike`
+- [x] `track_likes(spotify_id, uri, playlist_id, liked_at)`. A ♥ button per track row on the playlist page: a plain POST form that redirects back, with a small JS enhancement so the page doesn't reload
+- [x] Like also saves to Spotify Liked Songs via `PUT /me/library` (`user-library-modify`). Unlike removes from Moodify, and from Liked Songs only if Moodify added it. Setting: "Also add likes to my Spotify Liked Songs" (default on)
+- [x] `playlists.rating` (1–10): a row of 1–10 buttons on the playlist page, changeable any time. The written review is Phase 15
+- [x] History shows rating and number of likes, and can sort by rating
+- [x] All endpoints owner-only: `POST /playlists/{id}/rating`, `POST /playlists/{id}/tracks/{position}/like` and `/unlike`
 
 Tests (`tests/test_p14_feedback.py`)
-- [ ] like → row stored, `PUT /me/library` called with that URI; with the setting off → no Spotify call
-- [ ] unlike of a song Moodify added → `DELETE /me/library`; of a song already in Liked Songs before → no Spotify call
-- [ ] rating 0, 11, "abc" → 422; 1 and 10 accepted; re-rating overwrites
-- [ ] another user's playlist or track → 404, nothing stored
-- [ ] Spotify 403 on save (scope missing) → the like is still stored, and the page says Liked Songs wasn't updated
-- [ ] pages work with JS disabled (form POST + redirect)
+- [x] like → row stored, `PUT /me/library` called with that URI; with the setting off → no Spotify call
+- [x] unlike of a song Moodify added → `DELETE /me/library`; of a song already in Liked Songs before → no Spotify call
+- [x] rating 0, 11, "abc" → 422; 1 and 10 accepted; re-rating overwrites
+- [x] another user's playlist or track → 404, nothing stored
+- [x] Spotify 403 on save (scope missing) → the like is still stored, and the page says Liked Songs wasn't updated
+- [x] pages work with JS disabled (form POST + redirect)
 
 Gate: `pytest tests/test_p14_feedback.py` green, and a live like shows up in your Spotify Liked Songs.
+
+Done 2026-10-24. Migration 6 adds `track_likes`, `playlists.rating`/`rated_at` and `users.likes_to_spotify`. A like is per song, so a song liked in one playlist shows liked in every playlist. Before saving, Moodify asks `GET /me/library/contains`, so a song already in Liked Songs is marked as not Moodify's and is never removed on unlike. A like made through Moodify is undone on unlike even after the setting is turned off. The setting is on a new Settings page (`/settings`), linked from the home page and from the note under each track list; Phase 17's "open Spotify" setting can go there too. Spotify failures (403, 429, 5xx, no answer) keep the like and show a message once. The ♥ and the 1–10 row are plain forms; `static/feedback.js` sends the same posts asking for JSON, so the page doesn't reload. Both paths were checked in headless Chrome: a phone-width screenshot in light and dark, and with scripts turned off. Live: liking "Drip Too Hard" put it in Liked Songs (`user-library-modify` is enough for track URIs), and unliking took it out again. 37 tests.
 
 ---
 

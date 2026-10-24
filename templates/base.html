@@ -18,6 +18,8 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  {# One message at a time, fixed to the bottom of the screen: after a like the page is scrolled to that row #}
+  <p id="toast" class="toast" role="status">{{ notice or "" }}</p>
   <script>
     // Forms with data-busy submit once: a double tap on "Make a playlist" would make two.
     // pageshow puts the button back when the page returns from the back/forward cache.
@@ -27,5 +29,6 @@
       addEventListener("pageshow", () => { button.disabled = false; button.textContent = label; });
     }
   </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

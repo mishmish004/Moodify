@@ -2,6 +2,17 @@
 {% from "_spotify.html" import icon, open_spotify %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
+
+{# One track row: the whole row links to Spotify, with a ♥ form beside the link (a form can't sit inside it).
+   number is what the page shows; the URL uses the stored position, number - 1 #}
+{% macro track_row(t, number) -%}
+{%- set position = number - 1 %}{% set on = t.uri in liked -%}
+<li id="t{{ position }}"><a href="{{ t.url }}"><span class="n">{{ number }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a>
+  <form class="like" method="post" action="/playlists/{{ playlist.id }}/tracks/{{ position }}/{{ "unlike" if on else "like" }}" data-feedback="like">
+    <button type="submit" aria-pressed="{{ "true" if on else "false" }}" aria-label="Like {{ t.name }}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.8c0 5.5-7.5 10.1-7.5 10.1z"/></svg></button>
+  </form></li>
+{%- endmacro %}
+
 {% block content %}
 {% if brief and brief.support_note %}
 <p class="notice">If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a>.</p>
@@ -40,16 +51,32 @@
 <h2 class="section-head">{{ g.label }} <small>· starts at {{ g.start }}</small></h2>
 <ol class="list">
   {% for t in g.tracks %}
-  <li><a href="{{ t.url }}"><span class="n">{{ g.first + loop.index0 }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
+  {{ track_row(t, g.first + loop.index0) }}
   {% endfor %}
 </ol>
 {% endfor %}
 {% elif tracks %}
 <ol class="list">
   {% for t in tracks %}
-  <li><a href="{{ t.url }}"><span class="n">{{ loop.index }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
+  {{ track_row(t, loop.index) }}
   {% endfor %}
 </ol>
 {% endif %}
+{% if tracks %}
+<p><small>♥ the songs you like. {% if user.likes_to_spotify %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</small></p>
+{% endif %}
+
+<form id="rating" class="rating" method="post" action="/playlists/{{ playlist.id }}/rating" data-feedback="rating">
+  <fieldset>
+    <legend>How was it, out of 10?</legend>
+    <div class="scale">
+      {% for n in range(1, 11) %}
+      <button type="submit" name="rating" value="{{ n }}" aria-pressed="{{ "true" if playlist.rating == n else "false" }}">{{ n }}</button>
+      {% endfor %}
+    </div>
+  </fieldset>
+</form>
 <p><a class="button" href="/">Make another</a></p>
 {% endblock %}
+
+{% block scripts %}<script src="/static/feedback.js"></script>{% endblock %}

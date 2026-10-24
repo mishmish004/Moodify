@@ -140,6 +140,17 @@ class SpotifyClient:
         for start in range(0, len(uris), ADD_ITEMS_BATCH):
             self._request("POST", f"/playlists/{playlist_id}/items", json={"uris": uris[start:start + ADD_ITEMS_BATCH]})
 
+    # Liked Songs since Feb 2026: one /me/library for every kind of item, URIs comma-separated in the
+    # query string, at most 40 per call. Moodify sends one track at a time
+    def library_contains(self, uris: list[str]) -> list[bool]:
+        return self._request("GET", "/me/library/contains", params={"uris": ",".join(uris)})
+
+    def save_to_library(self, uris: list[str]) -> None:
+        self._request("PUT", "/me/library", params={"uris": ",".join(uris)})
+
+    def remove_from_library(self, uris: list[str]) -> None:
+        self._request("DELETE", "/me/library", params={"uris": ",".join(uris)})
+
     def queue(self, uri: str) -> None:
         """Premium only, on the user's active device: expect a SpotifyError (403/404) otherwise."""
         self._request("POST", "/me/player/queue", params={"uri": uri})

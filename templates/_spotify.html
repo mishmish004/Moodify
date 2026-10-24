@@ -13,11 +13,11 @@
 <a class="open-spotify" href="{{ url }}">{{ logo() }}<span>OPEN SPOTIFY</span></a>
 {%- endmacro %}
 
-{# Rows from the playlists table, with track_count #}
+{# Rows from playlists.recent(): with track_count and like_count #}
 {% macro playlist_list(rows) -%}
 <ul class="list">
   {% for p in rows %}
-  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}</small></span>{{ icon() }}</a></li>
+  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</small></span>{{ icon() }}</a></li>
   {% endfor %}
 </ul>
 {%- endmacro %}

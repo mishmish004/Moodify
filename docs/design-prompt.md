@@ -142,8 +142,10 @@ Status: **Live** means built today and needs a redesign. **Planned (Phase N)** m
   - "Workout · starts at 14:00": Hatchback (Cochise); FE!N (Travis Scott, Playboi Carti)
   - "Lock in · starts at 42:00": Location (Playboi Carti); YOU'RE THE ONE (KAYTRANADA, Syd)
   - Numbering runs on across sections. Each row: number, title, artists, Spotify icon. The whole row links to Spotify.
+- A ♥ toggle at the end of every row, beside the link (Live, Phase 14). Under the list: "♥ the songs you like. They're saved to your Spotify Liked Songs too (change)."
+- "How was it, out of 10?": a row of 1–10 buttons, the chosen one filled; 2 rows of 5 on phones (Live, Phase 14).
+- A small message bar at the bottom of the screen for the rare failure: "Liked in Moodify, but your Spotify Liked Songs couldn't be updated."
 - Planned:
-  - (Phase 14) a ♥ on every row, and a 1–10 rating row for the playlist.
   - (Phase 15) a "How was it?" review box: a free-text textarea, examples like "the workout part dragged", and a "Fix it with this review" button that builds a version 2 linked to version 1.
 - Variants:
   - the support line at the top
@@ -153,7 +155,7 @@ Status: **Live** means built today and needs a redesign. **Planned (Phase N)** m
 
 **6. History** (`/history`, Live)
 - All your playlists, newest first: title, date, length, track count, Spotify icon.
-- Planned (Phase 14): rating and number of likes, and sorting by rating.
+- Each row also shows the number of liked songs and the rating ("2 liked · rated 8/10"); "Sort by newest · your rating" above the list (Live, Phase 14).
 - Empty state: "Nothing yet. Make your first playlist."
 
 **7. Message page** (Live)
@@ -209,6 +211,8 @@ Status: **Live** means built today and needs a redesign. **Planned (Phase N)** m
 - A **"Replay the week"** control (play, pause, step) that animates the feed and timelines day by day over about 3 seconds. Keyboard accessible; reduced motion steps without animating.
 
 **14. Not found / errors** (Live): a 404 and a generic error, in the same message-page pattern.
+
+**15. Settings** (`/settings`, Live): one checkbox for now, "Also add likes to my Spotify Liked Songs" (on by default), with a sentence explaining that unliking only removes what Moodify added. Phase 17 adds "Open Spotify when my playlist is ready". Linked from the home page footer.
 
 ## Chart rules (taste map and activity)
 

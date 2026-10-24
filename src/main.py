@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, playlist, playlists, search_cache, taste, users
+from src import jobs, likes, playlist, playlists, search_cache, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -227,6 +227,8 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
     tracks = playlists.tracks(playlist_id)
     return templates.TemplateResponse(request, "playlist.html", {
         "user": user, "playlist": row, "tracks": tracks, "brief": brief,
+        "liked": likes.liked_uris(user["spotify_id"], [t.uri for t in tracks]),
+        "notice": request.session.pop("notice", None),
         "rules": rule_list(brief.hard_rules) if brief else [],
         "total_minutes": round(sum(t.duration_ms for t in tracks) / 60_000),
         "section_minutes": playlists.section_minutes(playlist_id),
@@ -255,11 +257,72 @@ def _clock(ms: int) -> str:
     return f"{hours}:{minutes:02d}:{seconds % 60:02d}" if hours else f"{minutes}:{seconds % 60:02d}"
 
 
+# --- likes and ratings (Phase 14) ------------------------------------------------------------------
+# Plain forms that post and redirect back, so they work without JavaScript. static/feedback.js sends the
+# same posts with "Accept: application/json" and gets JSON instead, so the page doesn't reload.
+
+def _wants_json(request: Request) -> bool:
+    return request.headers.get("accept", "").startswith("application/json")
+
+
+def _feedback_answer(request: Request, back: str, notice: Optional[str] = None, **state):
+    if _wants_json(request):
+        return JSONResponse({**state, "notice": notice})
+    if notice:
+        request.session["notice"] = notice  # shown once, on the page we go back to
+    return RedirectResponse(back, status_code=303)
+
+
+def _feedback_not_found(request: Request, user: sqlite3.Row):
+    if _wants_json(request):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+
+
+@app.post("/playlists/{playlist_id}/tracks/{position}/{action}")
+def like_track(request: Request, playlist_id: int, position: int, action: Literal["like", "unlike"],
+               user: sqlite3.Row = Depends(current_user)):
+    # position is the track's place in playlist_tracks (0-based); the owner check comes first
+    track = playlists.track_at(playlist_id, position) if playlists.get(playlist_id, user["spotify_id"]) else None
+    if track is None:
+        return _feedback_not_found(request, user)
+    if action == "like":
+        outcome = likes.like(user, track["uri"], playlist_id)
+    else:
+        outcome = likes.unlike(user, track["uri"])
+    return _feedback_answer(request, f"/playlists/{playlist_id}#t{position}", likes.notice(action, outcome),
+                            liked=action == "like")
+
+
+@app.post("/playlists/{playlist_id}/rating")
+def rate_playlist(request: Request, playlist_id: int, rating: int = Form(..., ge=1, le=10),
+                  user: sqlite3.Row = Depends(current_user)):
+    if not playlists.set_rating(playlist_id, user["spotify_id"], rating):
+        return _feedback_not_found(request, user)
+    return _feedback_answer(request, f"/playlists/{playlist_id}#rating", rating=rating)
+
+
 @app.get("/history")
-def history(request: Request, user: sqlite3.Row = Depends(current_user)):
+def history(request: Request, user: sqlite3.Row = Depends(current_user), sort: Literal["new", "rating"] = "new"):
     return templates.TemplateResponse(request, "history.html", {
-        "user": user, "rows": playlists.recent(user["spotify_id"], limit=-1),
+        "user": user, "rows": playlists.recent(user["spotify_id"], limit=-1, order=sort), "sort": sort,
     })
+
+
+@app.get("/settings")
+def settings_page(request: Request, user: sqlite3.Row = Depends(current_user)):
+    return templates.TemplateResponse(request, "settings.html", {
+        "user": user, "notice": request.session.pop("notice", None),
+    })
+
+
+@app.post("/settings")
+def settings_submit(request: Request, user: sqlite3.Row = Depends(current_user),
+                    likes_to_spotify: Optional[str] = Form(None)) -> RedirectResponse:
+    # An unticked checkbox sends nothing at all
+    users.set_likes_to_spotify(user["spotify_id"], likes_to_spotify is not None)
+    request.session["notice"] = "Saved."
+    return RedirectResponse("/settings", status_code=303)
 
 
 @app.post("/queue/{playlist_id}")

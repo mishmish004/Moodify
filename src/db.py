@@ -69,6 +69,20 @@ MIGRATIONS = [
     ALTER TABLE playlist_tracks ADD COLUMN energy INTEGER;
     ALTER TABLE playlist_tracks ADD COLUMN role TEXT;
     """,
+    # 6 (Phase 14): likes, ratings, and whether likes also go to Spotify's Liked Songs
+    """
+    ALTER TABLE users ADD COLUMN likes_to_spotify INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE playlists ADD COLUMN rating INTEGER CHECK (rating BETWEEN 1 AND 10);
+    ALTER TABLE playlists ADD COLUMN rated_at TEXT;
+    CREATE TABLE IF NOT EXISTS track_likes (
+        spotify_id        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        uri               TEXT NOT NULL,
+        playlist_id       INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+        added_to_spotify  INTEGER NOT NULL DEFAULT 0,
+        liked_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (spotify_id, uri)
+    );
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 
