@@ -2,6 +2,7 @@
 import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
 import Turnstile from '../components/Turnstile.astro';
 import Site from '../layouts/Site.astro';
+import { SESSION_DAYS } from '../lib/auth';
 import { LIMITS } from '../lib/forms';
 import { moodifyAccess } from '../site/pages';
 import { site } from '../site/site';
@@ -11,7 +12,7 @@ const loginUrl = `${site.moodify}/login`;
 
 const short = [
   'No ads, and nothing that follows you around other sites.',
-  'No analytics, and no cookies from this site.',
+  'No analytics. The only cookie from this site keeps you signed in.',
   'If you write to me, your message comes to me and nowhere else.',
 ];
 
@@ -20,10 +21,18 @@ const sectionsA: Section[] = [
   {
     h: 'What this site collects',
     ps: [
-      'Nothing just for visiting. There are no analytics, no tracking pixels and no fingerprinting.',
+      'Nothing beyond what signing in needs. There are no analytics, no tracking pixels and no fingerprinting.',
       'Cloudflare hosts the site, so every request passes through Cloudflare on its way to you. Their privacy policy covers what they see.',
     ],
     link: { href: 'https://www.cloudflare.com/privacypolicy/', label: 'Cloudflare privacy policy' },
+  },
+  {
+    h: 'Signing in',
+    ps: [
+      'The site is open to anyone signed in with a Google account. When you sign in, Google tells this site your Google account ID and email address.',
+      `They’re kept in a cookie on your device for ${SESSION_DAYS} days so you stay signed in, and aren’t saved anywhere else. The “sign out” link at the bottom of every page deletes the cookie.`,
+    ],
+    link: { href: 'https://policies.google.com/privacy', label: 'Google privacy policy' },
   },
   {
     h: 'The contact form',
@@ -41,7 +50,7 @@ const sectionsA: Section[] = [
     : []),
   {
     h: 'Cookies',
-    ps: ['This site sets no cookies of its own. Some pages load things from other services, which may set theirs. Those are listed below.'],
+    ps: [`This site sets one cookie of its own, which keeps you signed in for ${SESSION_DAYS} days, plus one that lasts the few minutes it takes to sign in. Some pages load things from other services, which may set theirs. Those are listed below.`],
   },
   {
     h: 'Spotify players',

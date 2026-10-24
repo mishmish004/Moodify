@@ -1,5 +1,12 @@
-# Copy to .dev.vars for `npm run preview`. In production these are Worker secrets
+# Copy to .dev.vars for `npm run dev` and `npm run preview`. In production these are Worker secrets
 # (Cloudflare dashboard > Workers > mish4mish > Settings > Variables and secrets).
+
+# Google sign-in (see README). Until all three are set, nobody gets past the sign-in page.
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+# Signs the sign-in cookie: 32+ random characters. Changing it signs everyone out. Make one with
+#   node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
+AUTH_SECRET=
 
 # Supabase > Project Settings > API: the project URL and the publishable key (sb_publishable_...).
 # Never the secret or service_role key; the site only inserts rows.

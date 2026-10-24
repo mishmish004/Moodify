@@ -16,6 +16,7 @@ const { bare = false } = Astro.props;
     {footerNav.map((l) => <a href={l.href}>{l.label}</a>)}
     <a class="gh" href={site.github.url} aria-label="GitHub"><CodeIcon size={18} /></a>
     <a href={site.linkedin.url}>LinkedIn</a>
+    <a href="/auth/sign-out">sign out</a>
   </nav>
 </footer>
 

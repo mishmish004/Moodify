@@ -4,6 +4,10 @@
   "name": "mish4mish",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // Every request runs src/worker.ts first, static files included, so nothing is served before
+  // the Google sign-in check. Each file a page loads counts as a Worker request.
+  "main": "./src/worker.ts",
+  "assets": { "binding": "ASSETS", "run_worker_first": true },
   // Attaches the Worker to the apex domain and creates its DNS record on deploy. The zone must be
   // in the same Cloudflare account, and mish4mish.com must not already have an A, AAAA or CNAME
   // record. www is redirected to the apex by a Redirect Rule (see README).
