@@ -1,10 +1,76 @@
 {% extends "base.html" %}
-{# Reloads itself until the build ends; /jobs/{id} then redirects to the playlist or explains the failure #}
-{% block head %}<meta http-equiv="refresh" content="3">{% endblock %}
-{% block title %}Moodify · making your playlist{% endblock %}
+{# While the build runs: the steps update every 3 seconds (a fetch that swaps the list, or a plain
+   refresh without JavaScript); /jobs/{id} redirects to the playlist when it's done. A failed build
+   stays here, showing the step it stopped at. #}
+{% set nav = "new" %}
+{% block head %}{% if not failed %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
+{% block title %}Moodify · {{ title if failed else "making your playlist" }}{% endblock %}
 {% block content %}
-<h1>Making your playlist</h1>
-<p class="muted">{{ job.prompt }}</p>
-<p><strong>{{ job.step or "Starting" }}…</strong></p>
-<p><small>This page updates by itself. It usually takes one to three minutes; you can leave it open in the background.</small></p>
+<div class="mf-stack-6" style="max-width: 640px; margin: 0 auto"{% if not failed %} data-job-running{% endif %}>
+  <div class="mf-stack-3">
+    <p class="mf-eyebrow">New playlist</p>
+    <h1 class="mf-h1">{{ title if failed else "Making your playlist" }}</h1>
+    <p class="mf-lead">{{ text if failed else "Usually 1 to 3 minutes." }}</p>
+  </div>
+
+  {% if failed %}
+  <div class="mf-stack-2">
+    <a class="mf-btn mf-btn--primary mf-btn--block" href="/?again={{ job.id }}">Back</a>
+    <p class="mf-hint" style="text-align: center">What you wrote is kept in the box.</p>
+  </div>
+  {% endif %}
+
+  <div class="mf-well mf-stack-2"><p class="mf-xs mf-muted mf-strong">You wrote</p><p class="mf-muted mf-ref">{{ job.prompt }}</p></div>
+
+  <section aria-labelledby="st-h" class="mf-stack-3">
+    <h2 id="st-h" class="mf-vh">Progress</h2>
+    <ol class="mf-steps" data-steps>
+      {% for s in steps %}
+      <li class="mf-step is-{{ s.state }}"{% if s.state in ("now", "failed") %} data-current="{{ s.label }}: {{ s.status }}"{% endif %}>
+        <span class="mf-step__icon">
+          {%- if s.state == "done" %}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"></path></svg>
+          {%- elif s.state == "now" %}<span class="mf-spin" aria-hidden="true"></span>
+          {%- elif s.state == "failed" %}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></svg>
+          {%- endif -%}
+        </span>
+        <span class="mf-step__text">{{ s.label }}<span class="mf-step__status">{{ s.status }}</span>{% if s.percent is not none %}<span class="mf-meter" aria-hidden="true"><span style="width: {{ s.percent }}%"></span></span>{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="mf-vh" aria-live="polite" data-step-live></p>
+  </section>
+
+  {% if not failed %}
+  <p class="mf-small mf-muted">This page updates itself every 3 seconds. You can leave and come back; the playlist still gets made.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if not failed %}
+<script>
+  // Check in every 3 seconds. Done: the server redirects to the playlist, so follow it. Failed:
+  // reload to show what happened. Otherwise swap the step list and say the new step, once.
+  const steps = document.querySelector("[data-steps]");
+  const live = document.querySelector("[data-step-live]");
+  let said = steps.querySelector("[data-current]")?.dataset.current ?? "";
+  const poll = async () => {
+    try {
+      const res = await fetch(location.href, { headers: { Accept: "text/html" }, cache: "no-store" });
+      if (res.redirected) { location.replace(res.url); return; }
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      if (!doc.querySelector("[data-job-running]")) { location.reload(); return; }
+      const fresh = doc.querySelector("[data-steps]");
+      if (fresh) {
+        steps.replaceChildren(...fresh.children);
+        const now = steps.querySelector("[data-current]")?.dataset.current ?? "";
+        if (now && now.split(" (")[0] !== said.split(" (")[0]) live.textContent = now;
+        said = now;
+      }
+    } catch { /* offline for a moment: try again */ }
+    setTimeout(poll, 3000);
+  };
+  setTimeout(poll, 3000);
+</script>
+{% endif %}
 {% endblock %}

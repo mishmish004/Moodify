@@ -1,31 +1,103 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import logo, playlist_list %}
+{% from "_spotify.html" import logo, playlist_list, horizon %}
+{% set nav = "new" %}
+{% set name = (user.display_name or "").split(" ")[0] %}
 {% block content %}
-<h1>How are you feeling?</h1>
-<form method="post" action="/playlist" data-busy="Making your playlist…">
-  <label for="mood">The mood, the moment, or what you're doing</label>
-  <textarea id="mood" name="mood" required maxlength="2000" rows="4" placeholder="e.g. chill summer morning, then 30 min workout, then straight into focus mode. Say it however you like: a word, a list, a paragraph.">{{ prompt }}</textarea>
-  <button type="submit" class="wide">Make a playlist</button>
-</form>
-<p><small>Takes a minute or two: an AI model reads your request and suggests songs, then each one is looked up on Spotify.</small></p>
+{{ horizon() }}
+<div class="mf-cols">
+  <section class="mf-stack-5" aria-labelledby="mood-h">
+    {% if remaking %}
+    <div class="mf-notice" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10a6 6 0 1 1 1.8 4.3"></path><path d="M4 15.5V10h5.5"></path></svg><p>You're adjusting <span class="mf-strong">{{ remaking }}</span>. Change anything, then make it again. The first version stays in your Spotify.</p></div>
+    {% endif %}
+    <div class="mf-stack-2">
+      <p class="mf-eyebrow" data-greeting data-name="{{ name }}">{{ "Hi, " ~ name ~ "." if name else "Hi." }}</p>
+      <h1 id="mood-h" class="mf-h1">How are you feeling?</h1>
+    </div>
+    <form method="post" action="/playlist" class="mf-stack-3" data-busy="Making your playlist…" data-mood>
+      <textarea id="mood" class="mf-textarea mf-textarea--mood" name="mood" required maxlength="2000" aria-labelledby="mood-h" aria-describedby="mood-hint mood-count" placeholder="e.g. chill summer morning, then 30 min workout, then straight into focus mode. Say it however you like: a word, a list, a paragraph.">{{ prompt }}</textarea>
+      <p class="mf-error" id="mood-err" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M10 5.5v5.5M10 13.6v.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>Write something first. One word is enough.</p>
+      <div class="mf-split"><span id="mood-hint" class="mf-hint">Sections, lengths and rules all work: "no sad songs", "30 min".</span><span id="mood-count" class="mf-count mf-if-js"><span data-count>{{ prompt | length }}</span> / 2,000</span></div>
+      <button class="mf-btn mf-btn--primary mf-btn--block mf-btn--xl" type="submit">Make a playlist</button>
+      <p class="mf-hint" style="text-align: center">Takes a minute or two: an AI model reads your request and suggests songs, then each one is looked up on Spotify.</p>
+    </form>
+  </section>
 
-{% if recent %}
-<h2>Recent playlists</h2>
-{{ playlist_list(recent) }}
-<p><a href="/history">All your playlists</a></p>
-{% endif %}
+  <div class="mf-stack-6">
+    <section class="mf-stack-3" aria-labelledby="recent-h">
+      <h2 id="recent-h" class="mf-h2">Recent playlists</h2>
+      {% if recent %}
+      {{ playlist_list(recent) }}
+      <a class="mf-btn mf-btn--link" href="/history" style="align-self: flex-start">All your playlists</a>
+      {% else %}
+      <p class="mf-well mf-muted">Nothing yet. Your playlists will show up here.</p>
+      {% endif %}
+    </section>
 
-<details>
-  <summary>What the model is told about your taste</summary>
-  <p><small>{{ summary }}</small></p>
-  <p><small>Top artists and tracks from</small> {{ logo() }}</p>
-  <p><a href="/onboarding">Change your answers</a></p>
-</details>
+    <details class="mf-disclosure">
+      <summary>What the model is told about your taste<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></summary>
+      <div class="mf-disclosure__body">
+        <p class="mf-small mf-ref">{{ summary }}</p>
+        <p class="mf-xs mf-muted mf-sp-attrib">Built from your answers and your listening on {{ logo() }}</p>
+        <div class="mf-cluster"><a class="mf-btn mf-btn--link" href="/onboarding">Change your answers</a></div>
+      </div>
+    </details>
+  </div>
+</div>
 
-<footer class="page">
-  <p class="muted">Logged in as {{ user.display_name or user.spotify_id }}.</p>
-  <form method="post" action="/disconnect" onsubmit="return confirm('Delete everything Moodify stored about you?')">
-    <button type="submit" class="quiet">Disconnect and delete my data</button>
+<section class="mf-stack-3 mf-leave" aria-labelledby="leave-h">
+  <h2 id="leave-h" class="mf-h3">Leave Moodify</h2>
+  <p class="mf-small mf-muted">Deletes everything Moodify stored about you and logs you out. Playlists already in your Spotify stay there.</p>
+  <button class="mf-btn mf-btn--danger mf-if-js" type="button" aria-expanded="false" aria-controls="delete-confirm" data-ask-delete style="align-self: flex-start">Disconnect and delete my data</button>
+  {# Without JavaScript the confirm step shows straight away #}
+  <form method="post" action="/disconnect" id="delete-confirm" class="mf-card mf-stack-3 mf-confirm mf-js-closed" aria-labelledby="del-h">
+    <h3 id="del-h" class="mf-h3">Delete all your Moodify data?</h3>
+    <p class="mf-small">Your answers, your playlist list and your taste summary are deleted from Moodify. This can't be undone.</p>
+    <div class="mf-cluster"><button class="mf-btn mf-btn--danger-solid" type="submit">Yes, delete my data</button><button class="mf-btn mf-btn--quiet mf-if-js" type="button" data-keep>Keep my data</button></div>
   </form>
-</footer>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Greeting by the clock on this device, not the server's
+  const greet = document.querySelector("[data-greeting]");
+  const hour = new Date().getHours();
+  const part = hour < 5 ? "Hi" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  greet.textContent = greet.dataset.name ? `${part}, ${greet.dataset.name}.` : `${part}.`;
+
+  // The mood box: count characters (announced only near the limit) and stop an empty submit
+  const form = document.querySelector("form[data-mood]");
+  const box = form.querySelector("textarea");
+  const count = form.querySelector("[data-count]");
+  const counter = document.getElementById("mood-count");
+  const err = document.getElementById("mood-err");
+  form.noValidate = true;
+  const update = () => {
+    count.textContent = box.value.length.toLocaleString("en-GB");
+    if (box.value.length > 1900) counter.setAttribute("aria-live", "polite"); else counter.removeAttribute("aria-live");
+    if (box.value.trim()) { err.hidden = true; box.removeAttribute("aria-invalid"); }
+  };
+  box.addEventListener("input", update);
+  update();
+  form.addEventListener("submit", (event) => {
+    if (box.value.trim()) return;
+    event.preventDefault();
+    err.hidden = false;
+    box.setAttribute("aria-invalid", "true");
+    box.setAttribute("aria-describedby", "mood-err mood-hint mood-count");
+    box.focus();
+  });
+
+  // Leaving takes two steps
+  const ask = document.querySelector("[data-ask-delete]");
+  const confirmBox = document.getElementById("delete-confirm");
+  const setOpen = (open) => {
+    confirmBox.classList.toggle("is-open", open);
+    ask.hidden = open;
+    ask.setAttribute("aria-expanded", String(open));
+    (open ? confirmBox.querySelector("button[type=submit]") : ask).focus();
+  };
+  ask.addEventListener("click", () => setOpen(true));
+  confirmBox.querySelector("[data-keep]").addEventListener("click", () => setOpen(false));
+</script>
 {% endblock %}

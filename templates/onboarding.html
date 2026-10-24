@@ -1,41 +1,125 @@
 {% extends "base.html" %}
 {% block title %}Moodify · about your taste{% endblock %}
+{% set err_icon %}<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M10 5.5v5.5M10 13.6v.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>{% endset %}
+{% macro options(name, choices, picked) -%}
+<div class="mf-options">
+  {% for value, label in choices %}
+  <label class="mf-option"><input type="radio" name="{{ name }}" value="{{ value }}"{% if picked == value %} checked{% endif %}{% if name == "energy" %} required{% endif %}><span class="mf-option__dot" aria-hidden="true"></span><span>{{ label }}</span></label>
+  {% endfor %}
+</div>
+{%- endmacro %}
+{% macro legend(n, title, optional=False) -%}
+<legend class="mf-q"><span class="mf-xs mf-muted">Question {{ n }} of 7</span><span class="mf-h3">{{ title }}{% if optional %} <span class="mf-label__opt">(optional)</span>{% endif %}</span></legend>
+{%- endmacro %}
 {% block content %}
-<h1>Tell Moodify about your taste</h1>
-<p>Seven quick questions. Together with your most played artists on Spotify they shape every playlist.</p>
-<form method="post" action="/onboarding">
-  <label>Favourite genres
-    <input name="genres" required maxlength="200" value="{{ answers.genres or '' }}" placeholder="e.g. indie rock, bollywood, lo-fi">
-  </label>
-  <label>Three artists you love
-    <input name="artists" required maxlength="200" value="{{ answers.artists or '' }}" placeholder="e.g. Prateek Kuhad, Radiohead, Arijit Singh">
-  </label>
-  <label>Energy you usually want
-    <select name="energy" required>
-      {% for value, text in [("low", "Low: calm, slow"), ("medium", "Medium"), ("high", "High: loud, fast"), ("mixed", "Depends on the day")] %}
-      <option value="{{ value }}" {% if answers.energy == value %}selected{% endif %}>{{ text }}</option>
+<form class="mf-stack-7" style="max-width: 640px; margin: 0 auto" method="post" action="/onboarding" data-busy="Saving…" data-onboarding>
+  <div class="mf-stack-3">
+    {% if first %}<p class="mf-eyebrow">Welcome, {{ user.display_name or "friend" }}.</p>{% endif %}
+    <h1 class="mf-h1">About your taste</h1>
+    <p class="mf-lead">Seven questions. Moodify uses your answers together with your Spotify listening. You can change them any time.</p>
+    <div class="mf-notice mf-notice--error" role="alert" tabindex="-1" data-problems{% if not errors %} hidden{% endif %}><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"></circle><path d="M10 5.5v5.5M10 13.8v.3"></path></svg>
+      <p><span class="mf-notice__title" data-problems-title>{{ "One answer is missing." if errors | length == 1 else "Some answers are missing." }}</span>
+        <span data-problems-list>{% for key, text in errors.items() %}{% if key == "genres" %} <a href="#q1">Pick a genre</a> (question 1).{% elif key == "artists" %} <a href="#q2">Add at least one artist you love</a> (question 2).{% elif key == "energy" %} <a href="#q3">Pick the energy you usually want</a> (question 3).{% else %} {{ text }}{% endif %}{% endfor %}</span></p>
+    </div>
+  </div>
+
+  <fieldset class="mf-stack-3" id="q1">
+    {{ legend(1, "Favourite genres") }}
+    <p class="mf-hint" style="margin-top: -8px">Pick as many as you like, or type your own below.</p>
+    <div class="mf-cluster">
+      {% for g in genres %}
+      <label class="mf-chip mf-chip--plain mf-chip--box"><input class="mf-vh" type="checkbox" name="genres" value="{{ g.name }}"{% if g.on %} checked{% endif %}>{{ g.name }}<svg class="mf-chip__check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"></path></svg></label>
       {% endfor %}
-    </select>
-  </label>
-  <label>Instrumental tracks (no vocals) OK?
-    <select name="instrumental">
-      <option value="yes" {% if answers.instrumental != "no" %}selected{% endif %}>Yes</option>
-      <option value="no" {% if answers.instrumental == "no" %}selected{% endif %}>No</option>
-    </select>
-  </label>
-  <label>Languages you listen in <small>(optional)</small>
-    <input name="languages" maxlength="200" value="{{ answers.languages or '' }}" placeholder="e.g. English, Hindi, Punjabi">
-  </label>
-  <label>Anything to avoid <small>(optional)</small>
-    <input name="avoid" maxlength="200" value="{{ answers.avoid or '' }}" placeholder="e.g. no country, nothing explicit">
-  </label>
-  <label>Songs you already know, or new ones?
-    <select name="familiar">
-      {% for value, text in [("new", "Mostly new to me"), ("mix", "A mix (about a third I know)"), ("known", "Mostly ones I know")] %}
-      <option value="{{ value }}" {% if (answers.familiar or "mix") == value %}selected{% endif %}>{{ text }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <button type="submit" class="wide">Save</button>
+    </div>
+    <div class="mf-field">
+      <label class="mf-label" for="genres-other">Other genres <span class="mf-label__opt">(optional)</span></label>
+      <input id="genres-other" class="mf-input" type="text" name="genres_other" maxlength="200" autocomplete="off" placeholder="e.g. indie rock, ghazals" value="{{ genres_other }}"{% if errors.genres %} aria-invalid="true"{% endif %} aria-describedby="err-genres">
+    </div>
+    <p class="mf-error" id="err-genres"{% if not errors.genres %} hidden{% endif %}>{{ err_icon }}<span>{{ errors.genres or "Pick at least one genre, or type your own." }}</span></p>
+  </fieldset>
+
+  <fieldset class="mf-stack-3" id="q2">
+    {{ legend(2, "Three artists you love") }}
+    {% for value in artists %}
+    <div class="mf-field">
+      <label class="mf-label" for="artist-{{ loop.index }}">Artist {{ loop.index }}{% if not loop.first %} <span class="mf-label__opt">(optional)</span>{% endif %}</label>
+      <input id="artist-{{ loop.index }}" class="mf-input" type="text" name="artists" maxlength="100" autocomplete="off" placeholder="{{ ['e.g. Frank Ocean', 'e.g. SZA', 'e.g. A.R. Rahman'][loop.index0] }}" value="{{ value }}"{% if loop.first %} required aria-describedby="err-artists"{% if errors.artists %} aria-invalid="true"{% endif %}{% endif %}>
+    </div>
+    {% endfor %}
+    <p class="mf-error" id="err-artists"{% if not errors.artists %} hidden{% endif %}>{{ err_icon }}<span>{{ errors.artists or "Add at least one artist." }}</span></p>
+  </fieldset>
+
+  <fieldset class="mf-stack-3" id="q3" aria-describedby="err-energy">
+    {{ legend(3, "The energy you usually want") }}
+    {{ options("energy", [("low", "Low"), ("medium", "Medium"), ("high", "High"), ("mixed", "Depends on the day")], answers.energy) }}
+    <p class="mf-error" id="err-energy"{% if not errors.energy %} hidden{% endif %}>{{ err_icon }}<span>{{ errors.energy or "Pick the energy you usually want." }}</span></p>
+  </fieldset>
+
+  <fieldset class="mf-stack-3">
+    {{ legend(4, "Are instrumental tracks OK?") }}
+    {{ options("instrumental", [("yes", "Yes"), ("sometimes", "Sometimes"), ("no", "No")], answers.instrumental or "yes") }}
+  </fieldset>
+
+  <fieldset class="mf-stack-3">
+    {{ legend(5, "Languages", optional=True) }}
+    <div class="mf-field">
+      <label class="mf-vh" for="languages">Languages</label>
+      <input id="languages" class="mf-input" type="text" name="languages" maxlength="200" placeholder="e.g. English, Hindi, Punjabi" value="{{ answers.languages or '' }}" aria-describedby="languages-hint">
+      <span class="mf-hint" id="languages-hint">Leave it empty for any language.</span>
+    </div>
+  </fieldset>
+
+  <fieldset class="mf-stack-3">
+    {{ legend(6, "Anything to avoid", optional=True) }}
+    <div class="mf-field">
+      <label class="mf-vh" for="avoid">Anything to avoid</label>
+      <textarea id="avoid" class="mf-textarea mf-textarea--short" name="avoid" maxlength="200" placeholder="e.g. country, explicit lyrics, breakup songs">{{ answers.avoid or '' }}</textarea>
+    </div>
+  </fieldset>
+
+  <fieldset class="mf-stack-3">
+    {{ legend(7, "Songs you already know, or new ones?") }}
+    {{ options("familiar", [("new", "Mostly new"), ("mix", "A mix"), ("known", "Mostly ones I know")], answers.familiar or "mix") }}
+  </fieldset>
+
+  <div class="mf-stack-3">
+    <button class="mf-btn mf-btn--primary mf-btn--block mf-btn--xl" type="submit">Save</button>
+    <p class="mf-hint" style="text-align: center">You can change these later from the home page.</p>
+  </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Our own messages instead of the browser's, shown in the same places as the server's.
+  // Runs before the busy-button script, so a stopped submit never shows "Saving…".
+  const form = document.querySelector("form[data-onboarding]");
+  form.noValidate = true;
+  const show = (id, on) => { document.getElementById(id).hidden = !on; };
+  form.addEventListener("submit", (event) => {
+    const genres = form.querySelector("input[name=genres]:checked") || form.genres_other.value.trim();
+    const artists = [...form.querySelectorAll("input[name=artists]")].some((i) => i.value.trim());
+    const energy = form.querySelector("input[name=energy]:checked");
+    const problems = [];
+    if (!genres) problems.push(["#q1", "Pick a genre", 1]);
+    if (!artists) problems.push(["#q2", "Add at least one artist you love", 2]);
+    if (!energy) problems.push(["#q3", "Pick the energy you usually want", 3]);
+    show("err-genres", !genres); show("err-artists", !artists); show("err-energy", !energy);
+    form.genres_other.setAttribute("aria-invalid", String(!genres));
+    form.querySelector("#artist-1").setAttribute("aria-invalid", String(!artists));
+    const box = form.querySelector("[data-problems]");
+    box.hidden = problems.length === 0;
+    if (!problems.length) return;
+    event.preventDefault();
+    form.querySelector("[data-problems-title]").textContent = problems.length === 1 ? "One answer is missing." : "Some answers are missing.";
+    const list = form.querySelector("[data-problems-list]");
+    list.replaceChildren(...problems.flatMap(([href, text, n]) => {
+      const a = document.createElement("a");
+      a.href = href; a.textContent = text;
+      return [" ", a, ` (question ${n}).`];
+    }));
+    box.scrollIntoView({ block: "center" });
+    box.focus({ preventScroll: true });
+  });
+</script>
 {% endblock %}

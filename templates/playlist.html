@@ -1,55 +1,91 @@
 {% extends "base.html" %}
 {% from "_spotify.html" import icon, open_spotify %}
+{% set nav = "history" %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
+
+{# Every row links to the track on Spotify, with the Spotify icon. Numbering carries across sections. #}
+{% macro track_list(items, first) -%}
+<ol class="mf-tracks" start="{{ first }}">
+  {% for t in items %}
+  <li class="mf-track"><a class="mf-track__link" href="{{ t.url }}" aria-label="{{ t.name }} by {{ t.artists | join(', ') }}, open in Spotify"><span class="mf-track__n">{{ first + loop.index0 }}</span><span><span class="mf-track__name">{{ t.name }}</span><span class="mf-track__artists">{{ t.artists | join(", ") }}</span></span>{{ icon() }}</a></li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
 {% block content %}
-{% if brief and brief.support_note %}
-<p class="notice">If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a>.</p>
-{% endif %}
-<h1>Moodify: {{ title }}</h1>
-{% if tracks %}
-<p class="muted">{{ tracks | length }} tracks, {{ total_minutes // 60 ~ " h " if total_minutes >= 60 else "" }}{{ total_minutes % 60 }} min, saved as a private playlist in your Spotify account.</p>
-{% else %}
-<p class="muted">This playlist was made before Moodify kept track lists. Open it in Spotify to see the songs.</p>
-{% endif %}
-{{ open_spotify(playlist.spotify_url) }}
-<form method="post" action="/queue/{{ playlist.id }}" data-busy="Adding to your queue…">
-  <button type="submit">Play now</button>
-  <small class="hint">Needs Premium and Spotify open on one of your devices.</small>
-</form>
+<div class="mf-pl mf-pl--no-rate">
+  <div class="mf-pl__top mf-stack-5">
+    {% if brief and brief.support_note %}
+    <p class="mf-support"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 13.5c2 0 2-1.2 4-1.2s2 1.2 4 1.2 2-1.2 4-1.2 2 1.2 2 1.2"></path><path d="M6 10a4 4 0 0 1 8 0"></path></svg><span>If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a></span></p>
+    {% endif %}
+    <div class="mf-stack-2">
+      <a class="mf-back" href="/history"><span aria-hidden="true">←</span> All your playlists</a>
+      <h1 class="mf-h1">Moodify: {{ title }}</h1>
+      {% if tracks %}
+      <p class="mf-muted">{{ tracks | length }} tracks, {{ total_minutes | duration }}, saved as a private playlist in your Spotify account.</p>
+      {% else %}
+      <p class="mf-muted">Saved as a private playlist in your Spotify account.</p>
+      {% endif %}
+    </div>
+    <div class="mf-stack-3">
+      {{ open_spotify(playlist.spotify_url) }}
+      <form method="post" action="/queue/{{ playlist.id }}" class="mf-stack-2" data-busy="Adding to your queue…">
+        <button class="mf-btn mf-btn--quiet mf-btn--block" type="submit" aria-describedby="play-note">Play now</button>
+        <p id="play-note" class="mf-hint" style="text-align: center">Needs Premium and Spotify open on one of your devices.</p>
+      </form>
+    </div>
+  </div>
 
-{% if brief %}
-<details class="reading" open>
-  <summary>How Moodify read this</summary>
-  <p>{{ brief.summary }}</p>
-  {% if brief.sections | length > 1 %}
-  <ol>
-    {% for s in brief.sections %}
-    <li><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min asked{% endif %}{% if loop.index0 in section_minutes %}, {{ section_minutes[loop.index0] | round | int }} min made{% endif %}{% if not loop.first and s.transition_in == "cut" %} <small>(straight in)</small>{% endif %}</li>
-    {% endfor %}
-  </ol>
+  {% if brief %}
+  <section class="mf-pl__read mf-card mf-stack-4" aria-labelledby="read-h">
+    <h2 id="read-h" class="mf-h3">How Moodify read this</h2>
+    <p>{{ brief.summary }}</p>
+    {% if chart %}
+    <figure class="mf-chart" aria-labelledby="en-cap">
+      <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="{{ chart.label }}">
+        <line class="grid" x1="{{ chart.x0 }}" y1="{{ chart.y5 }}" x2="{{ chart.x1 }}" y2="{{ chart.y5 }}"></line>
+        <line class="grid" x1="{{ chart.x0 }}" y1="{{ chart.y10 }}" x2="{{ chart.x1 }}" y2="{{ chart.y10 }}"></line>
+        <line class="axis" x1="{{ chart.x0 }}" y1="{{ chart.axis }}" x2="{{ chart.x1 }}" y2="{{ chart.axis }}"></line>
+        <path class="area" d="{{ chart.area }}"></path>
+        <path class="line" d="{{ chart.line }}"></path>
+        {% for t in chart.ticks %}<line class="axis" x1="{{ t.x }}" y1="{{ chart.axis }}" x2="{{ t.x }}" y2="{{ chart.axis + 4 }}"></line><text x="{{ t.x }}" y="116" text-anchor="middle">{{ t.text }}</text>{% endfor %}
+        <text x="{{ chart.x0 }}" y="116">0:00</text><text x="{{ chart.x1 }}" y="116" text-anchor="end">{{ chart.total }}</text>
+        {% for l in chart.levels %}<text x="{{ l.x }}" y="{{ l.y }}" text-anchor="middle" class="t-ink">{{ l.text }}</text>{% endfor %}
+        <text x="352" y="{{ chart.y10 + 3 }}" text-anchor="end">10</text><text x="352" y="{{ chart.y5 + 3 }}" text-anchor="end">5</text>
+      </svg>
+      <figcaption id="en-cap" class="mf-xs mf-muted">{{ chart.caption }}</figcaption>
+    </figure>
+    {% endif %}
+    {% if brief.sections | length > 1 %}
+    <ul class="mf-stack-2">
+      {% for s in brief.sections %}
+      <li class="mf-read"><span class="mf-read__dot" aria-hidden="true"></span><span><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min asked{% endif %}{% if loop.index0 in section_minutes %}, {{ section_minutes[loop.index0] | round | int }} min made{% endif %}{% if not loop.first and s.transition_in == "cut" %} <span class="mf-tag mf-tag--accent">straight in</span>{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if rules %}<p>Rules kept: {{ rules | join("; ") }}.</p>{% endif %}
+    <div class="mf-well mf-stack-2"><p class="mf-xs mf-muted mf-strong">You wrote</p><p class="mf-muted mf-ref">{{ playlist.prompt }}</p></div>
+    <a class="mf-btn mf-btn--link" href="/?redo={{ playlist.id }}" style="align-self: flex-start">Adjust and redo</a>
+  </section>
   {% endif %}
-  {% if rules %}<p><small>Rules kept: {{ rules | join("; ") }}.</small></p>{% endif %}
-  <p class="muted"><small>You wrote: {{ playlist.prompt }}</small></p>
-  <p><a href="/?redo={{ playlist.id }}">Adjust and redo</a></p>
-</details>
-{% endif %}
 
-{% if groups %}
-{% for g in groups %}
-<h2 class="section-head">{{ g.label }} <small>· starts at {{ g.start }}</small></h2>
-<ol class="list">
-  {% for t in g.tracks %}
-  <li><a href="{{ t.url }}"><span class="n">{{ g.first + loop.index0 }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
-  {% endfor %}
-</ol>
-{% endfor %}
-{% elif tracks %}
-<ol class="list">
-  {% for t in tracks %}
-  <li><a href="{{ t.url }}"><span class="n">{{ loop.index }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a></li>
-  {% endfor %}
-</ol>
-{% endif %}
-<p><a class="button" href="/">Make another</a></p>
+  <section class="mf-pl__tracks" aria-labelledby="tr-h">
+    <h2 id="tr-h" class="mf-vh">Tracks</h2>
+    {% if groups %}
+      {% for g in groups %}
+      <div>
+        <h3 class="mf-sec"><span class="mf-sec__name">{{ g.label }}</span><span class="mf-sec__time">starts at {{ g.start }}</span><span class="mf-sec__meta"><span class="mf-energy"><span class="mf-energy__bars" aria-hidden="true">{% for b in g.bars %}<i{% if b.on %} class="on"{% endif %} style="height: {{ b.height }}px"></i>{% endfor %}</span>Energy {{ g.energy }} of 10</span><span>{{ (g.ms / 60000) | duration }}</span></span></h3>
+        {{ track_list(g.tracks, g.first) }}
+      </div>
+      {% endfor %}
+    {% elif tracks %}
+      {{ track_list(tracks, 1) }}
+    {% else %}
+      <div class="mf-well mf-stack-2"><p class="mf-strong">This playlist was made before Moodify kept track lists.</p><p class="mf-muted">Open it in Spotify to see the songs.</p></div>
+    {% endif %}
+  </section>
+
+  <div class="mf-pl__more"><a class="mf-btn mf-btn--quiet mf-btn--block" href="/">Make another</a></div>
+</div>
 {% endblock %}
