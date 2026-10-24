@@ -1,5 +1,6 @@
 """Phase 4: onboarding answers + Spotify top items -> one cached taste paragraph."""
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -172,8 +173,13 @@ def test_onboarding_submit_stores_answers_and_redirects_home(logged_in, respx_mo
 def test_onboarding_form_is_prefilled_on_return(logged_in):
     logged_in.post("/onboarding", data=ONBOARDING)
     resp = logged_in.get("/onboarding")
-    assert 'value="indie rock, bollywood, lo-fi"' in resp.text
-    assert '<option value="medium" selected>' in resp.text
+    # Answers that match a genre chip come back ticked; the rest go in the "Other genres" box
+    assert re.search(r'value="Bollywood" checked', resp.text) and re.search(r'value="Lo-fi" checked', resp.text)
+    assert 'name="genres_other"' in resp.text and 'value="indie rock"' in resp.text
+    for artist in ("Prateek Kuhad", "Radiohead", "Arijit Singh"):
+        assert f'value="{artist}"' in resp.text
+    assert 'name="energy" value="medium" checked' in resp.text
+    assert 'name="instrumental" value="no" checked' in resp.text
 
 
 @pytest.mark.parametrize("missing", ["genres", "artists", "energy"])

@@ -67,10 +67,12 @@ def section_minutes(playlist_id: int) -> dict[int, float]:
 
 
 def recent(spotify_id: str, limit: int = 5) -> list[sqlite3.Row]:
-    """Newest first, with track_count. limit=-1 means all of them (SQLite's "no limit")."""
+    """Newest first, with track_count and minutes (NULL for playlists from before track lists were kept).
+    limit=-1 means all of them (SQLite's "no limit")."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title"
+            "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title,"
+            " (SELECT sum(duration_ms) / 60000.0 FROM playlist_tracks WHERE playlist_id = playlists.id) AS minutes"
             " FROM playlists"
             " WHERE spotify_id = ? ORDER BY id DESC LIMIT ?",
             (spotify_id, limit),

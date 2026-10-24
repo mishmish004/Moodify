@@ -266,9 +266,9 @@ def test_playlist_is_named_after_the_brief_and_shows_how_it_was_read(logged_in, 
     created = json.loads(sp.create.calls.last.request.content)
     assert created["name"] == "Moodify: Summer morning → workout → lock in"
     assert len(created["description"]) <= 300
-    assert "<h1>Moodify: Summer morning → workout → lock in</h1>" in page.text
+    assert '<h1 class="mf-h1">Moodify: Summer morning → workout → lock in</h1>' in page.text
     assert "How Moodify read this" in page.text and "Warm start, 30-minute workout, then focus." in page.text
-    assert "<strong>Workout</strong>: driving, 30 min" in page.text and "(straight in)" in page.text
+    assert "<strong>Workout</strong>: driving, 30 min" in page.text and ">straight in</span>" in page.text
     assert "Rules kept: no sad songs." in page.text
     row_id = _playlist_rows()[0]["id"]
     assert f'href="/?redo={row_id}"' in page.text

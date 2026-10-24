@@ -2,15 +2,17 @@ import json
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import Depends, FastAPI, Form, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, playlist, playlists, search_cache, taste, users
+from src import jobs, pages, playlist, playlists, search_cache, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -21,6 +23,8 @@ from src.spotify.client import SpotifyClient
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
+templates.env.filters["day"] = pages.day
+templates.env.filters["duration"] = pages.duration
 
 
 @asynccontextmanager
@@ -85,14 +89,32 @@ def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
 def _quota(request: Request, exc: SpotifyQuotaExceeded):
     MoodifyLogger.get_logger("spotify").warning("quota/rate limit hit: %s", exc)
     return _message(request, "Spotify is asking us to slow down",
-                    "The app's Spotify quota is used up for now. Try again in an hour or so.")
+                    "The app's Spotify quota is used up for now. Try again in an hour or so.", tone="low")
 
 
-def _message(request: Request, title: str, text: str, status_code: int = 200, **context):
-    """A plain page with a heading and a sentence, for every outcome that isn't the normal page."""
-    return templates.TemplateResponse(
-        request, "message.html", {"title": title, "text": text, **context}, status_code=status_code
-    )
+def _message(request: Request, title: str, text: str, status_code: int = 200, *, tone: Optional[str] = None,
+             back: Optional[tuple[str, str]] = None, code: str = "", **context):
+    """A plain page with a heading and a sentence, for every outcome that isn't the normal page.
+    tone "up" (good news) or "low" sets the picture; back is (label, href), by default the mood box
+    or, for someone logged out, the start."""
+    if back is None:
+        back = ("Back to the mood box", "/") if context.get("user") else ("Back to the start", "/login")
+    return templates.TemplateResponse(request, "message.html", {
+        "title": title, "text": text, "tone": tone or ("up" if status_code < 400 else "low"),
+        "back": back, "code": code, **context,
+    }, status_code=status_code)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error(request: Request, exc: StarletteHTTPException):
+    """Unknown addresses get a page, not JSON. Other HTTP errors keep FastAPI's answer."""
+    if exc.status_code != 404:
+        return await http_exception_handler(request, exc)
+    spotify_id = request.session.get("spotify_id") if "session" in request.scope else None
+    user = users.get(spotify_id) if spotify_id else None
+    return _message(request, "Nothing here",
+                    "There's no page at this address. It may have moved, or the link has a typo.",
+                    status_code=404, code="404 · Not found", user=user)
 
 
 def any_user(request: Request) -> sqlite3.Row:
@@ -135,7 +157,9 @@ def login(request: Request) -> RedirectResponse:
 def callback(request: Request, code: str = "", state: str = "", error: str = ""):
     oauth = request.session.pop("oauth", None)  # one use only, even when it fails
     if error:
-        return _message(request, "Login cancelled", "Spotify login was cancelled or refused.", status_code=400)
+        return _message(request, "Login cancelled",
+                        "You didn't finish logging in with Spotify, so nothing changed. You can try again whenever you like.",
+                        status_code=400, back=("Try again", "/login"), tone="up")
     if not oauth or not code or not secrets.compare_digest(state.encode(), oauth["state"].encode()):
         return _message(request, "Login expired", "This login link is stale or didn't start here. Please log in again.",
                         status_code=400)
@@ -147,7 +171,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
         if exc.status == 403:
             return _message(request, "Not on the list yet",
                             "Your Spotify account isn't on this app's allowlist yet. Ask the owner to add you, then log in again.",
-                            status_code=403)
+                            status_code=403, code="Can't log in")
         return _message(request, "Login failed", "Spotify login failed. Please try again.", status_code=502)
     users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token, tokens.scope)
     request.session["spotify_id"] = profile["id"]
@@ -170,13 +194,23 @@ def _redirect_to_onboarding(request: Request, exc: OnboardingRequired) -> Redire
 
 
 @app.get("/")
-def home(request: Request, user: sqlite3.Row = Depends(onboarded_user), redo: Optional[int] = None):
-    # "Adjust and redo" on a playlist page comes back here with that playlist's prompt in the box
-    again = playlists.get(redo, user["spotify_id"]) if redo else None
+def home(request: Request, user: sqlite3.Row = Depends(onboarded_user), redo: Optional[int] = None,
+         again: Optional[int] = None):
+    # "Adjust and redo" on a playlist page comes back here with that playlist's prompt in the box,
+    # and "Back" after a failed build with what was written for it
+    remade = playlists.get(redo, user["spotify_id"]) if redo else None
+    failed = jobs.get(again, user["spotify_id"]) if again and not remade else None
+    prompt = remade["prompt"] if remade else failed["prompt"] if failed else ""
     return templates.TemplateResponse(request, "index.html", {
         "user": user, "summary": taste.summary_for(user), "recent": playlists.recent(user["spotify_id"]),
-        "prompt": again["prompt"] if again else "",
+        "prompt": prompt, "remaking": _title(remade) if remade else "",
     })
+
+
+def _title(row: sqlite3.Row) -> str:
+    """A playlist as its lists show it: the title Moodify gave it, or the start of the prompt."""
+    title = json.loads(row["brief_json"]).get("title") if row["brief_json"] else None
+    return f"Moodify: {title}" if title else row["prompt"][:80]
 
 
 # How a failed build is explained, by jobs.error
@@ -206,7 +240,7 @@ def make_playlist(user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(
 def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_user)):
     job = jobs.get(job_id, user["spotify_id"])
     if job is None:
-        return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user)
+        return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user, code="404 · Not found")
     if job["status"] == "done":
         return RedirectResponse(f"/playlists/{job['playlist_id']}", status_code=303)
     if job["status"] == "failed":
@@ -214,23 +248,32 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
             request.session.clear()
             return RedirectResponse("/login", status_code=303)
         title, text = BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR])
-        return _message(request, title, text, user=user)
-    return templates.TemplateResponse(request, "job.html", {"user": user, "job": job})
+        return templates.TemplateResponse(request, "job.html", {
+            "user": user, "job": job, "failed": True, "title": title, "text": text,
+            "steps": pages.build_steps(job["step"], failed=True),
+        })
+    return templates.TemplateResponse(request, "job.html", {
+        "user": user, "job": job, "failed": False, "steps": pages.build_steps(job["step"]),
+    })
 
 
 @app.get("/playlists/{playlist_id}")
 def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
     row = playlists.get(playlist_id, user["spotify_id"])
     if row is None:
-        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
+                        code="404 · Not found")
     brief = Brief.model_validate_json(row["brief_json"]) if row["brief_json"] else None
     tracks = playlists.tracks(playlist_id)
+    total_ms = sum(t.duration_ms for t in tracks)
+    groups = _section_groups(brief, tracks, playlists.track_sections(playlist_id))
     return templates.TemplateResponse(request, "playlist.html", {
         "user": user, "playlist": row, "tracks": tracks, "brief": brief,
         "rules": rule_list(brief.hard_rules) if brief else [],
-        "total_minutes": round(sum(t.duration_ms for t in tracks) / 60_000),
+        "total_minutes": round(total_ms / 60_000),
         "section_minutes": playlists.section_minutes(playlist_id),
-        "groups": _section_groups(brief, tracks, playlists.track_sections(playlist_id)),
+        "groups": groups,
+        "chart": pages.energy_chart(groups, _clock(total_ms), total_ms),
     })
 
 
@@ -241,9 +284,13 @@ def _section_groups(brief: Optional[Brief], tracks: list, sections: list[Optiona
     groups, elapsed = [], 0
     for position, (track, section) in enumerate(zip(tracks, sections), start=1):
         if not groups or groups[-1]["section"] != section:
-            groups.append({"section": section, "label": brief.sections[section].label, "start": _clock(elapsed),
-                           "first": position, "tracks": []})
+            part = brief.sections[section]
+            groups.append({"section": section, "label": part.label, "start": _clock(elapsed), "start_ms": elapsed,
+                           "energy": part.energy, "bars": pages.energy_bars(part.energy),
+                           "cut": len(groups) > 0 and part.transition_in == "cut",
+                           "first": position, "tracks": [], "ms": 0})
         groups[-1]["tracks"].append(track)
+        groups[-1]["ms"] += track.duration_ms
         elapsed += track.duration_ms
     return groups
 
@@ -266,41 +313,70 @@ def history(request: Request, user: sqlite3.Row = Depends(current_user)):
 def queue_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
     row = playlists.get(playlist_id, user["spotify_id"])
     if row is None:
-        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
+                        code="404 · Not found")
     try:
         with SpotifyClient.for_user(user) as sp:
             for uri in json.loads(row["track_uris_json"]):
                 sp.queue(uri)
     except SpotifyError as exc:
         if exc.status in (403, 404):
-            return _message(request, "Can't queue", "Queuing needs Spotify Premium and Spotify open on one of your devices.",
-                            user=user)
+            return _message(request, "Can't play it from here",
+                            "Playing from Moodify needs Spotify Premium and Spotify open on one of your devices."
+                            " You can still open the playlist in Spotify.",
+                            user=user, tone="low", spotify_url=row["spotify_url"],
+                            back=("Back to the playlist", f"/playlists/{playlist_id}"))
         raise
     return _message(request, "Queued", "The tracks are in your queue. Open Spotify to listen.",
-                    user=user, spotify_url=row["spotify_url"])
+                    user=user, spotify_url=row["spotify_url"], back=("Back to the playlist", f"/playlists/{playlist_id}"))
+
+
+ENERGY = ("low", "medium", "high", "mixed")
+INSTRUMENTAL = ("yes", "sometimes", "no")
+FAMILIAR = ("new", "mix", "known")
+
+
+def _onboarding_page(request: Request, user: sqlite3.Row, answers: dict, errors: dict, status_code: int = 200):
+    chips, other = pages.genre_choices(answers.get("genres") or "")
+    return templates.TemplateResponse(request, "onboarding.html", {
+        "user": user, "answers": answers, "errors": errors, "first": not user["onboarding_json"],
+        "genres": chips, "genres_other": other, "artists": pages.artist_fields(answers.get("artists") or ""),
+    }, status_code=status_code)
 
 
 @app.get("/onboarding")
 def onboarding_form(request: Request, user: sqlite3.Row = Depends(current_user)):
-    answers = json.loads(user["onboarding_json"] or "{}")
-    return templates.TemplateResponse(request, "onboarding.html", {"user": user, "answers": answers})
+    return _onboarding_page(request, user, json.loads(user["onboarding_json"] or "{}"), {})
 
 
 @app.post("/onboarding")
-def onboarding_submit(
-    user: sqlite3.Row = Depends(current_user),
-    genres: str = Form(..., min_length=1, max_length=200),
-    artists: str = Form(..., min_length=1, max_length=200),
-    energy: Literal["low", "medium", "high", "mixed"] = Form(...),
-    instrumental: Literal["yes", "no"] = Form("yes"),
-    languages: str = Form("", max_length=200),
-    avoid: str = Form("", max_length=200),
-    familiar: Literal["new", "mix", "known"] = Form(taste.DEFAULT_FAMILIAR),
-) -> RedirectResponse:
+async def onboarding_submit(request: Request, user: sqlite3.Row = Depends(current_user)):
+    form = await request.form()
+
+    def one(key: str, default: str = "") -> str:
+        return " ".join(str(form.get(key) or default).split())
+
     answers = {
-        "genres": genres.strip(), "artists": artists.strip(), "energy": energy,
-        "instrumental": instrumental, "languages": languages.strip(), "avoid": avoid.strip(), "familiar": familiar,
+        # Ticked chips, the "Other genres" box and older single-box answers all arrive as "genres"
+        "genres": ", ".join(pages.split_list(*form.getlist("genres"), one("genres_other"))),
+        "artists": ", ".join(pages.split_list(*form.getlist("artists"))),
+        "energy": one("energy"), "instrumental": one("instrumental", "yes"),
+        "languages": one("languages"), "avoid": one("avoid"), "familiar": one("familiar", taste.DEFAULT_FAMILIAR),
     }
+    errors = {}
+    if not answers["genres"]:
+        errors["genres"] = "Pick at least one genre, or type your own."
+    if not answers["artists"]:
+        errors["artists"] = "Add at least one artist."
+    if answers["energy"] not in ENERGY:
+        errors["energy"] = "Pick the energy you usually want."
+    if answers["instrumental"] not in INSTRUMENTAL or answers["familiar"] not in FAMILIAR:
+        errors["other"] = "One of the answers isn't one of the choices. Pick again."
+    for key in ("genres", "artists", "languages", "avoid"):
+        if len(answers[key]) > 200:
+            errors[key] = "Keep it under 200 characters."
+    if errors:
+        return _onboarding_page(request, user, answers, errors, status_code=422)
     users.set_onboarding(user["spotify_id"], answers)
     return RedirectResponse("/", status_code=303)
 
@@ -311,5 +387,6 @@ def disconnect(request: Request, user: sqlite3.Row = Depends(any_user)):
     users.delete(user["spotify_id"])
     request.session.clear()
     return _message(request, "Disconnected",
-                    "Your Moodify data is deleted. To revoke Spotify access as well,"
-                    " remove Moodify at https://www.spotify.com/account/apps/")
+                    "Moodify deleted everything it stored about you and logged you out. Playlists already in your"
+                    " Spotify are still there. To remove Moodify's access to Spotify as well, remove it at"
+                    " https://www.spotify.com/account/apps/", tone="low")
