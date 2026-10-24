@@ -621,25 +621,34 @@ Built differently from the list above:
 Goal: see what everyone has been up to (playlists, moods over time, blends), with a replay that makes it feel alive.
 
 Build
-- [ ] `/activity`, newest first, for you plus friends who show their taste:
+- [x] `/activity`, newest first, for you plus friends who show their taste:
   - "Sam made *Summer morning → workout → lock in* · 58 min · 3 parts" (the title, never the prompt)
   - blends you're in
   - "Amish made a playlist the way you'd hear it" (shown to that friend only)
   - your own likes and ratings once Phase 14 exists (yours only)
-- [ ] **Mood timeline**: one strip per person over the last 30 days; each playlist is a mark placed by date, sized by length and shaded by average energy (sequential, one hue); hover shows the title
-- [ ] **Replay the week**: plays the feed and timelines day by day over about 3 seconds, with pause and step buttons that work from the keyboard; respects `prefers-reduced-motion` (step only)
-- [ ] Built from existing tables (`playlists`, `playlist_tracks`, `blends`, `taste_access`); no new storage beyond Phase 18's hide flag
-- [ ] Never shown: prompts, support-note playlists, hidden playlists, reviews, ratings of others
+- [x] **Mood timeline**: one strip per person over the last 30 days; each playlist is a mark placed by date, sized by length and shaded by average energy (sequential, one hue); hover shows the title
+- [x] **Replay the week**: plays the feed and timelines day by day over about 3 seconds, with pause and step buttons that work from the keyboard; respects `prefers-reduced-motion` (step only)
+- [x] Built from existing tables (`playlists`, `playlist_tracks`, `blends`, `taste_access`); no new storage beyond Phase 18's hide flag
+- [x] Never shown: prompts, support-note playlists, hidden playlists, reviews, ratings of others
 
 Tests (`tests/test_p24_activity.py`)
-- [ ] the feed holds only consenting people's visible playlists, newest first
-- [ ] support-note and hidden playlists never appear; prompt text never appears in the HTML or JSON (only titles)
-- [ ] "the way you'd hear it" items appear to that friend only
-- [ ] timeline data: dates within 30 days, energy within 1–10
-- [ ] reduced-motion rule present; the page is 200 when logged in and redirects when logged out
-- [ ] screenshots as in Phase 23
+- [x] the feed holds only consenting people's visible playlists, newest first
+- [x] support-note and hidden playlists never appear; prompt text never appears in the HTML or JSON (only titles)
+- [x] "the way you'd hear it" items appear to that friend only
+- [x] timeline data: dates within 30 days, energy within 1–10
+- [x] reduced-motion rule present; the page is 200 when logged in and redirects when logged out
+- [x] screenshots as in Phase 23
 
 Gate: `pytest tests/test_p24_activity.py` green, and the replay looks good on a phone.
+
+Done 2026-10-24 apart from your look on a real phone. In headless Chrome at phone width (light and dark), "Replay the week" hid the feed back to six days ago and brought it back a day at a time over about 3 seconds, then reset its button. Under reduced motion it steps one day per press. Built as planned from existing tables; nothing new is stored. Who sees what:
+- **Support-note playlists** never appear, not even to their maker.
+- **Hidden playlists** appear only to their maker.
+- **Blends** appear only to the people in them, even when the maker doesn't show their taste.
+- **"The way you'd hear it" playlists** appear only to their maker and that friend.
+- **Likes and ratings** appear only to their owner.
+
+The feed is server-rendered HTML, so it works without JavaScript; `static/activity.js` draws the timeline from `/activity.json` and runs the replay. A timeline mark's energy is the average of its songs' energy, else the brief's. 12 tests.
 
 ---
 
@@ -652,6 +661,8 @@ Gate: `pytest tests/test_p24_activity.py` green, and the replay looks good on a 
 - [ ] Energy check from a second source, if the LLM's energy judgements turn out unreliable in Phase 13 listening tests
 - [ ] "Compare": the same prompt as you'd hear it and as a friend would, side by side (Phase 21 twice), if friends ask for it
 - [ ] Judged energy from Phase 22 feeding Phase 13's ordering, if the per-build energy guesses disagree with it
+- [ ] The pre-action clarification question from Phase 16 (optional there, not built): ask one question when a brief conflicts with an active lesson, auto-continuing after 20 s
+- [ ] "Play on this phone" from Phase 17 (optional there, not built): `GET /me/player/devices`, then `PUT /me/player/play` on the phone (Premium only)
 - [ ] Replace a playlist's songs in place for "Fix it" (check that Spotify's replace-items endpoint still works for Dev Mode first), if v1/v2 copies pile up
 
 ## Sources

@@ -11,8 +11,8 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import (blend, jobs, library, likes, links, listen_as, memory, playlist, playlists, prompts, reflect, search_cache,
-                 sharing, taste, tastemap, users)
+from src import (activity, blend, jobs, library, likes, links, listen_as, memory, playlist, playlists, prompts, reflect,
+                 search_cache, sharing, taste, tastemap, users)
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -528,6 +528,21 @@ def map_page(request: Request, user: sqlite3.Row = Depends(current_user)):
 @app.get("/map.json")
 def map_data(user: sqlite3.Row = Depends(current_user)):
     return JSONResponse(tastemap.data(user["spotify_id"]), headers={"Cache-Control": "no-store"})
+
+
+# --- activity (Phase 24) -------------------------------------------------------------------------------------
+
+@app.get("/activity")
+def activity_page(request: Request, user: sqlite3.Row = Depends(current_user)):
+    return templates.TemplateResponse(request, "activity.html", {
+        "user": user, "items": activity.feed(user["spotify_id"]),
+        "friend_count": len(sharing.friends(user["spotify_id"], "taste")),
+    })
+
+
+@app.get("/activity.json")
+def activity_data(user: sqlite3.Row = Depends(current_user)):
+    return JSONResponse(activity.timeline(user["spotify_id"]), headers={"Cache-Control": "no-store"})
 
 
 @app.post("/playlists/{playlist_id}/hide")

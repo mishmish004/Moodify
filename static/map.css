@@ -105,3 +105,13 @@
   .map .cell-text.s4, .map .cell-text.s5 { fill: #0b0b0b; }
 }
 .map .inbar { font-weight: 600; pointer-events: none; }
+
+/* Phase 24: the activity page shares these tokens. Marks fade in while "Replay the week" plays */
+.activity .mark { stroke: var(--surface); stroke-width: 2; transition: opacity 250ms; }
+.activity .mark:focus { outline: none; stroke: var(--text); }
+.activity .mark.later { opacity: 0; pointer-events: none; }
+.activity .replay button { min-height: 44px; margin: 0; }
+.activity .replay #replay-back, .activity .replay #replay-next { color: var(--text); background: none; border: 1px solid var(--line); }
+.activity .feed li { display: block; }
+.activity .feed a { display: inline; min-height: 0; padding: 0; text-decoration: underline; }
+.activity .feed small { display: block; }
