@@ -578,25 +578,41 @@ Done 2026-10-24. Live: 18 of 18 obvious orderings right on `gpt-6.1-sol` (Till I
 Goal: one page that shows at a glance what each friend listens to and where tastes overlap.
 
 Build (rules in "Charts: how they're drawn")
-- [ ] `/map` (you plus friends who show their taste), data from `GET /map.json`, drawn by `static/map.js` in SVG
-- [ ] **Profiles**: one row per dimension (energy, mood, texture, groove, vocals, era) on a shared axis, one dot per person with a thin spread bar; the selected person in the accent colour, the others grey; tap a name to switch
-- [ ] **Track map**: tracks on two chosen dimensions (default energy × mood), one small panel per person; point size by weight, common-ground tracks ringed. Nearest-point hover; the tooltip shows the track and artist with the Spotify icon and link
-- [ ] **Match**: the taste-match grid (at most 5 × 5) as a heatmap in one sequential hue, with values written in the cells, plus a "common ground" list of shared artists and tracks per pair
-- [ ] **Genres**: one horizontal stacked bar per person, top 6 genres plus Other
-- [ ] A table view for every chart; legend plus direct labels; dark mode with its own validated colours
-- [ ] Animation: on load, dots glide from the centre to their places (about 400 ms, eased); changing axes or the selected person morphs points to their new positions. Under `prefers-reduced-motion`, everything appears in place at once
-- [ ] Opening the map logs one `view` row per person shown
+- [x] `/map` (you plus friends who show their taste), data from `GET /map.json`, drawn by `static/map.js` in SVG
+- [x] **Profiles**: one row per dimension (energy, mood, texture, groove, vocals, era) on a shared axis, one dot per person with a thin spread bar; the selected person in the accent colour, the others grey; tap a name to switch
+- [x] **Track map**: tracks on two chosen dimensions (default energy × mood), one small panel per person; point size by weight, common-ground tracks ringed. Nearest-point hover; the tooltip shows the track and artist with the Spotify icon and link
+- [x] **Match**: the taste-match grid (at most 5 × 5) as a heatmap in one sequential hue, with values written in the cells, plus a "common ground" list of shared artists and tracks per pair
+- [x] **Genres**: one horizontal stacked bar per person, top 6 genres plus Other
+- [x] A table view for every chart; legend plus direct labels; dark mode with its own validated colours
+- [x] Animation: on load, dots glide from the centre to their places (about 400 ms, eased); changing axes or the selected person morphs points to their new positions. Under `prefers-reduced-motion`, everything appears in place at once
+- [x] Opening the map logs one `view` row per person shown
 
 Tests (`tests/test_p23_map.py`)
-- [ ] `/map.json` holds only you and people with `show_taste` on; switching it off removes them on the next request
-- [ ] no prompts, reviews, ratings or support-note data anywhere in the JSON (key and value scan)
-- [ ] every track in the JSON carries an `open.spotify.com` link; values are inside their ranges
-- [ ] the page is 200 when logged in and redirects to `/login` when logged out; its static files exist
-- [ ] `map.css` has a `prefers-reduced-motion` rule that turns off transitions
-- [ ] the palette in `map.css` passes the dataviz validator for light and dark (the test runs `node scripts/validate_palette.js` when Node is installed, and is skipped with a message otherwise)
-- [ ] screenshots at phone and desktop width, light and dark, checked by eye for collisions and overflow (headless Chrome, as in Phase 7)
+- [x] `/map.json` holds only you and people with `show_taste` on; switching it off removes them on the next request
+- [x] no prompts, reviews, ratings or support-note data anywhere in the JSON (key and value scan)
+- [x] every track in the JSON carries an `open.spotify.com` link; values are inside their ranges
+- [x] the page is 200 when logged in and redirects to `/login` when logged out; its static files exist
+- [x] `map.css` has a `prefers-reduced-motion` rule that turns off transitions
+- [x] the palette in `map.css` passes the dataviz validator for light and dark (the test runs `node scripts/validate_palette.js` when Node is installed, and is skipped with a message otherwise)
+- [x] screenshots at phone and desktop width, light and dark, checked by eye for collisions and overflow (headless Chrome, as in Phase 7)
 
 Gate: `pytest tests/test_p23_map.py` green, the validator passes in both modes, and the screenshots look right.
+
+Done 2026-10-24. The validator passes for the six genre colours on this site's surfaces (#ffffff, #121212), both modes. Light mode warns on contrast for slots 3–5, so every chart has a legend, labels where they fit and a table view. Screenshots in headless Chrome, at phone width (light and dark) and desktop: no overflow and no label collisions. Your real library (334 songs, judged in 7 calls on 2026-10-24) shows its 200 heaviest songs spread across energy and mood, with genres led by trap 18% and hip hop 14%.
+
+Fixed on the way:
+- Spread bars ran past the axis ends.
+- A weak jitter hash lined similar track ids up diagonally.
+- "↑" rendered as a colour emoji in dark mode.
+- The stylesheet's text colour overrode the labels inside genre segments.
+
+Built differently from the list above:
+- **Colour.** Track-map panels use one hue for everyone (identity is the panel title), which keeps every plot within the all-pairs limit. Genre colours follow the genre across people: the page-wide top 6 genres, the rest Other.
+- **Track map.** It draws each person's 200 heaviest songs. Scores are whole numbers, so dots are spread a little, the same way every time. A tap pins the tooltip with an "Open on Spotify" link.
+- **Heatmap.** Quantised into 5 steps of the sequential blue, reversed in dark mode, with near-black or white numbers by step.
+- **Library.** It no longer takes songs from hidden or support-note Moodify playlists, since friends now see library data (map, Blends, hear it like a friend).
+
+`scripts/validate_palette.js` is the dataviz skill's validator, copied in for the test. 12 tests (+1 in Phase 19).
 
 ---
 

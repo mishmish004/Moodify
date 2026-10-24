@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Moodify · taste map{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/map.css">{% endblock %}
+{% block content %}
+<h1>Taste map</h1>
+<p>How your music sounds{% if friend_count %}, next to the {{ friend_count }} friend{{ "" if friend_count == 1 else "s" }} who show{{ "s" if friend_count == 1 else "" }} their taste{% endif %}. Every song in each library is described by an AI model: energy, mood, how acoustic or electronic, how danceable, how vocal, and when it came out.</p>
+<div id="map" class="map" data-src="/map.json">
+  <p class="loading muted">Loading the map…</p>
+  <noscript><p>The map is drawn by JavaScript, which is off in this browser.</p></noscript>
+  <div class="charts" hidden>
+    <section aria-labelledby="h-profiles">
+      <h2 id="h-profiles">Profiles</h2>
+      <p class="note">Where each person's music sits on each scale, on average. Tap a name to pick who's highlighted.</p>
+      <div class="controls people" role="group" aria-label="Highlight"></div>
+      <div id="profiles-legend" class="legend"></div>
+      <div id="profiles"></div>
+      <div id="profiles-table"></div>
+    </section>
+    <section aria-labelledby="h-tracks">
+      <h2 id="h-tracks">Songs</h2>
+      <p class="note">Each dot is a song, bigger the more it's played, liked or kept. Tap one to see it and open it on Spotify.</p>
+      <div class="controls">
+        <label>Across <select id="axis-x"></select></label>
+        <label>Up <select id="axis-y"></select></label>
+      </div>
+      <div class="legend"><span><i class="key dot" style="background: var(--accent)"></i>a song</span><span><i class="key ring"></i>common ground: a friend has it too</span></div>
+      <div id="panels" class="panels"></div>
+      <div id="panels-table"></div>
+    </section>
+    <section aria-labelledby="h-match">
+      <h2 id="h-match">Taste match</h2>
+      <p class="note">How alike two people's music is, from 0 to 100: the scales above, and the genres below.</p>
+      <div id="match"></div>
+    </section>
+    <section aria-labelledby="h-genres">
+      <h2 id="h-genres">Genres</h2>
+      <p class="note">Each person's share of the most common genres here; the rest is Other.</p>
+      <div id="genres"></div>
+    </section>
+  </div>
+  <div id="map-tip" class="map-tip" role="tooltip" hidden></div>
+</div>
+<p class="muted"><small>Only you and friends who switched on "Show my taste to friends" are on the map. They can see that you looked. Song details from</small> <img class="spotify-logo" src="/static/spotify-logo.svg" alt="Spotify" width="88" height="24"></p>
+{% endblock %}
+{% block scripts %}<script src="/static/map.js"></script>{% endblock %}

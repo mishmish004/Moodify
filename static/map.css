@@ -1,0 +1,107 @@
+/* Phase 23: the taste map. Colours follow the dataviz skill (phase-plan.md, "Charts: how they're drawn"):
+   - genres: the reference palette's categorical slots 1-6, in fixed order, per mode. Validated with
+     scripts/validate_palette.js against this site's surfaces (#ffffff light, #121212 dark): both pass; light has
+     a contrast warning on slots 3-5, so every chart has a legend, labels where they fit and a table view.
+     tests/test_p23_map.py runs the validator on the values between the "palette" markers.
+   - people: the selected person in the accent (slot 1), everyone else grey; never more than that on one plot.
+   - taste match: one sequential hue (blue), light to dark. */
+
+.map {
+  /* palette:light */
+  --genre-1: #2a78d6; --genre-2: #eb6834; --genre-3: #1baf7a; --genre-4: #eda100; --genre-5: #e87ba4; --genre-6: #008300;
+  /* /palette */
+  --genre-other: #898781;
+  --accent: #2a78d6;
+  --others: #b5b4ae;
+  --surface: #ffffff;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ink-2: #52514e;
+  --seq-1: #cde2fb; --seq-2: #86b6ef; --seq-3: #3987e5; --seq-4: #1c5cab; --seq-5: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  .map {
+    /* palette:dark */
+    --genre-1: #3987e5; --genre-2: #d95926; --genre-3: #199e70; --genre-4: #c98500; --genre-5: #d55181; --genre-6: #008300;
+    /* /palette */
+    --genre-other: #898781;
+    --accent: #3987e5;
+    --others: #5f5e5a;
+    --surface: #121212;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ink-2: #c3c2b7;
+    --seq-1: #184f95; --seq-2: #256abf; --seq-3: #3987e5; --seq-4: #86b6ef; --seq-5: #cde2fb;
+  }
+}
+
+.map section { margin-top: 2.5rem; }
+.map h2 { margin-bottom: .25rem; }
+.map svg { display: block; width: 100%; overflow: visible; }
+.map svg text { fill: var(--text); font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; }
+.map svg .muted { fill: var(--muted); }
+.map .axis { stroke: var(--axis); stroke-width: 1; }
+.map .grid { stroke: var(--grid); stroke-width: 1; }
+.map .controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin: .75rem 0; }
+.map .controls label { margin: 0; font-weight: 400; font-size: .9rem; }
+.map .controls select { width: auto; min-height: 44px; }
+.map .people button {
+  min-height: 44px; margin: 0; padding: .4rem 1rem; color: var(--text); background: none;
+  border: 1px solid var(--line); border-radius: 2rem; font-weight: 600;
+}
+.map .people button[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+.map .legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: .5rem 0; font-size: .9rem; color: var(--muted); }
+.map .key { display: inline-block; width: 10px; height: 10px; margin-right: .35rem; border-radius: 2px; vertical-align: baseline; }
+.map .key.dot { border-radius: 50%; }
+.map .key.ring { background: none; border: 2px solid var(--text); border-radius: 50%; }
+
+/* Marks. Movement explains change (dots glide to their place); it never carries data on its own */
+.map .person-dot, .map .point { transition: transform 400ms cubic-bezier(.2, .7, .2, 1), fill 200ms; }
+.map .person-dot { stroke: var(--surface); stroke-width: 2; }
+.map .spread { stroke-width: 2; stroke-linecap: round; transition: transform 400ms cubic-bezier(.2, .7, .2, 1); }
+.map .point { fill: var(--accent); fill-opacity: .75; stroke: var(--surface); stroke-width: 2; }
+.map .point.common { stroke: var(--text); stroke-width: 1.5; }
+.map .point.hot { fill-opacity: 1; stroke: var(--text); stroke-width: 2; }
+.map .cell { stroke: var(--surface); stroke-width: 2; }
+.map .cell:focus { outline: none; stroke: var(--text); }
+.map .segment { stroke: none; }
+.map .hit { fill: transparent; cursor: pointer; }
+.map .hit:focus { outline: none; }
+.map .hit:focus + .person-dot, .map .hit:hover + .person-dot { stroke: var(--text); }
+
+.map .panels { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+@media (min-width: 40rem) { .map .panels { grid-template-columns: 1fr 1fr; } }
+.map .panel h3 { font-size: 1rem; margin: 0 0 .25rem; }
+.map .note { color: var(--muted); font-size: .9rem; }
+.map .pairs { list-style: none; padding: 0; }
+.map .pairs li { padding: .5rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.map table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.map th, .map td { text-align: left; padding: .35rem .5rem .35rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.map .table-wrap { overflow-x: auto; }
+
+/* The tooltip: values lead, labels follow; text set with textContent only (map.js) */
+.map-tip {
+  position: absolute; z-index: 10; max-width: 16rem; padding: .5rem .75rem; pointer-events: none;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: .5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .12); font-size: .9rem; line-height: 1.35;
+}
+.map-tip.pinned { pointer-events: auto; }
+.map-tip strong { display: block; }
+.map-tip a { display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; margin-top: .25rem; font-weight: 600; }
+.map-tip[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .map *, .map-tip { transition: none !important; animation: none !important; }
+}
+
+.map { position: relative; }
+/* Numbers inside heatmap cells: near-black on the light steps, white on the dark ones, per mode */
+.map .cell-text { font-weight: 600; }
+.map .cell-text.s1, .map .cell-text.s2 { fill: #0b0b0b; }
+.map .cell-text.s3, .map .cell-text.s4, .map .cell-text.s5 { fill: #ffffff; }
+.map .cell-text.s0 { fill: var(--muted); }
+@media (prefers-color-scheme: dark) {
+  .map .cell-text.s1, .map .cell-text.s2, .map .cell-text.s3 { fill: #ffffff; }
+  .map .cell-text.s4, .map .cell-text.s5 { fill: #0b0b0b; }
+}
+.map .inbar { font-weight: 600; pointer-events: none; }

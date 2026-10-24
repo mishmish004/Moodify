@@ -218,3 +218,14 @@ def test_live_your_library():
     print("top artists:", library.top_artists(user["spotify_id"], 8))
     print(f"pool: {len(profile.pool)} songs, same as the library's: {library.pool(user['spotify_id']) == profile.pool}")
     assert 0 < sum(counts.values()) <= library.MAX_ROWS
+
+
+def test_hidden_and_support_note_playlists_stay_out_of_the_library(user):
+    from .conftest import default_brief
+    from src import sharing
+    playlists.insert("friend1", "ok", "u", [_t("Fine")], json.dumps(default_brief("ok")))
+    playlists.insert("friend1", "hard day", "u", [_t("Private")], json.dumps(default_brief("x", support_note=True)))
+    hidden = playlists.insert("friend1", "secret", "u", [_t("Hidden")], json.dumps(default_brief("y")))
+    sharing.set_hidden(hidden, "friend1", True)
+    library.replace("friend1", {})
+    assert [r["uri"] for r in _rows()] == ["spotify:track:Fine"]

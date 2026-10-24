@@ -43,9 +43,11 @@ def replace(spotify_id: str, sources: dict[str, Iterable[Track]]) -> dict[str, i
     their Moodify playlists. Keeps the MAX_ROWS heaviest rows. Returns how many rows each source kept."""
     rows, seen = [], set()
     with get_conn() as conn:
+        # Friends see the library (Phases 20-23): hidden and support-note playlists stay out of it
         moodify = [_track(r) for r in conn.execute(
             "SELECT t.uri, t.name, t.artists_json, t.duration_ms, 0 AS explicit FROM playlist_tracks t"
-            " JOIN playlists p ON p.id = t.playlist_id WHERE p.spotify_id = ? ORDER BY p.id DESC, t.position",
+            " JOIN playlists p ON p.id = t.playlist_id WHERE p.spotify_id = ? AND p.hidden = 0"
+            " AND coalesce(json_extract(p.brief_json, '$.support_note'), 0) = 0 ORDER BY p.id DESC, t.position",
             (spotify_id,))]
         everything = {**{s: list(tracks) for s, tracks in sources.items()}, "moodify": moodify}
         for source in SOURCES:
