@@ -134,3 +134,7 @@ footer.page { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--l
 .lessons li { padding: .75rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 button.small { min-height: 2.75rem; margin-top: .5rem; padding: .3rem 1rem; font-size: .9rem; }
 .forget li form button { margin: 0; }
+
+/* Phase 17: the store link under OPEN SPOTIFY on phones */
+.get-spotify { margin: .5rem 0 0; }
+.get-spotify a { font-weight: 700; letter-spacing: .03em; }

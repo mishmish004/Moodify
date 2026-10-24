@@ -8,9 +8,10 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, likes, memory, playlist, playlists, prompts, reflect, search_cache, taste, users
+from src import jobs, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -21,6 +22,26 @@ from src.spotify.client import SpotifyClient
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
+
+
+def _user_agent(context) -> str:
+    request = context.get("request")
+    return request.headers.get("user-agent", "") if request is not None else ""
+
+
+@pass_context
+def _app_link(context, url: str) -> str:
+    """Phase 17: a Spotify link for the device asking, so a tap on a phone opens the Spotify app."""
+    return links.for_url(url, _user_agent(context))
+
+
+@pass_context
+def _get_spotify(context) -> str:
+    return links.GET_SPOTIFY[links.device(_user_agent(context))]
+
+
+templates.env.filters["app_link"] = _app_link
+templates.env.globals["get_spotify_url"] = _get_spotify
 
 
 @asynccontextmanager
@@ -209,7 +230,8 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
     if job is None:
         return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user)
     if job["status"] == "done":
-        return RedirectResponse(f"/playlists/{job['playlist_id']}", status_code=303)
+        # ?ready: the first view after a build, where a phone may open the Spotify app by itself (Phase 17)
+        return RedirectResponse(f"/playlists/{job['playlist_id']}?ready=1", status_code=303)
     if job["status"] == "failed":
         if job["error"] == jobs.REAUTH:
             request.session.clear()
@@ -220,10 +242,13 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
 
 
 @app.get("/playlists/{playlist_id}")
-def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
+def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user), ready: int = 0):
     row = playlists.get(playlist_id, user["spotify_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    found = links.parse(row["spotify_url"])
+    auto_open = (links.auto_open_link(*found, request.headers.get("user-agent"))
+                 if ready and found and user["open_spotify"] else None)
     brief = Brief.model_validate_json(row["brief_json"]) if row["brief_json"] else None
     tracks = playlists.tracks(playlist_id)
     return templates.TemplateResponse(request, "playlist.html", {
@@ -239,6 +264,7 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "parent": playlists.get(row["parent_id"], user["spotify_id"]) if row["parent_id"] else None,
         "version": playlists.version(playlist_id) if row["parent_id"] else 1,
         "fixes": playlists.fixes(playlist_id, user["spotify_id"]),
+        "auto_open": auto_open, "phone": links.is_phone(request.headers.get("user-agent")),
     })
 
 
@@ -407,9 +433,10 @@ def settings_page(request: Request, user: sqlite3.Row = Depends(current_user)):
 
 @app.post("/settings")
 def settings_submit(request: Request, user: sqlite3.Row = Depends(current_user),
-                    likes_to_spotify: Optional[str] = Form(None)) -> RedirectResponse:
+                    likes_to_spotify: Optional[str] = Form(None), open_spotify: Optional[str] = Form(None)) -> RedirectResponse:
     # An unticked checkbox sends nothing at all
     users.set_likes_to_spotify(user["spotify_id"], likes_to_spotify is not None)
+    users.set_open_spotify(user["spotify_id"], open_spotify is not None)
     request.session["notice"] = "Saved."
     return RedirectResponse("/settings", status_code=303)
 

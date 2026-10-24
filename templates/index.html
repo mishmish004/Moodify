@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import logo, playlist_list %}
+{% from "_spotify.html" import logo, playlist_list with context %}
 {% block content %}
 <h1>How are you feeling?</h1>
 <form method="post" action="/playlist" data-busy="Making your playlist…">

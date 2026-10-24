@@ -40,6 +40,11 @@ def set_likes_to_spotify(spotify_id: str, on: bool) -> None:
         conn.execute("UPDATE users SET likes_to_spotify = ? WHERE spotify_id = ?", (int(on), spotify_id))
 
 
+def set_open_spotify(spotify_id: str, on: bool) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET open_spotify = ? WHERE spotify_id = ?", (int(on), spotify_id))
+
+
 def set_refresh_token(spotify_id: str, refresh_token: str) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE users SET refresh_token = ? WHERE spotify_id = ?", (refresh_token, spotify_id))

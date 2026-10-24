@@ -9,15 +9,21 @@
 <img class="spotify-icon" src="/static/spotify-icon.svg" alt="on Spotify" width="23" height="22">
 {%- endmacro %}
 
+{# Links go through app_link (src/links.py): on a phone a tap opens the Spotify app. Import these macros
+   "with context" so the filter can see the request's user agent. #}
 {% macro open_spotify(url) -%}
-<a class="open-spotify" href="{{ url }}">{{ logo() }}<span>OPEN SPOTIFY</span></a>
+<a class="open-spotify" href="{{ url | app_link }}">{{ logo() }}<span>OPEN SPOTIFY</span></a>
+{%- endmacro %}
+
+{% macro get_spotify() -%}
+<p class="get-spotify"><small>No Spotify app?</small> <a href="{{ get_spotify_url() }}">GET SPOTIFY FREE</a></p>
 {%- endmacro %}
 
 {# Rows from playlists.recent(): with track_count and like_count #}
 {% macro playlist_list(rows) -%}
 <ul class="list">
   {% for p in rows %}
-  <li><a href="{{ p.spotify_url }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</small></span>{{ icon() }}</a></li>
+  <li><a href="{{ p.spotify_url | app_link }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</small></span>{{ icon() }}</a></li>
   {% endfor %}
 </ul>
 {%- endmacro %}

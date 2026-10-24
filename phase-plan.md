@@ -341,23 +341,26 @@ Your check: rate and review a real playlist, then make a similar one and see whe
 Goal: on a phone with Spotify installed and logged in, the finished playlist opens in the app without hunting for a link.
 
 Build
-- [ ] `src/links.py`: `open_link(kind, id, user_agent)`:
+- [x] `src/links.py`: `open_link(kind, id, user_agent)`:
   - Android: `intent://{kind}/{id}#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url={web url};end` (opens the app directly; web page if not installed)
   - iPhone/iPad: `https://open.spotify.com/{kind}/{id}`, which Spotify documents as launching the app when installed. It works on a tap; for automatic opening, `spotify:{kind}:{id}` raises the system "Open in Spotify?" prompt
   - desktop: the web link (it hands over to the desktop app if installed)
-- [ ] Job page (Phase 9): when the build finishes on a phone, the page tries to open the app automatically, and a big "OPEN SPOTIFY" button stays as the fallback. Browsers may block an app switch without a tap (Chrome on Android needs a user gesture for `intent://`), so the button is the guaranteed path. Setting: "Open Spotify when my playlist is ready" (default on for phones)
-- [ ] Every track and playlist link on phones uses `open_link`, so a tap goes into the app
-- [ ] App not installed: "GET SPOTIFY FREE" link to the store, per Spotify's guidelines
-- [ ] Optional: "Play on this phone": `GET /me/player/devices`, then `PUT /me/player/play` with `context_uri` on the phone (Premium only; explain otherwise)
-- [ ] Needs the HTTPS deploy from plan.md Phase 8. A phone can't reach 127.0.0.1, and Spotify allows `http` redirect URIs only on loopback
+- [x] Job page (Phase 9): when the build finishes on a phone, the page tries to open the app automatically, and a big "OPEN SPOTIFY" button stays as the fallback. Browsers may block an app switch without a tap (Chrome on Android needs a user gesture for `intent://`), so the button is the guaranteed path. Setting: "Open Spotify when my playlist is ready" (default on for phones)
+- [x] Every track and playlist link on phones uses `open_link`, so a tap goes into the app
+- [x] App not installed: "GET SPOTIFY FREE" link to the store, per Spotify's guidelines
+- [ ] (Not built: optional) "Play on this phone": `GET /me/player/devices`, then `PUT /me/player/play` with `context_uri` on the phone (Premium only; explain otherwise)
+- [ ] (yours) Needs the HTTPS deploy from plan.md Phase 8. A phone can't reach 127.0.0.1, and Spotify allows `http` redirect URIs only on loopback
 
 Tests (`tests/test_p17_mobile.py`)
-- [ ] `open_link` for iPhone Safari, Android Chrome, Samsung Internet and desktop user agents → expected form, ids URL-safe, fallback URL present on Android
-- [ ] job-done page on a phone UA contains the auto-open script and the button; on desktop, only the button
-- [ ] setting off → no auto-open script
-- [ ] manual, on the deployed URL: iPhone with Spotify → app opens on the playlist (one system prompt at most); Android with Spotify → app opens with no prompt; a phone without Spotify → store link
+- [x] `open_link` for iPhone Safari, Android Chrome, Samsung Internet and desktop user agents → expected form, ids URL-safe, fallback URL present on Android
+- [x] job-done page on a phone UA contains the auto-open script and the button; on desktop, only the button
+- [x] setting off → no auto-open script
+- [ ] (yours) manual, on the deployed URL: iPhone with Spotify → app opens on the playlist (one system prompt at most); Android with Spotify → app opens with no prompt; a phone without Spotify → store link
 
 Gate: `pytest tests/test_p17_mobile.py` green, and both manual phone checks pass.
+
+Done 2026-10-24 apart from the phone checks, which need the HTTPS deploy running (the moodify.mish4mish.com tunnel was down on 2026-10-24). How it works: when a build finishes, the job page sends the browser to `/playlists/{id}?ready=1`. Only that first view, on a phone with the setting on, carries the script. The script opens the app once per tab (sessionStorage), using `spotify:playlist:…` on iPhone and the intent link on Android. Reloads and visits from History never auto-open. Every Spotify link (OPEN SPOTIFY, track rows, playlist lists) goes through `links.for_url`, so on Android a tap uses the intent link. On iPhone it stays the open.spotify.com link, which universal links hand to the app on a tap. "GET SPOTIFY FREE" shows on phones only and links to the Play Store or App Store. Ids that aren't plain base62 only get a quoted web link. The setting is on `/settings`, default on (migration 9, `users.open_spotify`). 30 tests. Checked in headless Chrome with an iPhone user agent, light and dark.
+Your checks: on the deployed URL, make a playlist on an iPhone with Spotify (the app should open after at most one prompt), on an Android phone with Spotify (it opens, or the button does it in one tap), and on a phone without Spotify (the store link).
 
 ---
 

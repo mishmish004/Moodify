@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- Phase 16: the memory text every build's prompt gets (src/memory.py), NULL until rendered again
     -- after feedback changes; memory_version counts the renders
     memory_block      TEXT,
-    memory_version    INTEGER NOT NULL DEFAULT 0
+    memory_version    INTEGER NOT NULL DEFAULT 0,
+    -- Phase 17: on a phone, open the Spotify app when a playlist is ready (the user's setting)
+    open_spotify      INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS playlists (

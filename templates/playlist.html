@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import icon, open_spotify %}
+{% from "_spotify.html" import icon, open_spotify, get_spotify with context %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
 
@@ -7,7 +7,7 @@
    number is what the page shows; the URL uses the stored position, number - 1 #}
 {% macro track_row(t, number) -%}
 {%- set position = number - 1 %}{% set on = t.uri in liked -%}
-<li id="t{{ position }}"><a href="{{ t.url }}"><span class="n">{{ number }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a>
+<li id="t{{ position }}"><a href="{{ t.url | app_link }}"><span class="n">{{ number }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}</small></span>{{ icon() }}</a>
   <form class="like" method="post" action="/playlists/{{ playlist.id }}/tracks/{{ position }}/{{ "unlike" if on else "like" }}" data-feedback="like">
     <button type="submit" aria-pressed="{{ "true" if on else "false" }}" aria-label="Like {{ t.name }}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.8c0 5.5-7.5 10.1-7.5 10.1z"/></svg></button>
   </form></li>
@@ -30,6 +30,7 @@
 <p class="muted">This playlist was made before Moodify kept track lists. Open it in Spotify to see the songs.</p>
 {% endif %}
 {{ open_spotify(playlist.spotify_url) }}
+{% if phone %}{{ get_spotify() }}{% endif %}
 <form method="post" action="/queue/{{ playlist.id }}" data-busy="Adding to your queue…">
   <button type="submit">Play now</button>
   <small class="hint">Needs Premium and Spotify open on one of your devices.</small>
@@ -117,4 +118,15 @@
 <p><a class="button" href="/">Make another</a></p>
 {% endblock %}
 
-{% block scripts %}<script src="/static/feedback.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/feedback.js"></script>
+{% if auto_open %}
+<script>
+  // Phase 17: just built, on a phone: open the Spotify app on this playlist, once. A browser may block it
+  // (Chrome on Android wants a tap), which is why OPEN SPOTIFY stays on the page.
+  (() => {
+    const key = "moodify-opened-{{ playlist.id }}";
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (error) {}
+    location.href = {{ auto_open | tojson }};
+  })();
+</script>
+{% endif %}{% endblock %}

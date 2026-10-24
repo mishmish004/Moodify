@@ -120,6 +120,10 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN memory_block TEXT;
     ALTER TABLE users ADD COLUMN memory_version INTEGER NOT NULL DEFAULT 0;
     """,
+    # 9 (Phase 17): open the Spotify app on a phone when a playlist is ready
+    """
+    ALTER TABLE users ADD COLUMN open_spotify INTEGER NOT NULL DEFAULT 1;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

@@ -5,6 +5,8 @@
 <form method="post" action="/settings">
   <label class="check"><input type="checkbox" name="likes_to_spotify" value="on" {% if user.likes_to_spotify %}checked{% endif %}> Also add likes to my Spotify Liked Songs</label>
   <small class="hint">When you ♥ a song in Moodify it's saved to your Liked Songs too. Unliking it takes it out again, but only if Moodify put it there.</small>
+  <label class="check"><input type="checkbox" name="open_spotify" value="on" {% if user.open_spotify %}checked{% endif %}> Open Spotify when my playlist is ready</label>
+  <small class="hint">On a phone, the Spotify app opens on your new playlist by itself. Some browsers ask first or need a tap; the OPEN SPOTIFY button always works.</small>
   <button type="submit">Save</button>
 </form>
 {% endblock %}
