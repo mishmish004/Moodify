@@ -122,3 +122,8 @@ footer.page { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--l
   color: var(--bg); background: var(--text); border-radius: .5rem;
 }
 .toast:empty { display: none; }
+
+/* Phase 15: the review box and what Moodify learned from it */
+.review { margin-top: 2rem; }
+.learned { margin-top: 1rem; padding: .25rem 1rem 1rem; border: 1px solid var(--line); border-radius: .5rem; }
+.learned ul { padding-left: 1.25rem; }

@@ -269,29 +269,32 @@ Done 2026-10-24. Migration 6 adds `track_likes`, `playlists.rating`/`rated_at` a
 Goal: after listening, the user writes what they thought, as freely as they wrote the prompt. The review is kept in SQL, fixes this playlist on request, and makes later playlists better. This phase covers steps 3–5 of the loop in "How the agent is structured".
 
 Build
-- [ ] Schema: `playlists.review TEXT` (the current review, ≤2,000 chars), `playlists.reviewed_at`, `playlists.review_verdict` (`worked | partly | missed`, filled by reflection). `review_history(playlist_id, text, created_at)` keeps earlier versions when a review is edited
-- [ ] `lessons(id, spotify_id, source_playlist_id, title, description, content, kind, tags_json, evidence, status, superseded_by, created_at, last_used_at, use_count)`. `kind` is `preference | pitfall | strategy`; `status` is `active | superseded | expired`. The shape follows ReasoningBank's memory items (title, description, content)
-- [ ] Playlist page: a "How was it?" box under the rating: a textarea with examples ("the workout part dragged", "loved the first 10 minutes", "too much Drake", "the switch to focus was perfect"). Reviews get the same tolerance as prompts (Phase 11 rules): slang, lists, emotion, one word or a long paragraph, all fine
-- [ ] Saving a review answers immediately and queues reflection in the background. The ADK and Memory Bank designs generate memory asynchronously too, so the user never waits
-- [ ] **Reflect** (`src/reflect.py`, one LLM call): inputs are the review, rating, likes, the brief, the track list by section with start times, and the job's `job_events` (what was asked vs what matched). Output: `review_verdict` plus 0–3 lessons. Each lesson must quote its `evidence` from the review and name the section or tracks it's about; lessons without evidence are dropped (grounded reflection, as in Meta's Early Experience). The output separates lessons about this playlist only ("summer-morning section too slow") from lasting preferences ("doesn't like long intros in workout music")
-- [ ] **Consolidate** (`src/memory.py`, one LLM call, only when new lessons exist): the new lessons plus existing active lessons with overlapping tags. The answer is one operation per lesson: `ADD`, `UPDATE(id)`, `SUPERSEDE(id)` or `NOOP`. Newer feedback wins when it contradicts older feedback, since preferences drift (PAHF); superseded lessons stay in the table with `superseded_by` as an audit trail. At most 40 active lessons per user: past that, consolidation must merge. Every query filters by `spotify_id`
-- [ ] **Fix it with this review**: a button next to a saved review. Builds a new version of the playlist with the review as a correction on top of the original brief. `playlists.parent_id` links v2 to v1; v1 stays in Spotify
-- [ ] Until Phase 16 adds selective recall, the next build gets every active lesson (≤1,500 chars) in the per-user prompt block
-- [ ] Login page and "What Moodify remembers" (Phase 16): reviews and lessons are sent to OpenAI and kept until you delete them or disconnect
+- [x] Schema: `playlists.review TEXT` (the current review, ≤2,000 chars), `playlists.reviewed_at`, `playlists.review_verdict` (`worked | partly | missed`, filled by reflection). `review_history(playlist_id, text, created_at)` keeps earlier versions when a review is edited
+- [x] `lessons(id, spotify_id, source_playlist_id, title, description, content, kind, tags_json, evidence, status, superseded_by, created_at, last_used_at, use_count)`. `kind` is `preference | pitfall | strategy`; `status` is `active | superseded | expired`. The shape follows ReasoningBank's memory items (title, description, content)
+- [x] Playlist page: a "How was it?" box under the rating: a textarea with examples ("the workout part dragged", "loved the first 10 minutes", "too much Drake", "the switch to focus was perfect"). Reviews get the same tolerance as prompts (Phase 11 rules): slang, lists, emotion, one word or a long paragraph, all fine
+- [x] Saving a review answers immediately and queues reflection in the background. The ADK and Memory Bank designs generate memory asynchronously too, so the user never waits
+- [x] **Reflect** (`src/reflect.py`, one LLM call): inputs are the review, rating, likes, the brief, the track list by section with start times, and the job's `job_events` (what was asked vs what matched). Output: `review_verdict` plus 0–3 lessons. Each lesson must quote its `evidence` from the review and name the section or tracks it's about; lessons without evidence are dropped (grounded reflection, as in Meta's Early Experience). The output separates lessons about this playlist only ("summer-morning section too slow") from lasting preferences ("doesn't like long intros in workout music")
+- [x] **Consolidate** (`src/memory.py`, one LLM call, only when new lessons exist): the new lessons plus existing active lessons with overlapping tags. The answer is one operation per lesson: `ADD`, `UPDATE(id)`, `SUPERSEDE(id)` or `NOOP`. Newer feedback wins when it contradicts older feedback, since preferences drift (PAHF); superseded lessons stay in the table with `superseded_by` as an audit trail. At most 40 active lessons per user: past that, consolidation must merge. Every query filters by `spotify_id`
+- [x] **Fix it with this review**: a button next to a saved review. Builds a new version of the playlist with the review as a correction on top of the original brief. `playlists.parent_id` links v2 to v1; v1 stays in Spotify
+- [x] Until Phase 16 adds selective recall, the next build gets every active lesson (≤1,500 chars) in the per-user prompt block
+- [x] Login page and "What Moodify remembers" (Phase 16): reviews and lessons are sent to OpenAI and kept until you delete them or disconnect
 
 Tests (`tests/test_p15_reviews.py`)
-- [ ] review saved → `playlists.review` and `reviewed_at` set, response under 1 s with the mocked LLM delayed 5 s; editing keeps the old text in `review_history`
-- [ ] review over 2,000 chars → 422; an empty review clears it; another user's playlist → 404
-- [ ] reflection with fixture review "the workout part was way too slow, rest was great" → verdict `partly`, a lesson tagged `workout` whose evidence is quoted from the review
-- [ ] a lesson whose `evidence` isn't in the review text is dropped
-- [ ] consolidation: "loves long intros" then later "skip long intros, they bore me" → the old lesson `superseded`, the new one `active`, `superseded_by` set
-- [ ] consolidation with 41 candidate lessons → at most 40 active afterwards
-- [ ] "Fix it with this review" → new playlist with `parent_id`; the review text reaches the brief call as a correction
-- [ ] the next build's per-user prompt block contains the active lessons, not the superseded ones
-- [ ] Disconnect deletes reviews, history and lessons (cascade)
-- [ ] `live` eval (on demand, results written into this file): 5 fixture playlists with reviews. For each, build with and without the lessons from the others, and have an LLM judge (temperature 0, separate call) say which result better respects the review. With-lessons should win at least 4 of 5
+- [x] review saved → `playlists.review` and `reviewed_at` set, response under 1 s with the mocked LLM delayed 5 s; editing keeps the old text in `review_history`
+- [x] review over 2,000 chars → 422; an empty review clears it; another user's playlist → 404
+- [x] reflection with fixture review "the workout part was way too slow, rest was great" → verdict `partly`, a lesson tagged `workout` whose evidence is quoted from the review
+- [x] a lesson whose `evidence` isn't in the review text is dropped
+- [x] consolidation: "loves long intros" then later "skip long intros, they bore me" → the old lesson `superseded`, the new one `active`, `superseded_by` set
+- [x] consolidation with 41 candidate lessons → at most 40 active afterwards
+- [x] "Fix it with this review" → new playlist with `parent_id`; the review text reaches the brief call as a correction
+- [x] the next build's per-user prompt block contains the active lessons, not the superseded ones
+- [x] Disconnect deletes reviews, history and lessons (cascade)
+- [x] `live` eval (on demand, results written into this file): 5 fixture playlists with reviews. For each, build with and without the lessons from the others, and have an LLM judge (temperature 0, separate call) say which result better respects the review. With-lessons should win at least 4 of 5
 
 Gate: `pytest tests/test_p15_reviews.py` green, the live eval passes, and one real review → "Fix it" gives a v2 that you rate higher than v1.
+
+Done 2026-10-24 apart from your real-review check. Live eval: with-lessons won 5/5 on `gpt-6.1-sol` (judge: same model; it takes temperature 0 or falls back to its default). The first run also won 5/5, but two of the five reviews ("too many sad acoustic ballads", "less sad acoustic stuff") gave no lasting lessons, because reflection was told to pick "this playlist only" when unsure; the rule now names artists, kinds of song, intros, vocals, energy and switches as lasting, and every review gave 2 lessons. Lessons are also told they beat the taste summary when the two disagree (a listener whose top artist is Drake but who said "too much Drake"). Built differently from the list above: `lessons` also has `scope` (`lasting | this_playlist`) and `about`; this-playlist lessons skip consolidation and are used only by "Fix it"; consolidation makes no LLM call when no existing lesson shares a tag (all ADD) and treats a failed call or an id that isn't the user's as ADD, so a grounded lesson is never lost; past 40 active it sees every lesson and is asked to merge, and if it doesn't merge enough, the least recently used expire (never the new ones). An edit while reflection runs wins: the older result is thrown away. Clearing a review deletes the lessons learned from it. "Fix it" sends the earlier brief, the review, the lessons from it and the songs liked in it, and names the new playlist "… (v2)". 34 tests.
+Your check: write a real review on a playlist, press "Fix it with this review", and rate both.
 
 ---
 

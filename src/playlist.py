@@ -6,11 +6,13 @@ read the prompt into a brief (LLM) -> work out minutes per section -> suggest so
 -> create the playlist -> add items -> save the row and its tracks.
 Sections still short after the first round get one extra suggestion call, for those sections only.
 run() is the background entry point: it records how the build ended on its job.
+Lessons from reviews reach both LLM calls (Phase 15). "Fix it with this review" is a build with `fix_of`:
+the earlier brief and its review go in as a correction, and the new playlist points back at the old one.
 """
 import json
 from typing import Optional
 
-from src import jobs, playlists, search_cache, taste, users
+from src import jobs, likes, memory, playlists, search_cache, taste, users
 from src.arc import arrange, timeline
 from src.brief import Brief, familiar_percent, read_prompt
 from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
@@ -33,14 +35,14 @@ class BuildFailed(Exception):
         self.reason = reason
 
 
-def run(job_id: int, spotify_id: str, mood: str) -> None:
+def run(job_id: int, spotify_id: str, mood: str, fix_of: Optional[int] = None) -> None:
     """Build in the background and record the outcome on the job. Never raises: a thread has nobody to raise to."""
     log = MoodifyLogger.get_logger("playlist")
     try:
         user = users.get(spotify_id)
         if user is None:  # disconnected while queued; the job row went with the user
             return
-        playlist_id = build(user, mood, Trace(job_id))
+        playlist_id = build(user, mood, Trace(job_id), fix_of=fix_of)
     except BuildFailed as exc:
         jobs.fail(job_id, exc.reason)
     except SpotifyQuotaExceeded as exc:
@@ -55,20 +57,24 @@ def run(job_id: int, spotify_id: str, mood: str) -> None:
         jobs.finish(job_id, playlist_id)
 
 
-def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
+def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None) -> int:
     """Returns the new playlists row id. Raises BuildFailed when there is nothing to make;
-    SpotifyQuotaExceeded and ReauthRequired propagate. In every failure no playlist is created."""
+    SpotifyQuotaExceeded and ReauthRequired propagate. In every failure no playlist is created.
+    `fix_of`: the id of the user's playlist whose review this build corrects."""
     mood = clean_mood(mood)
     trace.step("Reading your taste")
     profile = taste.profile_for(user)
+    lessons = memory.lessons_block(user["spotify_id"])
+    parent = playlists.get(fix_of, user["spotify_id"]) if fix_of else None
+    correction, feedback = fix_notes(parent, user["spotify_id"]) if parent else ("", "")
     trace.step("Reading your prompt")
-    brief = read_prompt(mood, profile.summary, trace, spotify_id=user["spotify_id"])
+    brief = read_prompt(mood, profile.summary, trace, spotify_id=user["spotify_id"], memory=lessons, correction=correction)
     targets = section_targets(brief)
     trace.event("brief", title=brief.title, sections=len(brief.sections), support_note=brief.support_note,
                 minutes=[round(t, 1) for t in targets])
     onboarding_percent = taste.familiar_percent(json.loads(user["onboarding_json"] or "{}"))
     ask = {"known": profile.pool, "familiar_percent": familiar_percent(brief, onboarding_percent),
-           "brief": brief, "spotify_id": user["spotify_id"]}
+           "brief": brief, "spotify_id": user["spotify_id"], "memory": lessons, "feedback": feedback}
 
     trace.step("Asking for song ideas")
     counts = [songs_to_ask_for(t) for t in targets]
@@ -95,12 +101,14 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
         minutes = round(sum(f.total for f in fills))
         trace.step("Saving the playlist to your Spotify")
         description = _description(brief, [f.total for f in fills], minutes)
-        playlist = sp.create_playlist(f"Moodify: {brief.title}", description)
+        name = f"Moodify: {brief.title}" + (f" (v{playlists.version(parent['id']) + 1})" if parent else "")
+        playlist = sp.create_playlist(name, description)
         sp.add_items(playlist.id, [t.uri for t in tracks])
     sections = [i for i, section in enumerate(ordered) for _ in section]
     row_id = playlists.insert(
         user["spotify_id"], mood, playlist.url, tracks, brief.model_dump_json(), sections,
         [finder.energy.get(t.uri) for t in tracks], [finder.roles.get(t.uri) for t in tracks],
+        parent_id=parent["id"] if parent else None,
     )
     pool_uris = {t.uri for t in profile.pool}
     known = sum(t.uri in pool_uris for t in tracks)
@@ -112,6 +120,25 @@ def build(user, mood: str, trace: Trace = NO_TRACE) -> int:
                 searched=finder.searched, cache_hits=finder.cache_hits, suggested=len(songs),
                 section_minutes=[round(f.total, 1) for f in fills], targets=[round(t, 1) for t in targets])
     return row_id
+
+
+def fix_notes(parent, spotify_id: str) -> tuple[str, str]:
+    """(correction for the brief call, feedback for the suggestion call) from a playlist's review, the
+    lessons learned from it, and the songs liked in it."""
+    lines = []
+    if parent["brief_json"]:
+        lines.append(f"Earlier brief: {parent['brief_json']}")
+    lines.append(f"What the listener said after hearing it: {parent['review']}")
+    learned = memory.from_playlist(spotify_id, parent["id"])
+    if learned:
+        lines.append("What Moodify took from that:\n" + memory.render(learned, limit=800))
+    rows = playlists.track_rows(parent["id"])
+    liked = likes.liked_uris(spotify_id, [r["uri"] for r in rows])
+    kept = [f"{r['name']} by {json.loads(r['artists_json'])[0]}" for r in rows if r["uri"] in liked][:10]
+    feedback = "\n".join(lines[1:])
+    if kept:
+        feedback += "\nSongs they liked in it (keep them if they still fit): " + "; ".join(kept)
+    return "\n".join(lines), feedback
 
 
 def _description(brief: Brief, section_minutes: list[float], minutes: int) -> str:

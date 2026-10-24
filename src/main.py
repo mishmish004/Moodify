@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, likes, playlist, playlists, search_cache, taste, users
+from src import jobs, likes, memory, playlist, playlists, prompts, reflect, search_cache, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -233,7 +233,15 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "total_minutes": round(sum(t.duration_ms for t in tracks) / 60_000),
         "section_minutes": playlists.section_minutes(playlist_id),
         "groups": _section_groups(brief, tracks, playlists.track_sections(playlist_id)),
+        "lessons": memory.from_playlist(user["spotify_id"], playlist_id) if row["review"] else [],
+        "verdict": VERDICTS.get(row["review_verdict"]),
+        "parent": playlists.get(row["parent_id"], user["spotify_id"]) if row["parent_id"] else None,
+        "version": playlists.version(playlist_id) if row["parent_id"] else 1,
+        "fixes": playlists.fixes(playlist_id, user["spotify_id"]),
     })
+
+
+VERDICTS = {"worked": "it worked", "partly": "it partly worked", "missed": "it missed"}
 
 
 def _section_groups(brief: Optional[Brief], tracks: list, sections: list[Optional[int]]) -> list[dict]:
@@ -300,6 +308,44 @@ def rate_playlist(request: Request, playlist_id: int, rating: int = Form(..., ge
     if not playlists.set_rating(playlist_id, user["spotify_id"], rating):
         return _feedback_not_found(request, user)
     return _feedback_answer(request, f"/playlists/{playlist_id}#rating", rating=rating)
+
+
+# --- reviews (Phase 15) -------------------------------------------------------------------------------------
+
+REVIEW_NOTICES = {
+    playlists.SAVED: "Review saved. Moodify is reading it now.",
+    playlists.CLEARED: "Review deleted, with what Moodify learned from it.",
+    playlists.UNCHANGED: None,
+}
+
+
+@app.post("/playlists/{playlist_id}/review")
+def review_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user),
+                    review: str = Form("", max_length=reflect.MAX_REVIEW_CHARS)):
+    # Saved at once; reflection (an LLM call or two) runs in the background, so this answers immediately
+    text = prompts.clean_text(review, reflect.MAX_REVIEW_CHARS)
+    outcome = playlists.set_review(playlist_id, user["spotify_id"], text)
+    if outcome is None:
+        return _feedback_not_found(request, user)
+    if outcome == playlists.SAVED:
+        jobs.start(reflect.run, playlist_id, user["spotify_id"], text)
+    return _feedback_answer(request, f"/playlists/{playlist_id}#review", REVIEW_NOTICES[outcome], review=outcome)
+
+
+@app.post("/playlists/{playlist_id}/fix")
+def fix_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
+    """A new version built from the same prompt with the review as a correction. The old one stays in Spotify."""
+    row = playlists.get(playlist_id, user["spotify_id"])
+    if row is None:
+        return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
+    if not row["review"]:
+        return _message(request, "Write a review first", "Say what to change in the review box, save it, then fix it.",
+                        status_code=400, user=user)
+    job = jobs.running_for(user["spotify_id"])
+    job_id = job["id"] if job else jobs.create(user["spotify_id"], row["prompt"])
+    if job is None:
+        jobs.start(playlist.run, job_id, user["spotify_id"], row["prompt"], playlist_id)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
 @app.get("/history")

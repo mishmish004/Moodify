@@ -33,6 +33,9 @@ Rules:
   first song is already at the section's full energy.
 - Vary the artists: at most 2 songs per artist.
 - Use the original title and the main artist only, as they appear on streaming services.
+- "What Moodify learned from the listener's reviews" is their feedback on earlier playlists: follow it when
+  it applies. It is newer than the taste summary and wins when they disagree (a lesson to avoid an artist
+  beats that artist being a favourite). Feedback on an earlier version of this same playlist is followed closely.
 - Some requests list songs the listener already knows, numbered. When you pick one of those, copy its
   title and artist exactly and set "known" to its number. For every other song set "known" to null.
 - Return only the JSON requested, no commentary.
@@ -61,13 +64,15 @@ def clean_mood(mood: str) -> str:
 def suggest_songs(
     mood: str, taste_summary: str, n: int = 30, exclude: list[Song] = (), trace: Trace = NO_TRACE,
     known: list[Track] = (), familiar_percent: int = 30, brief: Optional[Brief] = None, spotify_id: str = "",
-    counts: Optional[list[int]] = None,
+    counts: Optional[list[int]] = None, memory: str = "", feedback: str = "",
 ) -> list[Song]:
     """Never raises: any API or parsing problem is logged, retried once if it might pass, then gives [].
     `exclude` lists songs from an earlier call that the model shouldn't repeat. `known` are songs
     the listener knows; about `familiar_percent` of the answer should come from them. `counts`: songs
-    wanted per section of the brief (0 skips a section); without it, n songs in total."""
-    per_user, per_request = user_prompt(clean_mood(mood), taste_summary, n, exclude, known, familiar_percent, brief, counts)
+    wanted per section of the brief (0 skips a section); without it, n songs in total. `memory`: lessons from
+    reviews (per user). `feedback`: the review of an earlier version, when fixing a playlist (per request)."""
+    per_user, per_request = user_prompt(clean_mood(mood), taste_summary, n, exclude, known, familiar_percent, brief, counts,
+                                        memory, feedback)
     parsed = prompts.ask(
         "suggest", get_settings().OPENAI_MODEL, prompts.layout(SYSTEM_PROMPT, per_user, per_request), Suggestions, trace,
         cache_key=f"moodify:suggest:{spotify_id}" if spotify_id else "",
@@ -78,16 +83,20 @@ def suggest_songs(
 
 def user_prompt(
     mood: str, taste_summary: str, n: int, exclude: list[Song], known: list[Track], familiar_percent: int,
-    brief: Optional[Brief] = None, counts: Optional[list[int]] = None,
+    brief: Optional[Brief] = None, counts: Optional[list[int]] = None, memory: str = "", feedback: str = "",
 ) -> tuple[str, str]:
-    """(per user, per request). The per-user part (taste, known songs) is the same all day, so
+    """(per user, per request). The per-user part (taste, known songs, lessons) changes rarely, so
     consecutive builds share the longest possible prefix for OpenAI's prompt cache."""
     per_user = [f"Listener's taste: {taste_summary}"]
     if known:
         # Main artist only: listing every artist taught the model to fill "artist" with lists (2026-10-23)
         listed = "\n".join(f"{i}. {t.name} by {t.artists[0]}" for i, t in enumerate(known, start=1))
         per_user.append(f"Songs the listener already knows:\n{listed}")
+    if memory:
+        per_user.append(memory)
     per_request = [f"Mood: {mood}"]
+    if feedback:
+        per_request.append(f"Feedback on an earlier version of this playlist:\n{feedback}")
     if brief is not None:
         per_request.append(f"How to read this request:\n{describe(brief)}")
     if known:
