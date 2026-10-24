@@ -472,7 +472,7 @@
 .mf-step.is-now .mf-step__text { font-weight: 700; }
 .mf-step.is-wait .mf-step__text { color: var(--mf-ink-2); }
 .mf-step__status { display: block; font-size: var(--mf-t-sm); line-height: var(--mf-lh-sm); color: var(--mf-ink-2); font-weight: 400; }
-.mf-meter { height: 6px; border-radius: 3px; background: var(--mf-sunk); overflow: hidden; box-shadow: inset 0 0 0 1px var(--mf-line); margin-top: 8px; max-width: 260px; }
+.mf-meter { display: block; height: 6px; border-radius: 3px; background: var(--mf-sunk); overflow: hidden; box-shadow: inset 0 0 0 1px var(--mf-line); margin-top: 8px; max-width: 260px; }
 .mf-meter span { display: block; height: 100%; background: var(--mf-accent-ink); border-radius: 3px; transition: width 400ms var(--mf-ease-out); }
 
 /* ---------- 16. Disclosure (details/summary) ---------- */
