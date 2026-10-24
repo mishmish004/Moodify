@@ -111,6 +111,17 @@
   </form>
 </div>
 {% endif %}
+{% if not (brief and brief.support_note) %}
+<form id="hide" method="post" action="/playlists/{{ playlist.id }}/hide">
+  <input type="hidden" name="hidden" value="{{ 0 if playlist.hidden else 1 }}">
+  {% if playlist.hidden %}
+  <p><small>Hidden from friends.</small> <button type="submit" class="quiet small">Show to friends</button></p>
+  {% else %}
+  <p><small>{% if shows_taste %}Friends who see your taste see this playlist's title (never what you typed).{% else %}You don't share your taste with friends, so they see nothing of this.{% endif %}</small>
+    <button type="submit" class="quiet small">Hide from friends</button></p>
+  {% endif %}
+</form>
+{% endif %}
 <form method="post" action="/playlists/{{ playlist.id }}/more" data-busy="Starting…">
   <button type="submit">More like this</button>
   <small class="hint">A new playlist in the same spirit, with new songs. Uses your likes{% if playlist.review %} and your review{% endif %}.</small>

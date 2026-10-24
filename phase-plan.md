@@ -413,29 +413,31 @@ Phases 23–24 follow the `dataviz` skill:
 Goal: nothing about a person reaches another person unless they switched it on, and they can see every use and take it back.
 
 Build
-- [ ] `sharing(spotify_id PK, show_taste, allow_blends, allow_listen_as, updated_at)`: three switches, all **off** for every user, existing and new (migration)
-- [ ] `/sharing`: the three switches in plain words, each saying exactly what it shares:
+- [x] `sharing(spotify_id PK, show_taste, allow_blends, allow_listen_as, updated_at)`: three switches, all **off** for every user, existing and new (migration)
+- [x] `/sharing`: the three switches in plain words, each saying exactly what it shares:
   - **Show my taste to friends:** taste profile, top artists, the taste map and activity feed (playlist titles, never prompts)
   - **Let friends include me in Blends:** stored taste and library used in their blend playlists
   - **Let friends hear music like me:** stored taste used for playlists saved in their account
-- [ ] Friends are the other people on this Moodify (at most 5) with at least one switch on. `/friends` lists them and what each shares
-- [ ] `taste_access(id, owner, viewer, kind, playlist_id, at)` logs every use of someone's data: a map view, a blend, a "hear it like". The owner sees "Who used my taste" on `/sharing`; nobody else sees it
-- [ ] "Hide from friends" on any playlist. Playlists whose brief has `support_note` are **never** shown to anyone else; that is enforced in the query, not the template
-- [ ] Never shared, whatever the switches say: prompts, reviews and ratings (Phases 14–15), memory lessons (Phase 16), support-note playlists, Spotify tokens
-- [ ] Switching off works on the next request. Playlists already in someone else's Spotify stay there (they're theirs); the switch text says so
-- [ ] Disconnect deletes the user's sharing row and the access log in both directions
-- [ ] One permission check, `sharing.allowed(owner, viewer, kind)`, used by every Part 2 route
+- [x] Friends are the other people on this Moodify (at most 5) with at least one switch on. `/friends` lists them and what each shares
+- [x] `taste_access(id, owner, viewer, kind, playlist_id, at)` logs every use of someone's data: a map view, a blend, a "hear it like". The owner sees "Who used my taste" on `/sharing`; nobody else sees it
+- [x] "Hide from friends" on any playlist. Playlists whose brief has `support_note` are **never** shown to anyone else; that is enforced in the query, not the template
+- [x] Never shared, whatever the switches say: prompts, reviews and ratings (Phases 14–15), memory lessons (Phase 16), support-note playlists, Spotify tokens
+- [x] Switching off works on the next request. Playlists already in someone else's Spotify stay there (they're theirs); the switch text says so
+- [x] Disconnect deletes the user's sharing row and the access log in both directions
+- [x] One permission check, `sharing.allowed(owner, viewer, kind)`, used by every Part 2 route
 
 Tests (`tests/test_p18_sharing.py`)
-- [ ] a new user, and every user who existed before the migration, has all three switches off and appears nowhere: friends list, map data, blend picker, "hear it like"
-- [ ] table test, switch × feature: each switch grants exactly its own feature, and the others still answer 403
-- [ ] switching off → the next request is refused and the person is gone from every list
-- [ ] a support-note playlist never appears in any friend-facing query, with `show_taste` on and the playlist not hidden
-- [ ] a hidden playlist never appears to friends, but still appears to its owner
-- [ ] every use writes one `taste_access` row; only the owner can read their log
-- [ ] disconnect leaves no sharing or access rows mentioning the user, in either column
+- [x] a new user, and every user who existed before the migration, has all three switches off and appears nowhere: friends list, map data, blend picker, "hear it like"
+- [x] table test, switch × feature: each switch grants exactly its own feature, and the others still answer 403
+- [x] switching off → the next request is refused and the person is gone from every list
+- [x] a support-note playlist never appears in any friend-facing query, with `show_taste` on and the playlist not hidden
+- [x] a hidden playlist never appears to friends, but still appears to its owner
+- [x] every use writes one `taste_access` row; only the owner can read their log
+- [x] disconnect leaves no sharing or access rows mentioning the user, in either column
 
 Gate: `pytest tests/test_p18_sharing.py` green, and you read `/sharing` and agree it says plainly what is shared.
+
+Done 2026-10-24 apart from your read of `/sharing`. A person without a `sharing` row has every switch off, so users from before the migration and new users need no row (migration 10 adds the tables and `playlists.hidden`). `sharing.allowed(owner, viewer, kind)` reads the switch on every call. `sharing.visible_playlists` is the only friend-facing playlist query: it selects id, title, date and track count, and filters hidden and support-note playlists in SQL. A friend's page shows their stored taste summary, never refreshed with their token. Every look at a friend's taste writes a `view` row, and the owner's "Who used my taste" groups the rows by person and kind. "Friends" joined the header, which still fits at 390 px. 24 tests.
 
 ---
 

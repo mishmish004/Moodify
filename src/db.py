@@ -124,6 +124,27 @@ MIGRATIONS = [
     """
     ALTER TABLE users ADD COLUMN open_spotify INTEGER NOT NULL DEFAULT 1;
     """,
+    # 10 (Phase 18): what each person shares with friends (no row: nothing), who used it, and hidden playlists
+    """
+    ALTER TABLE playlists ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS sharing (
+        spotify_id       TEXT PRIMARY KEY REFERENCES users(spotify_id) ON DELETE CASCADE,
+        show_taste       INTEGER NOT NULL DEFAULT 0 CHECK (show_taste IN (0, 1)),
+        allow_blends     INTEGER NOT NULL DEFAULT 0 CHECK (allow_blends IN (0, 1)),
+        allow_listen_as  INTEGER NOT NULL DEFAULT 0 CHECK (allow_listen_as IN (0, 1)),
+        updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS taste_access (
+        id           INTEGER PRIMARY KEY,
+        owner        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        viewer       TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        kind         TEXT NOT NULL CHECK (kind IN ('view', 'blend', 'listen_as')),
+        playlist_id  INTEGER REFERENCES playlists(id) ON DELETE SET NULL,
+        at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS taste_access_by_owner ON taste_access (owner, at);
+    CREATE INDEX IF NOT EXISTS taste_access_by_viewer ON taste_access (viewer);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

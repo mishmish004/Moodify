@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS playlists (
     reviewed_at      TEXT,
     review_verdict   TEXT CHECK (review_verdict IN ('worked', 'partly', 'missed')),
     -- Phase 15: "Fix it with this review" makes a new version; this points at the one it fixed
-    parent_id        INTEGER REFERENCES playlists(id) ON DELETE SET NULL
+    parent_id        INTEGER REFERENCES playlists(id) ON DELETE SET NULL,
+    -- Phase 18: kept from friends' views by its owner
+    hidden           INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS playlists_by_user ON playlists (spotify_id, created_at);
@@ -142,3 +144,22 @@ CREATE TABLE IF NOT EXISTS lessons (
 );
 
 CREATE INDEX IF NOT EXISTS lessons_by_user ON lessons (spotify_id, status);
+
+-- Phase 18: what each person shares with friends; no row means nothing (every switch off). src/sharing.py
+CREATE TABLE IF NOT EXISTS sharing (
+    spotify_id       TEXT PRIMARY KEY REFERENCES users(spotify_id) ON DELETE CASCADE,
+    show_taste       INTEGER NOT NULL DEFAULT 0 CHECK (show_taste IN (0, 1)),
+    allow_blends     INTEGER NOT NULL DEFAULT 0 CHECK (allow_blends IN (0, 1)),
+    allow_listen_as  INTEGER NOT NULL DEFAULT 0 CHECK (allow_listen_as IN (0, 1)),
+    updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS taste_access (
+    id           INTEGER PRIMARY KEY,
+    owner        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    viewer       TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL CHECK (kind IN ('view', 'blend', 'listen_as')),
+    playlist_id  INTEGER REFERENCES playlists(id) ON DELETE SET NULL,
+    at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS taste_access_by_owner ON taste_access (owner, at);
+CREATE INDEX IF NOT EXISTS taste_access_by_viewer ON taste_access (viewer);

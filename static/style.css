@@ -138,3 +138,8 @@ button.small { min-height: 2.75rem; margin-top: .5rem; padding: .3rem 1rem; font
 /* Phase 17: the store link under OPEN SPOTIFY on phones */
 .get-spotify { margin: .5rem 0 0; }
 .get-spotify a { font-weight: 700; letter-spacing: .03em; }
+
+/* Phase 18: sharing switches and friends */
+.switches .check { margin-top: 1.25rem; }
+.list.plain li { min-height: 44px; padding: .5rem 0; }
+.summary { overflow-wrap: anywhere; }

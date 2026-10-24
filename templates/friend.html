@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Moodify · {{ name }}{% endblock %}
+{% block content %}
+<h1>{{ friend.display_name or friend.spotify_id }}</h1>
+{% if shared.taste %}
+<h2>{{ name }}'s taste</h2>
+{% if summary %}<p class="summary">{{ summary }}</p>{% else %}<p class="muted">Moodify hasn't read {{ name }}'s taste yet.</p>{% endif %}
+<h2>Recent playlists</h2>
+{% if playlists %}
+<ul class="list plain">
+  {% for p in playlists %}
+  <li><span class="what">{{ p.title or "Untitled" }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} tracks</small></span></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing to show.</p>
+{% endif %}
+<p><small>{{ name }} can see that you looked, on their sharing page.</small></p>
+{% else %}
+<p class="muted">{{ name }} doesn't show their taste to friends.</p>
+{% endif %}
+{% endblock %}

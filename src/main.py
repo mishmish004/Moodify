@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, taste, users
+from src import jobs, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -265,6 +265,7 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "version": playlists.version(playlist_id) if row["parent_id"] else 1,
         "fixes": playlists.fixes(playlist_id, user["spotify_id"]),
         "auto_open": auto_open, "phone": links.is_phone(request.headers.get("user-agent")),
+        "shows_taste": sharing.get(user["spotify_id"])["taste"],
     })
 
 
@@ -415,6 +416,65 @@ def forget_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depe
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
     request.session["notice"] = "Moodify forgot that playlist. It's still in your Spotify."
     return RedirectResponse("/memory#playlists", status_code=303)
+
+
+# --- sharing with friends (Phase 18) ------------------------------------------------------------------------
+
+def _not_shared(request: Request, user: sqlite3.Row):
+    return _message(request, "Not shared with you", "That person hasn't switched this on, or isn't on Moodify.",
+                    status_code=403, user=user)
+
+
+@app.get("/sharing")
+def sharing_page(request: Request, user: sqlite3.Row = Depends(current_user)):
+    return templates.TemplateResponse(request, "sharing.html", {
+        "user": user, "switches": sharing.get(user["spotify_id"]), "log": sharing.access_log(user["spotify_id"]),
+        "notice": request.session.pop("notice", None),
+    })
+
+
+@app.post("/sharing")
+def sharing_submit(request: Request, user: sqlite3.Row = Depends(current_user), show_taste: Optional[str] = Form(None),
+                   allow_blends: Optional[str] = Form(None), allow_listen_as: Optional[str] = Form(None)):
+    sharing.save(user["spotify_id"], show_taste is not None, allow_blends is not None, allow_listen_as is not None)
+    request.session["notice"] = "Saved. It applies from now on."
+    return RedirectResponse("/sharing", status_code=303)
+
+
+@app.get("/friends")
+def friends_page(request: Request, user: sqlite3.Row = Depends(current_user)):
+    return templates.TemplateResponse(request, "friends.html", {
+        "user": user, "friends": sharing.friends(user["spotify_id"]), "first_name": sharing.first_name,
+        "mine": sharing.get(user["spotify_id"]),
+    })
+
+
+@app.get("/friends/{friend_id}")
+def friend_page(request: Request, friend_id: str, user: sqlite3.Row = Depends(current_user)):
+    viewer = user["spotify_id"]
+    if friend_id == viewer:
+        return RedirectResponse("/sharing", status_code=303)
+    shared = {kind: sharing.allowed(friend_id, viewer, kind) for kind in sharing.SWITCHES}
+    friend = users.get(friend_id)
+    if friend is None or not any(shared.values()):
+        return _message(request, "Not found", "No friend by that name shares anything here.", status_code=404, user=user)
+    if shared["taste"]:
+        sharing.log(friend_id, viewer, "view")
+    return templates.TemplateResponse(request, "friend.html", {
+        "user": user, "friend": friend, "name": sharing.first_name(friend), "shared": shared,
+        # Only what "show my taste" covers: the stored summary (never refreshed with their token) and playlist titles
+        "summary": friend["taste_summary"] if shared["taste"] else None,
+        "playlists": sharing.visible_playlists(friend_id) if shared["taste"] else [],
+    })
+
+
+@app.post("/playlists/{playlist_id}/hide")
+def hide_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user),
+                  hidden: int = Form(..., ge=0, le=1)):
+    if not sharing.set_hidden(playlist_id, user["spotify_id"], bool(hidden)):
+        return _feedback_not_found(request, user)
+    notice = "Hidden from friends." if hidden else "Friends who see your taste can see this playlist's title again."
+    return _feedback_answer(request, f"/playlists/{playlist_id}#hide", notice, hidden=bool(hidden))
 
 
 @app.get("/history")

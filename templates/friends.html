@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Moodify · friends{% endblock %}
+{% block content %}
+<h1>Friends</h1>
+{% if friends %}
+<ul class="list">
+  {% for f in friends %}
+  <li><a href="/friends/{{ f.spotify_id }}"><span class="what">{{ f.display_name or f.spotify_id }}<small>Shares: {% set parts = [] %}{% if f.show_taste %}{% set parts = parts + ["their taste"] %}{% endif %}{% if f.allow_blends %}{% set parts = parts + ["Blends"] %}{% endif %}{% if f.allow_listen_as %}{% set parts = parts + ["hear it like " ~ first_name(f)] %}{% endif %}{{ parts | join(", ") }}</small></span></a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Nobody shares anything with friends yet. People show up here once they switch something on.</p>
+{% endif %}
+<p>{% if mine.taste or mine.blend or mine.listen_as %}You share some things with friends.{% else %}You don't share anything with friends.{% endif %} <a href="/sharing">Sharing settings</a></p>
+{% endblock %}
