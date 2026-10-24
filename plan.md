@@ -194,6 +194,12 @@ Tests (`tests/test_p7_ui.py`)
 - [x] no template references a static file that doesn't exist
 - [ ] manual: open on a phone, complete login → onboarding → playlist without zooming
 
+Redesign (2026-10-24), from the Moodify page of the "Portfolio" design canvas (brief: `docs/design-prompt.md`)
+- [x] `static/style.css` is the canvas's `moodify.css`: tokens on `.mf` (the `<body>`), dark mode following the OS (or `data-theme`), `@media` breakpoints at 768 and 1024 px, Instrument Serif self-hosted in `static/fonts/` (OFL)
+- [x] Every page rebuilt: wordmark, pill nav from 768 px and a bottom tab bar below it; onboarding with genre chips, three artist boxes and option cards (instrumental gains "Sometimes"); progress page with named steps that update in place, and failures shown there with "Back" keeping the words; playlist page with the energy chart, section headings (start time, energy meter, length) and track rows; message pages; a 404 page
+- [x] Presentation helpers in `src/pages.py`; tests in `tests/test_p7_ui.py`
+- [x] Comes with later phases, as designed: ♥ and 1–10 rating (14), reviews and version 2 (15), "What Moodify remembers" (16), open in the Spotify app (17), Friends, Blend, Map, Activity and Sharing (18–24). Done 2026-10-24 when the redesign was merged with Phases 14–24: every page uses the mf-* components, the nav has four items (New playlist, History, Friends, Memory; Map, Activity and Blend live on Friends), and the taste map's palette is re-validated against --mf-bg
+
 Gate: `pytest tests/test_p7_ui.py` green and the manual phone run works.
 
 ---

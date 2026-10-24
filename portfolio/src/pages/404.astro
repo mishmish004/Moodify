@@ -1,0 +1,60 @@
+---
+import Site from '../layouts/Site.astro';
+---
+
+<Site title="Page not found — amish" description="This page broke, so here's the write-up." noindex>
+  <section class="hero pad" aria-labelledby="nf-h">
+    <p class="label rise">404 · not found</p>
+    <h1 id="nf-h" class="display rise d1"><span>This page broke,</span><span class="muted">so here's the write-up.</span></h1>
+  </section>
+
+  <div class="cols pad">
+    <section class="panel report rise d2" aria-labelledby="glance-h">
+      <div class="glance-head">
+        <h2 id="glance-h">At a glance</h2>
+        <span class="chip"><span class="dot" aria-hidden="true"></span>Resolves when you click a link</span>
+      </div>
+      <dl class="glance">
+        <div><dt>Impact</dt><dd>You, briefly</dd></div>
+        <div><dt>Duration</dt><dd>Until you pick a page below</dd></div>
+        <div><dt>Detected by</dt><dd>You. Thanks for that.</dd></div>
+        <div><dt>Root cause</dt><dd>A typo in the address, or a page that moved</dd></div>
+      </dl>
+      <ol class="timeline tl">
+        <li><span class="t" data-now>now</span><span>You followed a link or typed an address.</span></li>
+        <li><span class="t" data-now>now</span><span>Nothing lives there.</span></li>
+        <li><span class="t">next</span><span>Mitigation: one of the pages on the right.</span></li>
+      </ol>
+    </section>
+
+    <nav class="go rise d3" aria-label="Places to go">
+      <a class="btn btn-dark home" href="/">Back home <span class="arrow" aria-hidden="true">→</span></a>
+      <ul class="rows">
+        <li><a class="row-link" href="/#serious-work"><span class="row-title">serious-work</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="row-link" href="/yapping"><span class="row-title">The incident log (real ones)</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="row-link" href="/about"><span class="row-title">about</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a class="row-link" href="/contact"><span class="row-title">Tell me a link is broken</span><span class="arrow" aria-hidden="true">→</span></a></li>
+      </ul>
+    </nav>
+  </div>
+</Site>
+
+<style>
+  .pad { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .hero { padding-top: clamp(32px, 5vw, 64px); padding-bottom: clamp(48px, 6vw, 80px); display: flex; flex-direction: column; gap: 40px; }
+  h1 { font-size: clamp(44px, 6.4vw, 96px); line-height: 0.92; letter-spacing: -0.025em; }
+  h1 span { display: block; }
+  .cols { display: flex; flex-wrap: wrap; gap: 32px clamp(32px, 5vw, 72px); align-items: flex-start; }
+  .report { flex: 999 1 560px; min-width: 0; max-width: 860px; }
+  .tl { margin-top: 28px; }
+  .tl li { padding: 14px 0; }
+  .tl li:last-child { border-bottom: 0; }
+  .go { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .home { min-height: 52px; padding: 0 20px; justify-content: space-between; }
+</style>
+
+<script>
+  const d = new Date();
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  document.querySelectorAll('[data-now]').forEach((el) => { el.textContent = hhmm; });
+</script>

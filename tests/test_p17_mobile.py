@@ -95,20 +95,20 @@ def _build(client, respx_mock, ua):
 def test_a_finished_build_on_a_phone_opens_spotify(logged_in, respx_mock, ua, auto):
     page = _build(logged_in, respx_mock, ua).text
     assert f"location.href = {auto};" in page and "sessionStorage" in page
-    assert 'class="open-spotify"' in page and "GET SPOTIFY FREE" in page
+    assert 'class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block"' in page and "GET SPOTIFY FREE" in page
 
 
 def test_a_finished_build_on_desktop_only_has_the_button(logged_in, respx_mock):
     page = _build(logged_in, respx_mock, DESKTOP).text
     assert "location.href" not in page and "GET SPOTIFY FREE" not in page
-    assert '<a class="open-spotify" href="https://open.spotify.com/playlist/pl1">' in page
+    assert '<a class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block" href="https://open.spotify.com/playlist/pl1">' in page
 
 
 def test_setting_off_means_no_auto_open(logged_in, respx_mock):
     logged_in.post("/settings", data={"likes_to_spotify": "on"})
     assert users.get("friend1")["open_spotify"] == 0 and users.get("friend1")["likes_to_spotify"] == 1
     page = _build(logged_in, respx_mock, IPHONE).text
-    assert "location.href" not in page and 'class="open-spotify"' in page
+    assert "location.href" not in page and 'class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block"' in page
 
 
 def test_only_the_first_view_after_a_build_opens_spotify(logged_in, respx_mock):
@@ -123,7 +123,7 @@ def test_track_and_playlist_links_open_the_app_on_android(logged_in):
     logged_in.headers["user-agent"] = ANDROID_CHROME
     page = logged_in.get(f"/playlists/{pid}").text
     assert 'href="intent://track/4uLU6hMCjMI75M1A2tKUQC#Intent;scheme=spotify;' in page
-    assert f'<a class="open-spotify" href="intent://playlist/{PLAYLIST_ID}#Intent;' in page
+    assert f'<a class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block" href="intent://playlist/{PLAYLIST_ID}#Intent;' in page
     assert 'href="https://play.google.com/store/apps/details?id=com.spotify.music">GET SPOTIFY FREE</a>' in page
     assert f'href="intent://playlist/{PLAYLIST_ID}#Intent;' in logged_in.get("/history").text
     logged_in.headers["user-agent"] = DESKTOP

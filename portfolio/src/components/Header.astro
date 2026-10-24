@@ -1,0 +1,116 @@
+---
+// Top bar on every daytime page. On phones the primary links fold behind a Menu button.
+// On the home page the logo is a button: seven taps open the secret page.
+import { primaryNav, site, type NavKey } from '../site/site';
+import CodeIcon from './CodeIcon.astro';
+
+interface Props {
+  current?: NavKey;
+  secretLogo?: boolean;
+}
+
+const { current, secretLogo = false } = Astro.props;
+---
+
+<header class="hdr no-print">
+  {secretLogo
+    ? <button class="box logo" type="button" data-secret-logo>amish</button>
+    : <a class="box logo" href="/">amish</a>}
+
+  <button class="box menu-btn" type="button" aria-expanded="false" aria-controls="primary-nav">
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16"></path><path d="M4 16h16"></path></svg>
+    Menu
+  </button>
+
+  <nav id="primary-nav" class="box nav" aria-label="Primary">
+    {primaryNav.map((item) => (
+      <a class="navlink" href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
+    ))}
+    <a class="navlink phone-only" href="/resume" aria-current={current === 'resume' ? 'page' : undefined}>résumé</a>
+    <a class="navlink gh" href={site.github.url} aria-label="GitHub"><CodeIcon /><span class="phone-only" aria-hidden="true">GitHub</span></a>
+  </nav>
+
+  <div class="box right">
+    <a class="navlink resume-link" href="/resume" aria-current={current === 'resume' ? 'page' : undefined}>Résumé</a>
+    <a class="btn btn-dark btn-sm" href="/contact" aria-current={current === 'contact' ? 'page' : undefined}>Say hello</a>
+  </div>
+</header>
+
+<style>
+  .hdr {
+    padding: 16px var(--gutter);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  }
+  .box {
+    display: flex; align-items: center; min-height: 52px; padding: 0 4px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  }
+  .logo {
+    padding: 0 18px; margin: 0; color: var(--ink); cursor: pointer; text-decoration: none;
+    font-family: var(--display); font-weight: 600; font-size: 21px;
+    transition: transform 160ms var(--ease-out);
+  }
+  .logo:active { transform: scale(0.97); }
+  .nav { flex-wrap: wrap; font-size: 15px; letter-spacing: 0.01em; }
+  .right { margin-left: auto; gap: 4px; }
+  .navlink {
+    text-decoration: none; min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 10px;
+    border-radius: 6px; color: var(--ink); font-size: 15px;
+    transition: background-color 150ms ease;
+  }
+  .resume-link { padding: 0 12px; }
+  .navlink[aria-current='page'] { background: var(--wash); }
+  .gh { min-width: 44px; justify-content: center; padding: 0; }
+  .menu-btn {
+    display: none; gap: 8px; margin: 0; padding: 0 16px; color: var(--ink); cursor: pointer; font-size: 16px;
+    transition: transform 160ms var(--ease-out);
+  }
+  .menu-btn:active { transform: scale(0.97); }
+  .phone-only { display: none; }
+  @media (hover: hover) and (pointer: fine) { .navlink:hover { background: var(--wash); color: var(--ink); } }
+
+  /* Phones: logo, Menu and Say hello on one row; the links open in a panel below */
+  @media (max-width: 640px) {
+    .resume-link { display: none; }
+    .right { order: 1; }
+    .nav { order: 2; flex: 1 1 100%; flex-direction: column; align-items: stretch; padding: 4px; }
+    .nav .navlink { min-height: 48px; justify-content: flex-start; padding: 0 14px; font-size: 17px; }
+    .phone-only { display: inline; }
+    a.phone-only { display: inline-flex; }
+    :global(.js) .menu-btn { display: inline-flex; }
+    :global(.js) .nav:not(.open) { display: none; }
+    .nav.open { animation: drop 200ms var(--ease-out) both; }
+  }
+  @keyframes drop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .nav.open { animation: none; }
+    .logo:active, .menu-btn:active { transform: none; }
+  }
+</style>
+
+<script>
+  const btn = document.querySelector<HTMLButtonElement>('.menu-btn');
+  const nav = document.getElementById('primary-nav');
+  if (btn && nav) {
+    const set = (open: boolean) => {
+      nav.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', String(open));
+    };
+    btn.addEventListener('click', () => set(!nav.classList.contains('open')));
+    // Close after following an in-page link such as /#serious-work
+    nav.addEventListener('click', (e) => { if ((e.target as Element).closest('a')) set(false); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && nav.classList.contains('open')) { set(false); btn.focus(); }
+    });
+  }
+
+  // Home page easter egg: taps 1-6 only count, the 7th opens the secret page
+  const logo = document.querySelector<HTMLButtonElement>('[data-secret-logo]');
+  if (logo) {
+    let taps = 0;
+    logo.addEventListener('click', () => {
+      taps += 1;
+      if (taps >= 7) window.location.href = '/good-morning';
+    });
+  }
+</script>

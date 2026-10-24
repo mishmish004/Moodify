@@ -1,34 +1,88 @@
 <!doctype html>
+{# The shell every page shares. Child templates set `nav` ("new", "history", "friends" or "memory") to mark where you are.
+   Page scripts (block scripts) run before the busy-button script, so a page can stop a submit first.
+   Under 768px the header shows only the wordmark and the tab bar sits at the bottom; from 768px the
+   pill nav shows and the tab bar hides. Same links, same order, everywhere. #}
+{% set nav_items = [("new", "/", "New playlist"), ("history", "/history", "History"), ("friends", "/friends", "Friends"),
+                    ("memory", "/memory", "Memory")] %}
+{% macro nav_icon(key) -%}
+{% if key == "new" %}<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 8v8M8 12h8"></path></svg>
+{%- elif key == "friends" %}<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"></circle><circle cx="16.5" cy="10" r="2.5"></circle><path d="M3 19c.8-3.2 3.2-5 6-5s5.2 1.8 6 5M15 14.5c2.6-.3 4.8 1.2 5.5 4"></path></svg>
+{%- elif key == "memory" %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h12v15l-6-3.5-6 3.5z"></path></svg>
+{%- else %}<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>{% endif %}
+{%- endmacro %}
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}Moodify{% endblock %}</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#FBF6EC" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0D1726" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="icon" href="data:,">
+  <link rel="preload" href="/static/fonts/instrument-serif-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <script>document.documentElement.classList.add("js")</script>
   {% block head %}{% endblock %}
 </head>
-<body>
-  <header>
-    <a class="brand" href="/">Moodify</a>
+<body class="mf">
+  <header class="mf-head">
+    <a class="mf-wordmark" href="/" aria-label="Moodify, home"><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="mf-wordmark__sun" d="M7 16a10 10 0 0 1 20 0z"></path><path class="mf-wordmark__sea" d="M2 19.5c3 0 3-1.6 6-1.6s3 1.6 6 1.6 3-1.6 6-1.6 3 1.6 6 1.6 3-1.6 6-1.6"></path></svg><span class="mf-wordmark__text" aria-hidden="true">moodify</span></a>
     {% if user %}
-    <nav><a href="/">New</a><a href="/history">History</a><a href="/friends">Friends</a><a href="/memory">Memory</a></nav>
+    <nav class="mf-nav" aria-label="Main">
+      {%- for key, href, label in nav_items %}<a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor -%}
+    </nav>
     {% endif %}
   </header>
-  <main>
+
+  <main class="mf-main">
     {% block content %}{% endblock %}
   </main>
+
+  <footer class="mf-foot">
+    {% if user %}<span>Logged in as {{ user.display_name or user.spotify_id }}</span>{% endif %}
+    <a class="mf-foot__home" href="https://mish4mish.com">mish4mish.com ↗</a>
+  </footer>
+
+  {% if user %}
+  <nav class="mf-tabs" aria-label="Main">
+    {%- for key, href, label in nav_items %}
+    <a class="mf-tab" href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ nav_icon(key) }}{{ label }}</a>
+    {%- endfor %}
+  </nav>
+  {% endif %}
+
   {# One message at a time, fixed to the bottom of the screen: after a like the page is scrolled to that row #}
-  <p id="toast" class="toast" role="status">{{ notice or "" }}</p>
+  <p id="toast" class="mf-toast" role="status">{{ notice or "" }}</p>
+
+  {% block scripts %}{% endblock %}
   <script>
     // Forms with data-busy submit once: a double tap on "Make a playlist" would make two.
-    // pageshow puts the button back when the page returns from the back/forward cache.
+    // The button stays focusable (aria-disabled, not disabled) and says what's happening.
+    // pageshow puts it back when the page returns from the back/forward cache.
     for (const form of document.querySelectorAll("form[data-busy]")) {
-      const button = form.querySelector("button"), label = button.textContent;
-      form.addEventListener("submit", () => { button.disabled = true; button.textContent = form.dataset.busy; });
-      addEventListener("pageshow", () => { button.disabled = false; button.textContent = label; });
+      const button = form.querySelector("button[type=submit]");
+      if (!button) continue;
+      const label = button.innerHTML;
+      let sent = false;
+      form.addEventListener("submit", (event) => {
+        if (event.defaultPrevented) return;  // the page's own check stopped it
+        if (sent) { event.preventDefault(); return; }
+        sent = true;
+        button.setAttribute("aria-busy", "true");
+        button.setAttribute("aria-disabled", "true");
+        const spin = document.createElement("span");
+        spin.className = "mf-spin";
+        spin.setAttribute("aria-hidden", "true");
+        button.replaceChildren(spin, document.createTextNode(form.dataset.busy));
+      });
+      addEventListener("pageshow", () => {
+        sent = false;
+        button.removeAttribute("aria-busy");
+        button.removeAttribute("aria-disabled");
+        button.innerHTML = label;
+      });
     }
   </script>
-  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -176,7 +176,7 @@ def _palette(mode):
     return re.findall(r"--genre-\d+:\s*(#[0-9a-fA-F]{6})", block)
 
 
-@pytest.mark.parametrize("mode, surface", [("light", "#ffffff"), ("dark", "#121212")])
+@pytest.mark.parametrize("mode, surface", [("light", "#FBF6EC"), ("dark", "#0D1726")])  # --mf-bg
 def test_palette_passes_the_dataviz_validator(mode, surface):
     node = shutil.which("node")
     if node is None:

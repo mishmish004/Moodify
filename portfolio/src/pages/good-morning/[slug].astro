@@ -1,0 +1,73 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import Night from '../../layouts/Night.astro';
+import { songs, type Song } from '../../lib/content';
+
+export const getStaticPaths = (async () => {
+  const all = await songs();
+  return all.map((song) => ({ params: { slug: song.id }, props: { song } }));
+}) satisfies GetStaticPaths;
+
+const { song } = Astro.props as { song: Song };
+const { Content } = await render(song);
+const d = song.data;
+const byline = [d.artist, d.album, d.year].filter(Boolean).join(' · ');
+const sections = [
+  { h: 'first listen', p: d.firstListen },
+  { h: 'why it hits', p: d.whyItHits },
+].filter((s) => s.p);
+---
+
+<Night title={`amish — my take on ${d.title}`} back={{ href: '/good-morning', label: 'back to good morning' }}>
+  <article class="take pad">
+    <p class="kicker rise">my take</p>
+    <h1 class="rise d1">{d.title}</h1>
+    <p class="kicker byline rise d1">{byline}</p>
+
+    {d.spotify && (
+      <div class="player rise d2" role="region" aria-label="Player">
+        <iframe
+          src={`https://open.spotify.com/embed/track/${d.spotify}?theme=0`}
+          title={`Spotify player: ${d.title}`}
+          width="100%" height="80" loading="lazy"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
+      </div>
+    )}
+
+    <div class="parts rise d3">
+      {sections.map((s) => (
+        <section><h2>{s.h}</h2><p>{s.p}</p></section>
+      ))}
+      {d.favouriteMoment && (
+        <section><h2>favourite moment</h2><p><span class="at">{d.favouriteMoment.at}</span> — {d.favouriteMoment.text}</p></section>
+      )}
+      {d.whenIPlayIt && <section><h2>when i play it</h2><p>{d.whenIPlayIt}</p></section>}
+      {song.body?.trim() && <section class="more"><Content /></section>}
+      {d.verdict && (
+        <section class="verdict"><h2>verdict</h2><p>{d.verdict}</p></section>
+      )}
+    </div>
+  </article>
+
+  <a slot="footer" class="foot-back" href="/good-morning"><span class="arrow arrow-back" aria-hidden="true">←</span> back to good morning</a>
+</Night>
+
+<style>
+  .pad { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .take { max-width: 760px; padding-top: clamp(32px, 5vw, 72px); padding-bottom: 104px; }
+  .kicker { margin: 0 0 14px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .byline { margin: 16px 0 0; font-size: 13px; letter-spacing: 0.06em; }
+  h1 { font-family: var(--poster); font-weight: 400; font-size: clamp(40px, 6vw, 88px); line-height: 0.95; letter-spacing: -0.005em; }
+  .player { margin-top: 32px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .player iframe { border: 0; }
+  .parts { margin-top: 56px; display: flex; flex-direction: column; gap: 40px; font-size: 18px; line-height: 1.65; }
+  .parts h2 { margin: 0 0 10px; font-family: var(--mono); font-weight: 400; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .at { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+  .more :global(p) { margin: 0 0 16px; }
+  .verdict { padding-top: 28px; border-top: 1px solid var(--line); display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .verdict h2 { margin: 0; }
+  .verdict p { font-family: var(--poster); font-size: 40px; line-height: 1; }
+  .foot-back { padding: 12px 0; text-decoration: none; color: var(--muted); display: inline-flex; gap: 6px; }
+  .foot-back:hover { color: var(--ink); }
+</style>

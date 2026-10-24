@@ -1,14 +1,26 @@
 {% extends "base.html" %}
 {% from "_spotify.html" import playlist_list with context %}
+{% set nav = "history" %}
 {% block title %}Moodify · your playlists{% endblock %}
 {% block content %}
-<h1>Your playlists</h1>
-{% if rows %}
-<p class="sort">Sort by
-  <a href="/history" {% if sort == "new" %}aria-current="page"{% endif %}>newest</a> ·
-  <a href="/history?sort=rating" {% if sort == "rating" %}aria-current="page"{% endif %}>your rating</a></p>
-{{ playlist_list(rows) }}
-{% else %}
-<p>Nothing yet. <a href="/">Make your first playlist</a>.</p>
-{% endif %}
+<div class="mf-stack-5" style="max-width: 760px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <h1 class="mf-h1">Your playlists</h1>
+    <p class="mf-muted">{% if rows %}{{ rows | length }} playlist{{ "" if rows | length == 1 else "s" }}, {{ "newest first" if sort == "new" else "by your rating" }}.{% else %}Playlists you make show up here, newest first.{% endif %}</p>
+  </div>
+  {% if rows %}
+  <nav class="mf-seg" aria-label="Sort by" style="max-width: 360px">
+    <a href="/history?sort=new" {% if sort == "new" %}aria-current="page"{% endif %}>Newest</a>
+    <a href="/history?sort=rating" {% if sort == "rating" %}aria-current="page"{% endif %}>Your rating</a>
+  </nav>
+  {{ playlist_list(rows) }}
+  {% else %}
+  <div class="mf-card mf-stack-4" style="text-align: center; align-items: center; padding: 48px 24px">
+    <svg class="mf-msg-art" viewBox="0 0 120 48" width="120" height="48" aria-hidden="true"><path class="sun" d="M40 38a20 20 0 0 1 40 0z"></path><path class="sea" d="M4 40q14-5 28 0t28 0t28 0t28 0"></path></svg>
+    <p class="mf-h2">Nothing yet.</p>
+    <p class="mf-muted">Make your first playlist.</p>
+    <a class="mf-btn mf-btn--primary" href="/">Make a playlist</a>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

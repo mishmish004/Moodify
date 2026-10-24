@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Moodify · settings{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-<form method="post" action="/settings">
-  <label class="check"><input type="checkbox" name="likes_to_spotify" value="on" {% if user.likes_to_spotify %}checked{% endif %}> Also add likes to my Spotify Liked Songs</label>
-  <small class="hint">When you ♥ a song in Moodify it's saved to your Liked Songs too. Unliking it takes it out again, but only if Moodify put it there.</small>
-  <label class="check"><input type="checkbox" name="open_spotify" value="on" {% if user.open_spotify %}checked{% endif %}> Open Spotify when my playlist is ready</label>
-  <small class="hint">On a phone, the Spotify app opens on your new playlist by itself. Some browsers ask first or need a tap; the OPEN SPOTIFY button always works.</small>
-  <button type="submit">Save</button>
-</form>
+<div class="mf-stack-6" style="max-width: 640px; margin: 0 auto">
+  <h1 class="mf-h1">Settings</h1>
+  <form method="post" action="/settings" class="mf-stack-5">
+    <label class="mf-switch"><input type="checkbox" name="likes_to_spotify" value="on" {% if user.likes_to_spotify %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Also add likes to my Spotify Liked Songs</span><span class="mf-hint">When you ♥ a song in Moodify it's saved to your Liked Songs too. Unliking it takes it out again, but only if Moodify put it there.</span></span></label>
+    <label class="mf-switch"><input type="checkbox" name="open_spotify" value="on" {% if user.open_spotify %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Open Spotify when my playlist is ready</span><span class="mf-hint">On a phone, the Spotify app opens on your new playlist by itself. Some browsers ask first or need a tap; the OPEN SPOTIFY button always works.</span></span></label>
+    <button class="mf-btn mf-btn--primary" type="submit" style="align-self: flex-start">Save</button>
+  </form>
+</div>
 {% endblock %}

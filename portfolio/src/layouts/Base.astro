@@ -1,0 +1,53 @@
+---
+// The document shell: head tags, fonts and global styles. Every page goes through this.
+import { Font } from 'astro:assets';
+import '../styles/global.css';
+import { site } from '../site/site';
+
+interface Props {
+  title: string;
+  description?: string;
+  theme?: 'day' | 'night';
+  noindex?: boolean;
+  /** Path of a social preview image in public/, e.g. '/og.png' */
+  image?: string;
+  type?: 'website' | 'article';
+}
+
+const { title, description = site.description, theme = 'day', noindex = false, image, type = 'website' } = Astro.props;
+const canonical = new URL(Astro.url.pathname.replace(/\.html$/, '').replace(/\/index$/, '') || '/', site.url).href;
+const ogImage = image ? new URL(image, site.url).href : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content={theme === 'night' ? '#17110C' : '#FDFDFC'} />
+    <meta name="color-scheme" content={theme === 'night' ? 'dark' : 'light'} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate" type="application/rss+xml" title="The incident log" href="/yapping/rss.xml" />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="amish" />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+    <Font cssVariable="--font-hanken" preload />
+    <Font cssVariable="--font-mono" />
+    <Font cssVariable="--font-tiro" />
+    {theme === 'night' && <Font cssVariable="--font-anton" preload />}
+    <script is:inline>document.documentElement.classList.add('js')</script>
+    <slot name="head" />
+  </head>
+  <body class={theme === 'night' ? 'theme-night' : undefined}>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <slot />
+  </body>
+</html>

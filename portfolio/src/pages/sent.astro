@@ -1,0 +1,21 @@
+---
+// Where a form lands after a submit without JavaScript. With JavaScript the form shows this in place.
+import Site from '../layouts/Site.astro';
+---
+
+<Site title="Sent — amish" noindex>
+  <section class="msg">
+    <div class="panel" role="status">
+      <p class="display big">Sent. Thanks.</p>
+      <p class="muted">It's in my inbox, and I'll reply by email.</p>
+      <a class="btn btn-line btn-sm" href="/">Back home <span class="arrow" aria-hidden="true">→</span></a>
+    </div>
+  </section>
+</Site>
+
+<style>
+  .msg { max-width: 760px; padding: clamp(32px, 5vw, 72px) var(--gutter) 40px; }
+  .panel { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: clamp(24px, 3vw, 40px); }
+  .big { font-size: clamp(32px, 3.4vw, 48px); line-height: 1; letter-spacing: -0.02em; }
+  .muted { font-size: 17px; }
+</style>

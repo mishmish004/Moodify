@@ -1,0 +1,172 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import Site from '../../layouts/Site.astro';
+import { hasCaseStudy, hindiNumber, incidentPosts, projects, type Project } from '../../lib/content';
+
+export const getStaticPaths = (async () => {
+  const all = await projects();
+  const withStudy = all.filter(hasCaseStudy);
+  return withStudy.map((project, i) => ({
+    params: { slug: project.id },
+    props: {
+      project,
+      n: all.indexOf(project) + 1,
+      total: all.length,
+      prev: withStudy[i - 1],
+      next: withStudy[i + 1],
+    },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props { project: Project; n: number; total: number; prev?: Project; next?: Project }
+const { project, n, total, prev, next } = Astro.props as Props;
+const { Content } = await render(project);
+const d = project.data;
+const related = (await incidentPosts()).find((p) => p.data.project === project.id);
+---
+
+<Site title={`${d.title} — amish`} description={d.en} current="serious-work" image={d.screenshot?.src}>
+  <article data-lang-scope data-lang="en">
+    <header class="head wide">
+      <a class="back" href="/#serious-work"><span class="arrow arrow-back" aria-hidden="true">←</span>serious-work</a>
+      <div class="head-row">
+        <span lang="hi" aria-hidden="true" class="deva-num big-num rise">{hindiNumber(n)}</span>
+        <div class="head-main">
+          <p class="label rise">project {n} of {total}{d.year && ` · ${d.year}`}</p>
+          <h1 class="display rise d1">{d.title}</h1>
+          <div class="swap-grid intro rise d2">
+            <p lang="en">{d.en}</p>
+            {d.hi && <p lang="hi" aria-hidden="true">{d.hi}</p>}
+          </div>
+          {d.hi && <button class="lang-pill" type="button" data-lang-toggle aria-pressed="false">hindi mai</button>}
+        </div>
+      </div>
+    </header>
+
+    <section class="wide" aria-label="Project details">
+      <dl class="details">
+        {d.role && <div><dt class="label">Role</dt><dd>{d.role}</dd></div>}
+        {d.timeline && <div><dt class="label">Timeline</dt><dd>{d.timeline}</dd></div>}
+        {d.stack.length > 0 && <div><dt class="label">Stack</dt><dd class="mono stack">{d.stack.join(' · ')}</dd></div>}
+        {(d.repo || d.live) && (
+          <div>
+            <dt class="label">Links</dt>
+            <dd class="links">
+              {d.repo && <a href={d.repo}>Repo <span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
+              {d.live && <a href={d.live}>Live <span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
+            </dd>
+          </div>
+        )}
+      </dl>
+    </section>
+
+    {d.screenshot && (
+      <figure class="wide shot">
+        <img src={d.screenshot.src} alt={d.screenshot.alt} width="1120" height="630" decoding="async" />
+        {d.screenshot.caption && <figcaption>{d.screenshot.caption}</figcaption>}
+      </figure>
+    )}
+
+    <div class="narrow">
+      <div class="prose"><Content /></div>
+
+      {d.diagram && (
+        <figure class="diagram">
+          <img src={d.diagram.src} alt={d.diagram.alt} width="760" height="475" loading="lazy" decoding="async" />
+          {d.diagram.caption && <figcaption>{d.diagram.caption}</figcaption>}
+        </figure>
+      )}
+
+      {d.results.length > 0 && (
+        <>
+          <h2 class="display sub">What changed</h2>
+          <dl class="results">
+            {d.results.map((r) => <div><dt>{r.label}</dt><dd class="display">{r.value}</dd></div>)}
+          </dl>
+        </>
+      )}
+
+      {d.next.length > 0 && (
+        <>
+          <h2 class="display sub">What I'd do next</h2>
+          <ul class="next-list">{d.next.map((x) => <li>{x}</li>)}</ul>
+        </>
+      )}
+
+      {related && (
+        <a class="card related" href={`/yapping/${related.id}`}>
+          <span class="label">from the incident log</span>
+          <span class="related-title">{related.data.title} <span class="arrow" aria-hidden="true">→</span></span>
+        </a>
+      )}
+    </div>
+  </article>
+
+  {(prev || next) && (
+    <nav class="more" aria-label="More projects">
+      {prev && (
+        <a class="card" href={`/projects/${prev.id}`}>
+          <span class="label"><span class="arrow arrow-back" aria-hidden="true">←</span> Previous project</span>
+          <span class="display more-title">{prev.data.title}</span>
+        </a>
+      )}
+      {next && (
+        <a class="card right" href={`/projects/${next.id}`}>
+          <span class="label">Next project <span class="arrow" aria-hidden="true">→</span></span>
+          <span class="display more-title">{next.data.title}</span>
+        </a>
+      )}
+    </nav>
+  )}
+</Site>
+
+<style>
+  .wide { max-width: 1120px; margin: 0 auto; padding-left: var(--gutter-wide); padding-right: var(--gutter-wide); }
+  .narrow { max-width: 760px; margin: 0 auto; padding: 24px var(--gutter-wide) 0; }
+  .head { padding-top: clamp(32px, 5vw, 64px); padding-bottom: 48px; }
+  .back { text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--muted); min-height: 44px; }
+  .head-row { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: flex-start; }
+  .big-num { flex: 0 0 auto; font-size: clamp(40px, 4vw, 56px); }
+  .head-main { flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px; align-items: flex-start; }
+  h1 { font-size: clamp(44px, 6vw, 88px); line-height: 0.95; letter-spacing: -0.025em; text-wrap: balance; }
+  .intro { max-width: 760px; font-size: clamp(19px, 1.7vw, 23px); line-height: 1.5; color: var(--ink-3); }
+  .intro [lang='hi'] { font-size: clamp(20px, 1.8vw, 24px); }
+
+  .details {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 40px;
+  }
+  .details > div { padding: 20px 20px 20px 0; }
+  .details dd { margin-top: 6px; font-size: 17px; font-weight: 500; }
+  .details .stack { font-size: 14px; line-height: 1.6; font-weight: 400; }
+  .links { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 2px !important; }
+  .links a { display: inline-flex; align-items: center; min-height: 44px; }
+
+  .shot img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; background: var(--tile); }
+  .shot figcaption, .diagram figcaption { margin-top: 12px; font-size: 14px; color: var(--muted); }
+  .diagram { margin: 40px 0; }
+  .diagram img { width: 100%; border-radius: 10px; background: var(--tile); }
+
+  .sub { margin: 64px 0 20px; font-size: clamp(28px, 2.8vw, 36px); line-height: 1.12; letter-spacing: -0.015em; }
+  .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; }
+  .results > div { padding: 20px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column-reverse; gap: 6px; }
+  .results dt { font-size: 15px; line-height: 1.4; color: var(--muted); }
+  .results dd { font-size: clamp(36px, 3.4vw, 48px); line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .next-list { margin: 0 0 20px; padding-left: 22px; font-size: 18px; line-height: 1.7; color: var(--ink-2); }
+  .next-list li { margin-bottom: 10px; }
+  .related { margin-top: 48px; padding: 24px; gap: 8px; }
+  .related-title { font-size: 21px; font-weight: 500; line-height: 1.25; letter-spacing: -0.01em; }
+
+  .more {
+    max-width: 1120px; margin: 0 auto; padding: 80px var(--gutter-wide) 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px;
+  }
+  .right { text-align: right; }
+  .more-title { font-size: 26px; line-height: 1.15; letter-spacing: -0.015em; }
+</style>
+
+<script>
+  import { initLangToggles } from '../../scripts/lang';
+  initLangToggles();
+</script>

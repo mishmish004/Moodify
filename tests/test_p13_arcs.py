@@ -121,10 +121,10 @@ def test_build_orders_sections_and_shows_them_with_start_times(logged_in, respx_
     assert "Focusbridge" in names[12:]
 
     # Sections under headings with start times; numbering runs on
-    assert "Summer morning <small>· starts at 0:00</small>" in page.text
-    assert "Workout <small>· starts at 14:00</small>" in page.text
-    assert "Lock in <small>· starts at 42:00</small>" in page.text
-    assert '<span class="n">13</span><span class="what">Focus 1<small>' in page.text
+    assert '<span class="mf-sec__name">Summer morning</span><span class="mf-sec__time">starts at 0:00</span>' in page.text
+    assert '<span class="mf-sec__name">Workout</span><span class="mf-sec__time">starts at 14:00</span>' in page.text
+    assert '<span class="mf-sec__name">Lock in</span><span class="mf-sec__time">starts at 42:00</span>' in page.text
+    assert '<span class="mf-track__n">13</span><span><span class="mf-track__name">Focus 1</span>' in page.text
 
     created = json.loads(sp.create.calls.last.request.content)
     assert created["description"] == "0–14 Summer morning → 14–42 Workout → 42–56 Lock in. Made by Moodify."

@@ -1,0 +1,167 @@
+---
+import CodeIcon from '../components/CodeIcon.astro';
+import Site from '../layouts/Site.astro';
+import { incidentPosts } from '../lib/content';
+import { resume } from '../site/pages';
+import { site } from '../site/site';
+
+const posts = await incidentPosts();
+const jobs = resume.jobs.map((j) => ({
+  ...j,
+  docs: j.tag ? posts.filter((p) => p.data.tags.map((t) => t.toLowerCase()).includes(j.tag)) : [],
+}));
+---
+
+<Site title="Résumé — Amish Shah" description={resume.summary} current="resume">
+  <article class="sheet">
+    <header class="top">
+      <div class="who">
+        <p class="label rise">résumé · updated {resume.updated}</p>
+        <h1 class="display rise d1">{site.name}</h1>
+        <p class="role rise d2">{site.role} · {site.city}</p>
+        <ul class="contact rise d2" aria-label="Contact">
+          <li><a href={`mailto:${site.email}`}>{site.email}</a></li>
+          <li><a href={site.github.url}>github.com/{site.github.handle}</a></li>
+          <li><a href={site.linkedin.url}>linkedin.com/in/{site.linkedin.handle}</a></li>
+        </ul>
+      </div>
+      <div class="actions no-print rise d3">
+        {resume.pdf && (
+          <a class="btn btn-dark btn-md" href={resume.pdf} download="Amish-Shah-resume.pdf">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"></path><path d="M7 10.5l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+            Download PDF
+          </a>
+        )}
+        <button class="btn btn-line btn-md" type="button" data-print>Print</button>
+      </div>
+    </header>
+
+    <section class="part" aria-labelledby="sum-h">
+      <h2 id="sum-h" class="label">summary</h2>
+      <p class="display summary">{resume.summary}</p>
+    </section>
+
+    <section class="part" aria-labelledby="exp-h">
+      <h2 id="exp-h" class="label">experience</h2>
+      <ol class="jobs">
+        {jobs.map((j) => (
+          <li>
+            <div class="job-head">
+              <h3 class="display">{j.role} <span class="muted">at {j.company}</span></h3>
+              <span class="mono when">{j.when}</span>
+            </div>
+            {j.points.length > 0 && <ul class="points">{j.points.map((pt) => <li>{pt}</li>)}</ul>}
+            {j.site && <a class="site-link" href={j.site}>{j.siteLabel}<span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
+            {j.repos.length > 0 && (
+              <div class="repos">
+                <span class="label">code</span>
+                {j.repos.map((r) => <a class="mono" href={r.href}><CodeIcon size={16} />{r.name}<span class="arrow arrow-up" aria-hidden="true">↗</span></a>)}
+              </div>
+            )}
+            {j.docs.length > 0 && (
+              <div class="docs">
+                <p class="label">write-ups tagged {j.tag}</p>
+                <ul>{j.docs.map((d) => <li><a href={`/yapping/${d.id}`}>{d.data.title}<span class="arrow" aria-hidden="true">&#160;→</span></a></li>)}</ul>
+                <a class="muted all" href="/yapping">All {j.company} posts in the log <span class="arrow" aria-hidden="true">&#160;→</span></a>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="part" aria-labelledby="proj-h">
+      <h2 id="proj-h" class="label">selected projects</h2>
+      <ul class="rows projects">
+        {resume.projects.map((p) => (
+          <li>
+            <a class="row-link proj" href={p.href}>
+              <span class="proj-text"><span class="row-title">{p.name}</span><span class="muted">{p.line}</span></span>
+              <span class="proj-cta">Code on GitHub <span class="arrow arrow-up" aria-hidden="true">↗</span></span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="part" aria-labelledby="sk-h">
+      <h2 id="sk-h" class="label">skills</h2>
+      <dl class="skills">
+        {resume.skills.map((s) => (
+          <div><dt>{s.group}</dt><dd>{s.items.map((i) => <span class="tag">{i}</span>)}</dd></div>
+        ))}
+      </dl>
+    </section>
+
+    <section class="part" aria-labelledby="ed-h">
+      <h2 id="ed-h" class="label">education</h2>
+      <div class="edu">
+        <p>{resume.education.degree}, <span class="muted">{resume.education.school}</span></p>
+        <span class="mono when">{resume.education.when}</span>
+      </div>
+    </section>
+
+    <section class="part last" aria-labelledby="wr-h">
+      <h2 id="wr-h" class="label">writing</h2>
+      <p class="writing">I write up every production bug I'm part of: what broke, how it was found, what changed. <a href="/yapping">Read the incident log <span class="arrow" aria-hidden="true">→</span></a></p>
+    </section>
+  </article>
+</Site>
+
+<style>
+  .sheet { max-width: 1040px; margin: 0 auto; padding: clamp(32px, 5vw, 72px) var(--gutter) 40px; }
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 40px; border-bottom: 1px solid var(--ink); }
+  .who { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: clamp(48px, 6.4vw, 96px); line-height: 0.92; letter-spacing: -0.025em; }
+  .role { font-size: clamp(18px, 1.6vw, 21px); line-height: 1.45; color: var(--ink-3); }
+  .contact { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 20px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .contact a { display: inline-flex; align-items: center; min-height: 44px; }
+  .actions { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+
+  .part { display: flex; flex-wrap: wrap; gap: 12px 40px; padding: 40px 0; border-bottom: 1px solid var(--line); }
+  .part.last { border-bottom: 0; }
+  .part > h2 { flex: 0 0 200px; padding-top: 6px; }
+  .part > :not(h2) { flex: 1 1 480px; min-width: 0; }
+  .summary { font-size: clamp(22px, 2vw, 28px); line-height: 1.3; letter-spacing: -0.01em; }
+
+  .jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 40px; }
+  .jobs > li { display: flex; flex-direction: column; gap: 10px; }
+  .job-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 24px; }
+  .job-head h3 { font-size: clamp(24px, 2.2vw, 30px); line-height: 1.15; letter-spacing: -0.015em; }
+  .when { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .points { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 17px; line-height: 1.55; color: var(--ink-2); }
+  .site-link { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; font-weight: 500; }
+  .repos { margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .repos .label { margin-right: 4px; }
+  .repos a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; }
+  .docs { margin-top: 6px; padding: 16px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+  .docs ul { list-style: none; margin: 0; padding: 0; }
+  .docs li a, .docs .all { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; }
+  .docs .all { align-self: flex-start; font-size: 15px; }
+
+  .proj { flex-wrap: wrap; align-items: baseline; padding: 18px 0; }
+  .proj-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 320px; }
+  .proj-text .row-title { font-size: 19px; font-weight: 500; }
+  .proj-text .muted { font-size: 15px; }
+  .proj-cta { font-size: 15px; white-space: nowrap; }
+
+  .skills { display: flex; flex-direction: column; gap: 20px; }
+  .skills > div { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+  .skills dt { flex: 0 0 140px; font-weight: 500; }
+  .skills dd { flex: 1 1 280px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .edu { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 24px; }
+  .edu p { font-size: 19px; font-weight: 500; }
+  .edu .muted { font-weight: 400; }
+  .writing { font-size: 17px; line-height: 1.55; }
+
+  @media print {
+    .sheet { padding-top: 0; }
+    .part { padding: 20px 0; break-inside: avoid; }
+    .top { padding-bottom: 20px; }
+  }
+</style>
+
+<script>
+  document.querySelector('[data-print]')?.addEventListener('click', () => window.print());
+</script>

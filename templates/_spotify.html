@@ -1,29 +1,48 @@
 {# Spotify's design guidelines: Spotify metadata always comes with the Spotify logo and links back to Spotify.
-   The full logo goes next to playlists; the icon alone is allowed where there's no room, so track rows get the icon. #}
+   The full logo goes next to playlists; the icon alone is allowed where there's no room, so rows get the icon.
+   Official files only: black on light, white on dark (style.css flips them with the theme). #}
 
-{% macro logo() -%}
-<img class="spotify-logo" src="/static/spotify-logo.svg" alt="Spotify" width="88" height="24">
+{% macro logo(alt="Spotify") -%}
+<img class="mf-sp-logo" src="/static/spotify-logo.svg" alt="{{ alt }}" width="88" height="24">
 {%- endmacro %}
 
 {% macro icon() -%}
-<img class="spotify-icon" src="/static/spotify-icon.svg" alt="on Spotify" width="23" height="22">
+<img class="mf-sp-icon" src="/static/spotify-icon.svg" alt="" width="25" height="24">
 {%- endmacro %}
 
 {# Links go through app_link (src/links.py): on a phone a tap opens the Spotify app. Import these macros
    "with context" so the filter can see the request's user agent. #}
+
+{# The required "OPEN SPOTIFY" button, with the full logo #}
 {% macro open_spotify(url) -%}
-<a class="open-spotify" href="{{ url | app_link }}">{{ logo() }}<span>OPEN SPOTIFY</span></a>
+<a class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block" href="{{ url | app_link }}">{{ logo(alt="") }}<span>OPEN SPOTIFY</span></a>
 {%- endmacro %}
 
 {% macro get_spotify() -%}
-<p class="get-spotify"><small>No Spotify app?</small> <a href="{{ get_spotify_url() }}">GET SPOTIFY FREE</a></p>
+<p class="mf-small mf-muted mf-get-spotify">No Spotify app? <a class="mf-strong" href="{{ get_spotify_url() }}">GET SPOTIFY FREE</a></p>
 {%- endmacro %}
 
-{# Rows from playlists.recent(): with track_count and like_count #}
+{% macro title_of(p) -%}
+{{ "Moodify: " ~ p.title if p.title else (p.prompt | truncate(80)) }}
+{%- endmacro %}
+
+{# Rows from playlists.recent(), with like_count and rating: the title opens the playlist in Moodify, the icon opens it in Spotify #}
 {% macro playlist_list(rows) -%}
-<ul class="list">
+<ul class="mf-list">
   {% for p in rows %}
-  <li><a href="{{ p.spotify_url | app_link }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</small></span>{{ icon() }}</a></li>
+  <li class="mf-prow">
+    <a class="mf-link-row" href="/playlists/{{ p.id }}"><span class="mf-link-row__title">{{ title_of(p) }}</span><span class="mf-link-row__meta">{{ p.created_at | day }}{% if p.minutes %} · {{ p.minutes | duration }}{% endif %} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</span></a>
+    <a class="mf-sp-link" href="{{ p.spotify_url | app_link }}" aria-label="Open {{ title_of(p) }} in Spotify">{{ icon() }}</a>
+  </li>
   {% endfor %}
 </ul>
+{%- endmacro %}
+
+{# The half sun on the sea, as on every message page: up for good news, low for the rest #}
+{% macro sun(tone) -%}
+<svg class="mf-msg-art" viewBox="0 0 160 56" width="160" height="56" aria-hidden="true"><path class="sun" d="{{ 'M50 40a30 30 0 0 1 60 0z' if tone == 'up' else 'M62 46a18 18 0 0 1 36 0z' }}"></path><rect class="ground" x="0" y="40" width="160" height="16"></rect><path class="sea" d="M2 42q13-5 26 0t26 0t26 0t26 0t26 0t26 0"></path><path class="sea sea--2" d="M10 51q15-4 30 0t30 0t30 0t30 0t30 0"></path></svg>
+{%- endmacro %}
+
+{% macro horizon() -%}
+<div class="mf-horizon" aria-hidden="true"><svg viewBox="0 0 1200 96" preserveAspectRatio="xMidYMax slice"><path class="mf-horizon__sun" d="M664 76a36 36 0 0 1 72 0z"></path><path class="mf-horizon__line" d="M0 76q37.5-6 75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0t75 0"></path><path class="mf-horizon__line mf-horizon__line--2" d="M-40 88q50-5 100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0t100 0"></path></svg></div>
 {%- endmacro %}

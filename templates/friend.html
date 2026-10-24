@@ -1,33 +1,43 @@
 {% extends "base.html" %}
+{% set nav = "friends" %}
 {% block title %}Moodify · {{ name }}{% endblock %}
 {% block content %}
-<h1>{{ friend.display_name or friend.spotify_id }}</h1>
-{% if shared.taste %}
-<h2>{{ name }}'s taste</h2>
-{% if summary %}<p class="summary">{{ summary }}</p>{% else %}<p class="muted">Moodify hasn't read {{ name }}'s taste yet.</p>{% endif %}
-<h2>Recent playlists</h2>
-{% if playlists %}
-<ul class="list plain">
-  {% for p in playlists %}
-  <li><span class="what">{{ p.title or "Untitled" }}<small>{{ p.created_at[:10] }} · {{ p.track_count }} tracks</small></span></li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="muted">Nothing to show.</p>
-{% endif %}
-<p><small>{{ name }} can see that you looked, on their sharing page.</small></p>
-{% else %}
-<p class="muted">{{ name }} doesn't show their taste to friends.</p>
-{% endif %}
-{% if shared.listen_as %}
-<form method="post" action="/friends/{{ friend.spotify_id }}/listen" data-busy="Making it…">
-  <label for="mood">Make a playlist the way {{ name }} would hear it</label>
-  <textarea id="mood" name="mood" required maxlength="2000" rows="3" placeholder="e.g. gym, 40 minutes · sunday cooking · late night drive"></textarea>
-  <button type="submit">Make it</button>
-  <small class="hint">Built from {{ name }}'s taste and the songs they know, not yours, and saved in your Spotify. Nothing goes into {{ name }}'s account; {{ name }} can see you made it.</small>
-</form>
-{% endif %}
-{% if shared.blend %}
-<p><a class="button" href="/blend?with={{ friend.spotify_id }}">Make a Blend with {{ name }}</a></p>
-{% endif %}
+<div class="mf-stack-6" style="max-width: 760px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <a class="mf-back" href="/friends"><span aria-hidden="true">←</span> Friends</a>
+    <h1 class="mf-h1">{{ friend.display_name or friend.spotify_id }}</h1>
+  </div>
+  {% if shared.taste %}
+  <section class="mf-stack-3" aria-labelledby="taste-h">
+    <h2 id="taste-h" class="mf-h2">{{ name }}'s taste</h2>
+    {% if summary %}<p class="mf-ref">{{ summary }}</p>{% else %}<p class="mf-muted">Moodify hasn't read {{ name }}'s taste yet.</p>{% endif %}
+  </section>
+  <section class="mf-stack-3" aria-labelledby="recent-h">
+    <h2 id="recent-h" class="mf-h2">Recent playlists</h2>
+    {% if playlists %}
+    <ul class="mf-list">
+      {% for p in playlists %}
+      <li class="mf-link-row"><span class="mf-link-row__title">{{ p.title or "Untitled" }}</span><span class="mf-link-row__meta">{{ p.created_at | day }} · {{ p.track_count }} tracks</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mf-well mf-muted">Nothing to show.</p>
+    {% endif %}
+    <p class="mf-small mf-muted">{{ name }} can see that you looked, on their sharing page.</p>
+  </section>
+  {% else %}
+  <p class="mf-well mf-muted">{{ name }} doesn't show their taste to friends.</p>
+  {% endif %}
+  {% if shared.listen_as %}
+  <form method="post" action="/friends/{{ friend.spotify_id }}/listen" class="mf-card mf-stack-3" data-busy="Making it…">
+    <label class="mf-h3" for="mood">Make a playlist the way {{ name }} would hear it</label>
+    <textarea id="mood" class="mf-textarea mf-textarea--short" name="mood" required maxlength="2000" rows="3" aria-describedby="listen-hint" placeholder="e.g. gym, 40 minutes · sunday cooking · late night drive"></textarea>
+    <p id="listen-hint" class="mf-hint">Built from {{ name }}'s taste and the songs they know, not yours, and saved in your Spotify. Nothing goes into {{ name }}'s account; {{ name }} can see you made it.</p>
+    <button class="mf-btn mf-btn--primary" type="submit" style="align-self: flex-start">Make it</button>
+  </form>
+  {% endif %}
+  {% if shared.blend %}
+  <a class="mf-btn mf-btn--quiet" href="/blend?with={{ friend.spotify_id }}" style="align-self: flex-start">Make a Blend with {{ name }}</a>
+  {% endif %}
+</div>
 {% endblock %}

@@ -83,6 +83,8 @@ def build_summary(onboarding: dict, listening: Listening) -> str:
             lines.append(f"{label}: {answer}.")
     if onboarding.get("instrumental") == "no":
         lines.append("No instrumental tracks.")
+    elif onboarding.get("instrumental") == "sometimes":
+        lines.append("Instrumental tracks are fine now and then.")
     elif onboarding.get("instrumental"):
         lines.append("Instrumental tracks are fine.")
 

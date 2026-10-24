@@ -1,48 +1,59 @@
 {% extends "base.html" %}
+{% set nav = "memory" %}
 {% block title %}Moodify · what Moodify remembers{% endblock %}
 {% block content %}
-<h1>What Moodify remembers</h1>
-<p>Moodify learns from your likes, ratings and reviews. Here is all of it, and you can delete any part.</p>
+<div class="mf-stack-7" style="max-width: 760px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <h1 class="mf-h1">What Moodify remembers</h1>
+    <p class="mf-lead">Moodify learns from your likes, ratings and reviews. Here is all of it, and you can delete any part.</p>
+  </div>
 
-<h2>What the AI model is told</h2>
-{% if block %}
-<pre class="memory-block">{{ block }}</pre>
-{% else %}
-<p class="muted">Nothing yet. Like songs, rate playlists or write a review, and it shows here.</p>
-{% endif %}
-<p><small>This goes with every request. Lessons that fit a request are added to it as well, at most 8 lessons and 1,500 characters in all.</small></p>
+  <section class="mf-stack-3" aria-labelledby="block-h">
+    <h2 id="block-h" class="mf-h2">What the AI model is told</h2>
+    {% if block %}
+    <pre class="memory-block">{{ block }}</pre>
+    {% else %}
+    <p class="mf-well mf-muted">Nothing yet. Like songs, rate playlists or write a review, and it shows here.</p>
+    {% endif %}
+    <p class="mf-small mf-muted">This goes with every request. Lessons that fit a request are added to it as well, at most 8 lessons and 1,500 characters in all.</p>
+  </section>
 
-<h2 id="lessons">Lessons from your reviews</h2>
-{% if lessons %}
-<ul class="lessons">
-  {% for l in lessons %}
-  {% set source = sources.get(l.source_playlist_id) %}
-  <li>
-    <strong>{{ l.title }}</strong> <small>({{ {"preference": "what you like", "pitfall": "to avoid", "strategy": "what works"}[l.kind] }})</small><br>
-    {{ l.content }}<br>
-    <small>From your review: “{{ l.evidence }}”{% if source %} on <a href="/playlists/{{ source.id }}">{{ source.title or (source.prompt | truncate(60)) }}</a>{% endif %}{% if tags[l.id] %} · {{ tags[l.id] | join(", ") }}{% endif %}</small>
-    <form method="post" action="/memory/lessons/{{ l.id }}/delete">
-      <button type="submit" class="quiet small">Delete this lesson</button>
-    </form>
-  </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="muted">No lessons yet. Write a review on any playlist and Moodify takes a few lessons from it.</p>
-{% endif %}
+  <section class="mf-stack-3" aria-labelledby="lessons">
+    <h2 id="lessons" class="mf-h2">Lessons from your reviews</h2>
+    {% if lessons %}
+    <ul class="mf-list">
+      {% for l in lessons %}
+      {% set source = sources.get(l.source_playlist_id) %}
+      <li class="mf-stack-2 mf-lesson">
+        <p><span class="mf-strong">{{ l.title }}</span> <span class="mf-tag">{{ {"preference": "what you like", "pitfall": "to avoid", "strategy": "what works"}[l.kind] }}</span></p>
+        <p>{{ l.content }}</p>
+        <p class="mf-small mf-muted">From your review: “{{ l.evidence }}”{% if source %} on <a href="/playlists/{{ source.id }}">{{ source.title or (source.prompt | truncate(60)) }}</a>{% endif %}{% if tags[l.id] %} · {{ tags[l.id] | join(", ") }}{% endif %}</p>
+        <form method="post" action="/memory/lessons/{{ l.id }}/delete">
+          <button class="mf-btn mf-btn--danger mf-btn--sm" type="submit">Delete this lesson</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mf-well mf-muted">No lessons yet. Write a review on any playlist and Moodify takes a few lessons from it.</p>
+    {% endif %}
+  </section>
 
-<h2 id="playlists">Playlists Moodify remembers</h2>
-{% if rows %}
-<ul class="list forget">
-  {% for p in rows %}
-  <li><a href="/playlists/{{ p.id }}"><span class="what">{{ p.title or (p.prompt | truncate(80)) }}<small>{{ p.created_at[:10] }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}{% if p.review %} · reviewed{% endif %}</small></span></a>
-    <form method="post" action="/playlists/{{ p.id }}/forget" onsubmit="return confirm('Forget this playlist? Its likes, rating, review and lessons go too. It stays in your Spotify.')">
-      <button type="submit" class="quiet small">Forget</button>
-    </form></li>
-  {% endfor %}
-</ul>
-<p><small>Forgetting a playlist deletes it from Moodify with its likes, rating, review and lessons. It stays in your Spotify.</small></p>
-{% else %}
-<p class="muted">No playlists yet.</p>
-{% endif %}
+  <section class="mf-stack-3" aria-labelledby="playlists">
+    <h2 id="playlists" class="mf-h2">Playlists Moodify remembers</h2>
+    {% if rows %}
+    <ul class="mf-list">
+      {% for p in rows %}
+      <li class="mf-prow"><a class="mf-link-row" href="/playlists/{{ p.id }}"><span class="mf-link-row__title">{{ p.title or (p.prompt | truncate(80)) }}</span><span class="mf-link-row__meta">{{ p.created_at | day }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}{% if p.review %} · reviewed{% endif %}</span></a>
+        <form method="post" action="/playlists/{{ p.id }}/forget" onsubmit="return confirm('Forget this playlist? Its likes, rating, review and lessons go too. It stays in your Spotify.')">
+          <button class="mf-btn mf-btn--quiet mf-btn--sm" type="submit">Forget</button>
+        </form></li>
+      {% endfor %}
+    </ul>
+    <p class="mf-small mf-muted">Forgetting a playlist deletes it from Moodify with its likes, rating, review and lessons. It stays in your Spotify.</p>
+    {% else %}
+    <p class="mf-well mf-muted">No playlists yet.</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

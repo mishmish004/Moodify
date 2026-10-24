@@ -1,16 +1,25 @@
 {% extends "base.html" %}
+{% set nav = "friends" %}
 {% block title %}Moodify · friends{% endblock %}
 {% block content %}
-<h1>Friends</h1>
-{% if friends %}
-<ul class="list">
-  {% for f in friends %}
-  <li><a href="/friends/{{ f.spotify_id }}"><span class="what">{{ f.display_name or f.spotify_id }}<small>Shares: {% set parts = [] %}{% if f.show_taste %}{% set parts = parts + ["their taste"] %}{% endif %}{% if f.allow_blends %}{% set parts = parts + ["Blends"] %}{% endif %}{% if f.allow_listen_as %}{% set parts = parts + ["hear it like " ~ first_name(f)] %}{% endif %}{{ parts | join(", ") }}</small></span></a></li>
-  {% endfor %}
-</ul>
-{% else %}
-<p>Nobody shares anything with friends yet. People show up here once they switch something on.</p>
-{% endif %}
-<p><a class="button" href="/activity">Activity</a> <a class="button" href="/map">Taste map</a> <a class="button" href="/blend">Make a Blend</a></p>
-<p>{% if mine.taste or mine.blend or mine.listen_as %}You share some things with friends.{% else %}You don't share anything with friends.{% endif %} <a href="/sharing">Sharing settings</a></p>
+<div class="mf-stack-6" style="max-width: 760px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <h1 class="mf-h1">Friends</h1>
+    <p class="mf-muted">{% if mine.taste or mine.blend or mine.listen_as %}You share some things with friends.{% else %}You don't share anything with friends.{% endif %} <a href="/sharing">Sharing settings</a></p>
+  </div>
+  {% if friends %}
+  <ul class="mf-list">
+    {% for f in friends %}
+    <li class="mf-prow"><a class="mf-link-row" href="/friends/{{ f.spotify_id }}"><span class="mf-link-row__title">{{ f.display_name or f.spotify_id }}</span><span class="mf-link-row__meta">Shares: {% set parts = [] %}{% if f.show_taste %}{% set parts = parts + ["their taste"] %}{% endif %}{% if f.allow_blends %}{% set parts = parts + ["Blends"] %}{% endif %}{% if f.allow_listen_as %}{% set parts = parts + ["hear it like " ~ first_name(f)] %}{% endif %}{{ parts | join(", ") }}</span></a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="mf-well mf-muted">Nobody shares anything with friends yet. People show up here once they switch something on.</p>
+  {% endif %}
+  <div class="mf-cluster">
+    <a class="mf-btn mf-btn--primary" href="/blend">Make a Blend</a>
+    <a class="mf-btn mf-btn--quiet" href="/map">Taste map</a>
+    <a class="mf-btn mf-btn--quiet" href="/activity">Activity</a>
+  </div>
+</div>
 {% endblock %}

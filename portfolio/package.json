@@ -1,0 +1,29 @@
+{
+  "name": "mish4mish",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "wrangler types && astro check",
+    "deploy": "astro build && wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "placeholders": "node scripts/placeholders.mjs",
+    "test": "node --test \"tests/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.4.2",
+    "@astrojs/rss": "^4.0.19",
+    "@astrojs/sitemap": "^3.7.4",
+    "astro": "^7.4.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.152.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

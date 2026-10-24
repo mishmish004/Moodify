@@ -375,7 +375,7 @@ def test_fix_it_needs_a_review(logged_in):
 def test_page_shows_the_review_box_and_fix_button_only_with_a_review(logged_in, respx_mock):
     pid = _playlist()
     page = logged_in.get(f"/playlists/{pid}").text
-    assert f'<form id="review" class="review" method="post" action="/playlists/{pid}/review">' in page
+    assert f'<form id="review" class="mf-field" method="post" action="/playlists/{pid}/review">' in page
     assert 'maxlength="2000"' in page and "too much Drake" in page
     assert f'action="/playlists/{pid}/fix"' not in page
     ChatMock(respx_mock, "Reflection", {"verdict": "worked", "lessons": []})

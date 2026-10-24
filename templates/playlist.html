@@ -1,165 +1,206 @@
 {% extends "base.html" %}
 {% from "_spotify.html" import icon, open_spotify, get_spotify with context %}
+{% set nav = "history" %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
 
-{# One track row: the whole row links to Spotify, with a ♥ form beside the link (a form can't sit inside it).
-   number is what the page shows; the URL uses the stored position, number - 1 #}
-{% macro track_row(t, number) -%}
-{%- set position = number - 1 %}{% set on = t.uri in liked -%}
-<li id="t{{ position }}"><a href="{{ t.url | app_link }}"><span class="n">{{ number }}</span><span class="what">{{ t.name }}<small>{{ t.artists | join(", ") }}{% if blend %}{{ credit_badge(blend.credits[position]) }}{% endif %}</small></span>{{ icon() }}</a>
-  <form class="like" method="post" action="/playlists/{{ playlist.id }}/tracks/{{ position }}/{{ "unlike" if on else "like" }}" data-feedback="like">
-    <button type="submit" aria-pressed="{{ "true" if on else "false" }}" aria-label="Like {{ t.name }}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.8c0 5.5-7.5 10.1-7.5 10.1z"/></svg></button>
-  </form></li>
+{# Every row links to the track on Spotify, with the Spotify icon, and has a ♥ form beside the link (a form
+   can't sit inside it). Numbering carries across sections; the like URL uses the stored position, number - 1 #}
+{% macro track_list(items, first) -%}
+<ol class="mf-tracks" start="{{ first }}">
+  {% for t in items %}
+  {%- set position = first + loop.index0 - 1 %}{% set on = t.uri in liked %}
+  <li class="mf-track" id="t{{ position }}"><a class="mf-track__link" href="{{ t.url | app_link }}" aria-label="{{ t.name }} by {{ t.artists | join(', ') }}, open in Spotify"><span class="mf-track__n">{{ position + 1 }}</span><span><span class="mf-track__name">{{ t.name }}</span><span class="mf-track__artists">{{ t.artists | join(", ") }}{% if blend %}{{ credit_badge(blend.credits[position]) }}{% endif %}</span></span>{{ icon() }}</a>
+    <form class="mf-like-form" method="post" action="/playlists/{{ playlist.id }}/tracks/{{ position }}/{{ "unlike" if on else "like" }}" data-feedback="like">
+      <button class="mf-like" type="submit" aria-pressed="{{ "true" if on else "false" }}" aria-label="Like {{ t.name }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.8c0 5.5-7.5 10.1-7.5 10.1z"/></svg></button>
+    </form></li>
+  {% endfor %}
+</ol>
 {%- endmacro %}
 
-{# Phase 20: whose taste a Blend track came from: one person's dot and initials, or "common ground" #}
+{# Phase 20: whose taste a Blend track came from: one person's initials in their colour, or "common ground" #}
 {% macro credit_badge(ids) -%}
-{%- if ids | length > 1 %} · <span class="credit">common ground</span>
-{%- elif ids %}{% set m = blend.members | selectattr("id", "equalto", ids[0]) | first %} · <span class="credit"><i class="swatch member-{{ m.slot }}" aria-hidden="true"></i>{{ m.initials }}</span>{% endif %}
+{%- if ids | length > 1 %}<span class="mf-track__who"><span class="mf-tag">common ground</span></span>
+{%- elif ids %}{% set m = blend.members | selectattr("id", "equalto", ids[0]) | first %}<span class="mf-track__who"><span class="mf-avatar mf-avatar--sm" style="--who: var(--mf-p{{ m.slot }})" title="From {{ m.name }}'s taste">{{ m.initials }}</span></span>{% endif %}
 {%- endmacro %}
 
 {% block content %}
-{% if brief and brief.support_note %}
-<p class="notice">If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a>.</p>
-{% endif %}
-<h1>Moodify: {{ title }}</h1>
-{% if heard_as %}
-<p class="muted">Made the way {{ heard_as }} would hear it: from {{ heard_as }}'s taste and the songs they know, not yours.</p>
-{% endif %}
-{% if blend %}
-<p class="muted">A Moodify Blend with {{ (blend.members[1:] | map(attribute="name") | list) | join(", ") }}.</p>
-{% endif %}
-{% if parent %}
-<p class="muted">Version {{ version }}, fixed with your review of <a href="/playlists/{{ parent.id }}">the earlier one</a>.</p>
-{% endif %}
-{% for f in fixes %}
-<p class="muted"><a href="/playlists/{{ f.id }}">A fixed version</a> was made from your review on {{ f.created_at[:10] }}.</p>
-{% endfor %}
-{% if tracks %}
-<p class="muted">{{ tracks | length }} tracks, {{ total_minutes // 60 ~ " h " if total_minutes >= 60 else "" }}{{ total_minutes % 60 }} min, saved as a private playlist in your Spotify account.</p>
-{% else %}
-<p class="muted">This playlist was made before Moodify kept track lists. Open it in Spotify to see the songs.</p>
-{% endif %}
-{{ open_spotify(playlist.spotify_url) }}
-{% if phone %}{{ get_spotify() }}{% endif %}
-<form method="post" action="/queue/{{ playlist.id }}" data-busy="Adding to your queue…">
-  <button type="submit">Play now</button>
-  <small class="hint">Needs Premium and Spotify open on one of your devices.</small>
-</form>
-
-{% if blend %}
-<section class="shares" aria-labelledby="shares-title">
-  <h2 id="shares-title">Whose taste it came from</h2>
-  <p class="muted"><small>Share of the playlist's minutes per person. Songs on common ground count for each of them. The tick is each person's fair minimum.</small></p>
-  {% for s in blend.shares %}
-  <div class="share" title="{{ s.name }}: {{ s.percent }}% ({{ s.minutes }} min), fair minimum {{ s.floor }}%">
-    <span class="share-name"><i class="swatch member-{{ s.slot }}" aria-hidden="true"></i>{{ s.name }} <small>({{ s.initials }})</small></span>
-    <span class="share-track" aria-hidden="true"><span class="share-bar member-{{ s.slot }}" style="width: {{ [s.percent, 100] | min }}%"></span><span class="share-floor" style="left: {{ s.floor }}%"></span></span>
-    <span class="share-value">{{ s.percent }}%</span>
-  </div>
-  {% endfor %}
-  <details>
-    <summary>As a table</summary>
-    <table>
-      <thead><tr><th scope="col">Person</th><th scope="col">Minutes</th><th scope="col">Share</th><th scope="col">Fair minimum</th></tr></thead>
-      <tbody>{% for s in blend.shares %}<tr><th scope="row">{{ s.name }}</th><td>{{ s.minutes }}</td><td>{{ s.percent }}%</td><td>{{ s.floor }}%</td></tr>{% endfor %}</tbody>
-    </table>
-  </details>
-</section>
-{% endif %}
-
-{% if brief %}
-<details class="reading" open>
-  <summary>How Moodify read this</summary>
-  <p>{{ brief.summary }}</p>
-  {% if brief.sections | length > 1 %}
-  <ol>
-    {% for s in brief.sections %}
-    <li><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min asked{% endif %}{% if loop.index0 in section_minutes %}, {{ section_minutes[loop.index0] | round | int }} min made{% endif %}{% if not loop.first and s.transition_in == "cut" %} <small>(straight in)</small>{% endif %}</li>
-    {% endfor %}
-  </ol>
-  {% endif %}
-  {% if rules %}<p><small>Rules kept: {{ rules | join("; ") }}.</small></p>{% endif %}
-  <p class="muted"><small>You wrote: {{ playlist.prompt }}</small></p>
-  <p><a href="/?redo={{ playlist.id }}">Adjust and redo</a></p>
-</details>
-{% endif %}
-
-{% if groups %}
-{% for g in groups %}
-<h2 class="section-head">{{ g.label }} <small>· starts at {{ g.start }}</small></h2>
-<ol class="list">
-  {% for t in g.tracks %}
-  {{ track_row(t, g.first + loop.index0) }}
-  {% endfor %}
-</ol>
-{% endfor %}
-{% elif tracks %}
-<ol class="list">
-  {% for t in tracks %}
-  {{ track_row(t, loop.index) }}
-  {% endfor %}
-</ol>
-{% endif %}
-{% if tracks %}
-<p><small>♥ the songs you like. {% if user.likes_to_spotify %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</small></p>
-{% endif %}
-
-<form id="rating" class="rating" method="post" action="/playlists/{{ playlist.id }}/rating" data-feedback="rating">
-  <fieldset>
-    <legend>How was it, out of 10?</legend>
-    <div class="scale">
-      {% for n in range(1, 11) %}
-      <button type="submit" name="rating" value="{{ n }}" aria-pressed="{{ "true" if playlist.rating == n else "false" }}">{{ n }}</button>
+<div class="mf-pl">
+  <div class="mf-pl__top mf-stack-5">
+    {% if brief and brief.support_note %}
+    <p class="mf-support"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 13.5c2 0 2-1.2 4-1.2s2 1.2 4 1.2 2-1.2 4-1.2 2 1.2 2 1.2"></path><path d="M6 10a4 4 0 0 1 8 0"></path></svg><span>If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a></span></p>
+    {% endif %}
+    <div class="mf-stack-2">
+      <a class="mf-back" href="/history"><span aria-hidden="true">←</span> All your playlists</a>
+      <h1 class="mf-h1">Moodify: {{ title }}</h1>
+      {% if tracks %}
+      <p class="mf-muted">{{ tracks | length }} tracks, {{ total_minutes | duration }}, saved as a private playlist in your Spotify account.</p>
+      {% else %}
+      <p class="mf-muted">Saved as a private playlist in your Spotify account.</p>
+      {% endif %}
+      {% if heard_as %}
+      <p class="mf-muted">Made the way {{ heard_as }} would hear it: from {{ heard_as }}'s taste and the songs they know, not yours.</p>
+      {% endif %}
+      {% if blend %}
+      <p class="mf-muted">A Moodify Blend with {{ (blend.members[1:] | map(attribute="name") | list) | join(", ") }}.</p>
+      {% endif %}
+      {% if parent %}
+      <p class="mf-muted">Version {{ version }}, fixed with your review of <a href="/playlists/{{ parent.id }}">the earlier one</a>.</p>
+      {% endif %}
+      {% for f in fixes %}
+      <p class="mf-muted"><a href="/playlists/{{ f.id }}">A fixed version</a> was made from your review on {{ f.created_at | day }}.</p>
       {% endfor %}
     </div>
-  </fieldset>
-</form>
+    <div class="mf-stack-3">
+      {{ open_spotify(playlist.spotify_url) }}
+      {% if phone %}{{ get_spotify() }}{% endif %}
+      <form method="post" action="/queue/{{ playlist.id }}" class="mf-stack-2" data-busy="Adding to your queue…">
+        <button class="mf-btn mf-btn--quiet mf-btn--block" type="submit" aria-describedby="play-note">Play now</button>
+        <p id="play-note" class="mf-hint" style="text-align: center">Needs Premium and Spotify open on one of your devices.</p>
+      </form>
+    </div>
 
-<form id="review" class="review" method="post" action="/playlists/{{ playlist.id }}/review">
-  <label for="review-text">Tell Moodify how it went, in your own words</label>
-  <textarea id="review-text" name="review" maxlength="2000" rows="4" placeholder="e.g. the workout part dragged · loved the first 10 minutes · too much Drake · the switch to focus was perfect">{{ playlist.review or "" }}</textarea>
-  <small class="hint">A word, a list or a whole paragraph, however you like. Moodify learns from it for your next playlists. To delete it, empty the box and save.</small>
-  <button type="submit">Save review</button>
-</form>
-{% if playlist.review %}
-<div class="learned">
-  {% if verdict %}
-  <p>Moodify read your review as: <strong>{{ verdict }}</strong>.</p>
-  {% else %}
-  <p class="muted"><small>Moodify is reading your review. Reload in a moment to see what it learned.</small></p>
+    {% if blend %}
+    <section class="mf-card mf-stack-3" aria-labelledby="shares-h">
+      <h2 id="shares-h" class="mf-h3">Whose taste it came from</h2>
+      <p class="mf-small mf-muted">Share of the playlist's minutes per person. Songs on common ground count for each of them. The tick is each person's fair minimum.</p>
+      <div class="mf-stack-2">
+        {% for s in blend.shares %}
+        <div class="mf-share" style="--who: var(--mf-p{{ s.slot }})" title="{{ s.name }}: {{ s.percent }}% ({{ s.minutes }} min), fair minimum {{ s.floor }}%">
+          <span class="mf-share__name"><span class="mf-avatar mf-avatar--sm" aria-hidden="true">{{ s.initials }}</span>{{ s.name }}</span>
+          <span class="mf-share__track" aria-hidden="true"><span class="mf-share__bar" style="width: {{ [s.percent, 100] | min }}%"></span><span class="mf-share__floor" style="left: {{ s.floor }}%"></span></span>
+          <span class="mf-share__value mf-num">{{ s.percent }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      <details class="mf-disclosure">
+        <summary>Show as table<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></summary>
+        <div class="mf-disclosure__body">
+          <table class="mf-table">
+            <thead><tr><th scope="col">Person</th><th scope="col">Minutes</th><th scope="col">Share</th><th scope="col">Fair minimum</th></tr></thead>
+            <tbody>{% for s in blend.shares %}<tr><th scope="row">{{ s.name }}</th><td>{{ s.minutes }}</td><td>{{ s.percent }}%</td><td>{{ s.floor }}%</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+    {% endif %}
+  </div>
+
+  {% if brief %}
+  <section class="mf-pl__read mf-card mf-stack-4" aria-labelledby="read-h">
+    <h2 id="read-h" class="mf-h3">How Moodify read this</h2>
+    <p>{{ brief.summary }}</p>
+    {% if chart %}
+    <figure class="mf-chart" aria-labelledby="en-cap">
+      <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="{{ chart.label }}">
+        <line class="grid" x1="{{ chart.x0 }}" y1="{{ chart.y5 }}" x2="{{ chart.x1 }}" y2="{{ chart.y5 }}"></line>
+        <line class="grid" x1="{{ chart.x0 }}" y1="{{ chart.y10 }}" x2="{{ chart.x1 }}" y2="{{ chart.y10 }}"></line>
+        <line class="axis" x1="{{ chart.x0 }}" y1="{{ chart.axis }}" x2="{{ chart.x1 }}" y2="{{ chart.axis }}"></line>
+        <path class="area" d="{{ chart.area }}"></path>
+        <path class="line" d="{{ chart.line }}"></path>
+        {% for t in chart.ticks %}<line class="axis" x1="{{ t.x }}" y1="{{ chart.axis }}" x2="{{ t.x }}" y2="{{ chart.axis + 4 }}"></line><text x="{{ t.x }}" y="116" text-anchor="middle">{{ t.text }}</text>{% endfor %}
+        <text x="{{ chart.x0 }}" y="116">0:00</text><text x="{{ chart.x1 }}" y="116" text-anchor="end">{{ chart.total }}</text>
+        {% for l in chart.levels %}<text x="{{ l.x }}" y="{{ l.y }}" text-anchor="middle" class="t-ink">{{ l.text }}</text>{% endfor %}
+        <text x="352" y="{{ chart.y10 + 3 }}" text-anchor="end">10</text><text x="352" y="{{ chart.y5 + 3 }}" text-anchor="end">5</text>
+      </svg>
+      <figcaption id="en-cap" class="mf-xs mf-muted">{{ chart.caption }}</figcaption>
+    </figure>
+    {% endif %}
+    {% if brief.sections | length > 1 %}
+    <ul class="mf-stack-2">
+      {% for s in brief.sections %}
+      <li class="mf-read"><span class="mf-read__dot" aria-hidden="true"></span><span><strong>{{ s.label }}</strong>: {{ s.feeling }}{% if s.minutes %}, {{ s.minutes }} min asked{% endif %}{% if loop.index0 in section_minutes %}, {{ section_minutes[loop.index0] | round | int }} min made{% endif %}{% if not loop.first and s.transition_in == "cut" %} <span class="mf-tag mf-tag--accent">straight in</span>{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if rules %}<p>Rules kept: {{ rules | join("; ") }}.</p>{% endif %}
+    <div class="mf-well mf-stack-2"><p class="mf-xs mf-muted mf-strong">You wrote</p><p class="mf-muted mf-ref">{{ playlist.prompt }}</p></div>
+    <a class="mf-btn mf-btn--link" href="/?redo={{ playlist.id }}" style="align-self: flex-start">Adjust and redo</a>
+  </section>
   {% endif %}
-  {% if lessons %}
-  <p>What it will remember:</p>
-  <ul>
-    {% for l in lessons %}
-    <li><strong>{{ l.title }}</strong>: {{ l.content }} <small>(from “{{ l.evidence }}”{% if l.scope == "this_playlist" %}; this playlist only{% endif %})</small></li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  <form method="post" action="/playlists/{{ playlist.id }}/fix" data-busy="Starting…">
-    <button type="submit">Fix it with this review</button>
-    <small class="hint">Makes a new version in your Spotify with your review applied. This one stays.</small>
-  </form>
+
+  <section class="mf-pl__tracks mf-stack-3" aria-labelledby="tr-h">
+    <h2 id="tr-h" class="mf-vh">Tracks</h2>
+    {% if groups %}
+      {% for g in groups %}
+      <div>
+        <h3 class="mf-sec"><span class="mf-sec__name">{{ g.label }}</span><span class="mf-sec__time">starts at {{ g.start }}</span><span class="mf-sec__meta"><span class="mf-energy"><span class="mf-energy__bars" aria-hidden="true">{% for b in g.bars %}<i{% if b.on %} class="on"{% endif %} style="height: {{ b.height }}px"></i>{% endfor %}</span>Energy {{ g.energy }} of 10</span><span>{{ (g.ms / 60000) | duration }}</span></span></h3>
+        {{ track_list(g.tracks, g.first) }}
+      </div>
+      {% endfor %}
+    {% elif tracks %}
+      {{ track_list(tracks, 1) }}
+    {% else %}
+      <div class="mf-well mf-stack-2"><p class="mf-strong">This playlist was made before Moodify kept track lists.</p><p class="mf-muted">Open it in Spotify to see the songs.</p></div>
+    {% endif %}
+    {% if tracks %}
+    <p class="mf-small mf-muted">♥ the songs you like. {% if user.likes_to_spotify %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</p>
+    {% endif %}
+  </section>
+
+  <section class="mf-pl__rate mf-stack-6" aria-label="How it went">
+    <form id="rating" class="mf-rate" method="post" action="/playlists/{{ playlist.id }}/rating" data-feedback="rating">
+      <fieldset class="mf-stack-3">
+        <legend class="mf-h3">How was it, out of 10?</legend>
+        <div class="mf-rating">
+          {% for n in range(1, 11) %}
+          <button type="submit" name="rating" value="{{ n }}" aria-pressed="{{ "true" if playlist.rating == n else "false" }}">{{ n }}</button>
+          {% endfor %}
+        </div>
+        <p class="mf-rating__ends" aria-hidden="true"><span>1 · not for me</span><span>10 · just right</span></p>
+      </fieldset>
+    </form>
+
+    <form id="review" class="mf-field" method="post" action="/playlists/{{ playlist.id }}/review">
+      <label class="mf-label" for="review-text">Tell Moodify how it went, in your own words</label>
+      <textarea id="review-text" class="mf-textarea mf-textarea--short" name="review" maxlength="2000" rows="4" aria-describedby="review-hint" placeholder="e.g. the workout part dragged · loved the first 10 minutes · too much Drake · the switch to focus was perfect">{{ playlist.review or "" }}</textarea>
+      <p id="review-hint" class="mf-hint">A word, a list or a whole paragraph, however you like. Moodify learns from it for your next playlists. To delete it, empty the box and save.</p>
+      <button class="mf-btn mf-btn--quiet" type="submit" style="align-self: flex-start">Save review</button>
+    </form>
+    {% if playlist.review %}
+    <div class="mf-well mf-stack-3">
+      {% if verdict %}
+      <p>Moodify read your review as: <strong>{{ verdict }}</strong>.</p>
+      {% else %}
+      <p class="mf-small mf-muted">Moodify is reading your review. Reload in a moment to see what it learned.</p>
+      {% endif %}
+      {% if lessons %}
+      <p>What it will remember:</p>
+      <ul class="mf-stack-2">
+        {% for l in lessons %}
+        <li class="mf-read"><span class="mf-read__dot" aria-hidden="true"></span><span><strong>{{ l.title }}</strong>: {{ l.content }} <span class="mf-small mf-muted">(from “{{ l.evidence }}”{% if l.scope == "this_playlist" %}; this playlist only{% endif %})</span></span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <form method="post" action="/playlists/{{ playlist.id }}/fix" class="mf-stack-2" data-busy="Starting…">
+        <button class="mf-btn mf-btn--primary" type="submit" aria-describedby="fix-note" style="align-self: flex-start">Fix it with this review</button>
+        <p id="fix-note" class="mf-hint">Makes a new version in your Spotify with your review applied. This one stays.</p>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if not (brief and brief.support_note) %}
+    <form id="hide" method="post" action="/playlists/{{ playlist.id }}/hide" class="mf-stack-2">
+      <input type="hidden" name="hidden" value="{{ 0 if playlist.hidden else 1 }}">
+      {% if playlist.hidden %}
+      <p class="mf-small mf-muted">Hidden from friends.</p>
+      <button class="mf-btn mf-btn--quiet mf-btn--sm" type="submit" style="align-self: flex-start">Show to friends</button>
+      {% else %}
+      <p class="mf-small mf-muted">{% if shows_taste %}Friends who see your taste see this playlist's title (never what you typed).{% else %}You don't share your taste with friends, so they see nothing of this.{% endif %}</p>
+      <button class="mf-btn mf-btn--quiet mf-btn--sm" type="submit" style="align-self: flex-start">Hide from friends</button>
+      {% endif %}
+    </form>
+    {% endif %}
+  </section>
+
+  <div class="mf-pl__more mf-stack-3">
+    <form method="post" action="/playlists/{{ playlist.id }}/more" class="mf-stack-2" data-busy="Starting…">
+      <button class="mf-btn mf-btn--quiet mf-btn--block" type="submit" aria-describedby="more-note">More like this</button>
+      <p id="more-note" class="mf-hint" style="text-align: center">A new playlist in the same spirit, with new songs. Uses your likes{% if playlist.review %} and your review{% endif %}.</p>
+    </form>
+    <a class="mf-btn mf-btn--quiet mf-btn--block" href="/">Make another</a>
+  </div>
 </div>
-{% endif %}
-{% if not (brief and brief.support_note) %}
-<form id="hide" method="post" action="/playlists/{{ playlist.id }}/hide">
-  <input type="hidden" name="hidden" value="{{ 0 if playlist.hidden else 1 }}">
-  {% if playlist.hidden %}
-  <p><small>Hidden from friends.</small> <button type="submit" class="quiet small">Show to friends</button></p>
-  {% else %}
-  <p><small>{% if shows_taste %}Friends who see your taste see this playlist's title (never what you typed).{% else %}You don't share your taste with friends, so they see nothing of this.{% endif %}</small>
-    <button type="submit" class="quiet small">Hide from friends</button></p>
-  {% endif %}
-</form>
-{% endif %}
-<form method="post" action="/playlists/{{ playlist.id }}/more" data-busy="Starting…">
-  <button type="submit">More like this</button>
-  <small class="hint">A new playlist in the same spirit, with new songs. Uses your likes{% if playlist.review %} and your review{% endif %}.</small>
-</form>
-<p><a class="button" href="/">Make another</a></p>
 {% endblock %}
 
 {% block scripts %}<script src="/static/feedback.js"></script>

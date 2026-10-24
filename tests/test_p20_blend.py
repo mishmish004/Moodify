@@ -237,8 +237,8 @@ def test_name_description_access_log_and_page(logged_in, respx_mock):
     with get_conn() as conn:
         rows = [tuple(r) for r in conn.execute("SELECT owner, viewer, kind FROM taste_access ORDER BY owner")]
     assert rows == [("friend2", "friend1", "blend"), ("friend3", "friend1", "blend")]
-    assert "Whose taste it came from" in page and 'class="share-bar member-2"' in page
-    assert '<i class="swatch member-2" aria-hidden="true"></i>SR</span>' in page and "common ground" in page
+    assert "Whose taste it came from" in page and '<div class="mf-share" style="--who: var(--mf-p2)"' in page
+    assert 'style="--who: var(--mf-p2)" title="From Sam\'s taste">SR</span>' in page and "common ground" in page
     assert "<th scope=\"row\">Priya</th>" in page
 
 

@@ -1,24 +1,72 @@
 {% extends "base.html" %}
+{% from "_spotify.html" import horizon %}
+{% block title %}Moodify · playlists for the mood you're in{% endblock %}
 {% block content %}
-{% if reason == "scopes" %}
-<p class="notice">Moodify can now use more of your Spotify: your liked songs, what you played recently, the artists you follow and your playlists. Please log in again to allow it. Nothing you saved is lost.</p>
-{% endif %}
-<h1>Playlists for the mood you're in</h1>
-<p>Describe how you feel or what you're doing. Moodify picks songs that fit, in the style you like, and saves them as a private playlist in your Spotify account.</p>
-{# POST, not a link: starting the Spotify login from a GET lets prefetchers and crawlers use up the one-time state #}
-<form method="post" action="/login">
-  <button type="submit" class="wide">Log in with Spotify</button>
-</form>
-<p><small>Friends only: your Spotify account has to be added to the app first. Ask whoever sent you the link.</small></p>
+{{ horizon() }}
+<div class="mf-stack-7" style="max-width: 600px; margin: 0 auto">
+  <div class="mf-stack-5">
+    {% if reason == "scopes" %}
+    <div class="mf-notice" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"></circle><path d="M10 9v5M10 6.2v.3"></path></svg><p>Moodify can now use more of your Spotify: your liked songs, what you played recently, the artists you follow and your playlists. Please log in again to allow it. Nothing you saved is lost.</p></div>
+    {% endif %}
+    <div class="mf-stack-3">
+      <h1 class="mf-display">Playlists for the mood you're in</h1>
+      <p class="mf-lead">Tell Moodify how you feel or what you're doing, in any words. It plans the parts, picks songs that fit your taste, and saves a private playlist to your Spotify.</p>
+    </div>
+    <div class="mf-stack-3">
+      {# POST, not a link: starting the Spotify login from a GET lets prefetchers and crawlers use up the one-time state #}
+      <form method="post" action="/login">
+        <button type="submit" class="mf-btn mf-btn--primary mf-btn--xl mf-btn--block">Log in with Spotify</button>
+      </form>
+      <p class="mf-small mf-muted" style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" style="flex: 0 0 18px; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round"><rect x="4" y="9" width="12" height="8" rx="2"></rect><path d="M7 9V6.5a3 3 0 0 1 6 0V9"></path></svg><span>Friends only. Your Spotify account has to be added first; ask whoever sent you the link.</span></p>
+    </div>
+  </div>
 
-<h2>What happens to your data</h2>
-<ul>
-  <li>Each mood you type is sent to OpenAI with your answers to the taste questions and a summary of your Spotify listening, so its model can suggest songs. The summary covers your most played artists and tracks, what you played recently, some of your liked songs, the artists you follow and your playlists' names. Up to 150 songs you know are listed too, so some can go into your playlists.</li>
-  <li>Moodify stores your Spotify ID and name, a login token and which Spotify permissions you gave, your answers, that summary and song list (refreshed daily), the playlists it made for you with their tracks, and the songs you like and the 1–10 ratings you give in Moodify.</li>
-  <li>When you write a review of a playlist, it's sent to OpenAI with that playlist's tracks, your likes and rating, so its model can work out what to do differently. What it learns (a few short lessons, each quoting your review) is sent along with your next requests, together with the songs you liked and what you asked for in playlists you rated 8 or more. Reviews, their earlier versions and the lessons are kept until you delete them or disconnect; "Memory" shows all of it and lets you delete any part.</li>
-  <li>It can read your listening history, liked songs, followed artists and playlists; create playlists in your account; add songs to your liked songs when you like them in Moodify (you can turn this off in Settings); and, when you press Play now, add songs to your queue.</li>
-  <li>The songs in your library (what you play, like and keep) are sent to OpenAI to be described: energy, mood, how electronic or danceable they are, decade, genres and language. Moodify keeps those descriptions with the songs, and they go when the songs leave your library.</li>
-  <li>Nothing about you is shown to or used for other people on Moodify unless you switch it on under Friends → Sharing settings. Even then, what you type, your reviews, ratings and lessons are never shared.</li>
-  <li>Disconnect, at the bottom of the home page, deletes everything Moodify stored about you at once. To remove its access to Spotify as well, go to <a href="https://www.spotify.com/account/apps/">spotify.com/account/apps</a>.</li>
-</ul>
+  <section class="mf-card mf-stack-4" aria-labelledby="ex-h">
+    <h2 id="ex-h" class="mf-h3">What it looks like</h2>
+    <div class="mf-well"><p class="mf-xs mf-muted mf-strong">You write</p><p>"chill summer morning, then 30 min workout, then instantly lock in for coding"</p></div>
+    <div class="mf-stack-2">
+      <p class="mf-xs mf-muted mf-strong">Moodify plans</p>
+      <ol class="mf-list">
+        <li class="mf-split" style="padding: 10px 0"><span class="mf-strong">Summer morning</span><span class="mf-small mf-muted mf-num">easy start · energy 4</span></li>
+        <li class="mf-split" style="padding: 10px 0"><span class="mf-strong">Workout</span><span class="mf-small mf-muted mf-num">30 min · energy 8</span></li>
+        <li class="mf-split" style="padding: 10px 0"><span class="mf-strong">Lock in, straight in</span><span class="mf-small mf-muted mf-num">steady · energy 5</span></li>
+      </ol>
+      <p class="mf-small mf-muted">Then it finds each song on Spotify and saves the playlist to your account.</p>
+    </div>
+  </section>
+
+  <section class="mf-stack-4" aria-labelledby="data-h">
+    <h2 id="data-h" class="mf-h2">What happens to your data</h2>
+    <dl class="mf-stack-5">
+      <div class="mf-stack-2">
+        <dt class="mf-h3">What goes to OpenAI</dt>
+        <dd class="mf-muted">Each mood you type, with your answers to the taste questions and a summary of your Spotify listening, so its model can suggest songs. The summary covers your most played artists and tracks, what you played recently, some of your liked songs, the artists you follow and your playlists' names. Up to 150 songs you know are listed too, so some can go into your playlists. Not your email or your Spotify login.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">What Moodify keeps</dt>
+        <dd class="mf-muted">Your Spotify ID and name, a login token and which Spotify permissions you gave, your answers, that summary and song list (refreshed daily), the playlists it made for you with their tracks, and the songs you like and the 1–10 ratings you give in Moodify.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">What it can do in your Spotify</dt>
+        <dd class="mf-muted">Read your listening history, liked songs, followed artists and playlists; create playlists in your account; add songs to your liked songs when you like them in Moodify (you can turn this off in Settings); and, when you press Play now, add songs to your queue.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">Your reviews and what Moodify learns</dt>
+        <dd class="mf-muted">When you write a review of a playlist, it's sent to OpenAI with that playlist's tracks, your likes and rating, so its model can work out what to do differently. What it learns (a few short lessons, each quoting your review) is sent along with your next requests, together with the songs you liked and what you asked for in playlists you rated 8 or more. Reviews, their earlier versions and the lessons are kept until you delete them or disconnect; "Memory" shows all of it and lets you delete any part.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">How your songs are described</dt>
+        <dd class="mf-muted">The songs in your library (what you play, like and keep) are sent to OpenAI to be described: energy, mood, how electronic or danceable they are, decade, genres and language. Moodify keeps those descriptions with the songs, and they go when the songs leave your library.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">Friends</dt>
+        <dd class="mf-muted">Nothing about you is shown to or used for other people on Moodify unless you switch it on under Friends → Sharing settings. Even then, what you type, your reviews, ratings and lessons are never shared.</dd>
+      </div>
+      <div class="mf-stack-2">
+        <dt class="mf-h3">How to delete it</dt>
+        <dd class="mf-muted">"Disconnect and delete my data", at the bottom of the home page, deletes everything Moodify stored about you, straight away. Playlists already in your Spotify stay there. To remove its access to Spotify as well, go to <a href="https://www.spotify.com/account/apps/">spotify.com/account/apps</a>.</dd>
+      </div>
+    </dl>
+  </section>
+</div>
 {% endblock %}

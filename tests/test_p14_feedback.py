@@ -252,12 +252,12 @@ def test_playlist_page_works_without_javascript(logged_in):
     pid = _playlist()
     page = logged_in.get(f"/playlists/{pid}").text
     # Plain forms that post and redirect: the script only enhances them
-    assert f'<form class="like" method="post" action="/playlists/{pid}/tracks/0/like" data-feedback="like">' in page
-    assert f'<form id="rating" class="rating" method="post" action="/playlists/{pid}/rating" data-feedback="rating">' in page
+    assert f'<form class="mf-like-form" method="post" action="/playlists/{pid}/tracks/0/like" data-feedback="like">' in page
+    assert f'<form id="rating" class="mf-rate" method="post" action="/playlists/{pid}/rating" data-feedback="rating">' in page
     for n in range(1, 11):
         assert f'name="rating" value="{n}"' in page
     assert '<script src="/static/feedback.js"></script>' in page
-    assert '<p id="toast" class="toast" role="status"></p>' in page  # empty: hidden by CSS
+    assert '<p id="toast" class="mf-toast" role="status"></p>' in page  # empty: hidden by CSS
     assert logged_in.get("/static/feedback.js").status_code == 200
 
 
@@ -270,8 +270,8 @@ def test_history_shows_ratings_and_likes_and_sorts_by_rating(logged_in, respx_mo
     logged_in.post(f"/playlists/{high}/tracks/1/like")
 
     page = logged_in.get("/history").text
-    assert "3 tracks · 2 liked · rated 9/10</small>" in page
-    assert "3 tracks · rated 3/10</small>" in page and "3 tracks</small>" in page
+    assert "3 tracks · 2 liked · rated 9/10</span>" in page
+    assert "3 tracks · rated 3/10</span>" in page and "3 tracks</span>" in page
     by_rating = [r["id"] for r in playlists.recent("friend1", limit=-1, order="rating")]
     assert by_rating == [high, low, unrated]
     assert [r["id"] for r in playlists.recent("friend1", limit=-1)] == [high, unrated, low]
@@ -287,7 +287,7 @@ def test_settings_page(logged_in, respx_mock):
     resp = logged_in.post("/settings", data={})
     assert resp.headers["location"] == "/settings"
     page = logged_in.get("/settings").text
-    assert 'value="on" >' in page and "checked" not in page and '<p id="toast" class="toast" role="status">Saved.</p>' in page
+    assert 'value="on" >' in page and "checked" not in page and '<p id="toast" class="mf-toast" role="status">Saved.</p>' in page
     logged_in.post("/settings", data={"likes_to_spotify": "on"})
     assert users.get("friend1")["likes_to_spotify"] == 1
     FakeSpotify(respx_mock, {})  # the home page shows the taste summary, built from Spotify

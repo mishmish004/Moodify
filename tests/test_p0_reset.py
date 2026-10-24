@@ -96,7 +96,8 @@ def _dockerignored(rel: str, patterns) -> bool:
     "rel",
     [".env", ".git/HEAD", ".venv/bin/python", "data/moodify.db", "logs/moodify.log",
      ".qdrant_storage/raft_state.json", "_archive/graveyard_backup/fma_small.zip",
-     "_trash/session_backup.py", "src/core/__pycache__/config.cpython-310.pyc"],
+     "_trash/session_backup.py", "src/core/__pycache__/config.cpython-310.pyc",
+     "portfolio/node_modules/astro/package.json"],
 )
 def test_dockerignore_excludes(rel):
     assert _dockerignored(rel, _dockerignore_patterns()), f"{rel} would be sent to the Docker build context"

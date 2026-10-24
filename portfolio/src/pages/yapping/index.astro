@@ -1,0 +1,175 @@
+---
+import Site from '../../layouts/Site.astro';
+import { CATEGORIES } from '../../lib/categories';
+import { capitalize, formatMonth, incidentPosts, readMinutes } from '../../lib/content';
+
+const posts = await incidentPosts();
+const featured = posts.find((p) => p.data.featured) ?? posts[0];
+const usedCategories = CATEGORIES.filter((c) => posts.some((p) => p.data.category === c));
+---
+
+<Site title="amish — the incident log" description="Write-ups of real production issues: the symptoms, the dead ends, the root cause, and the fix." current="yapping" banner>
+  <section class="hero container">
+    <p class="label rise count">The incident log · {posts.length} write-up{posts.length === 1 ? '' : 's'}</p>
+    <h1 class="display">
+      <span class="rise d1">Things that broke,</span>
+      <span class="rise d2">and what they taught me.</span>
+    </h1>
+    <p class="lede rise d3">Write-ups of real production issues: the symptoms, the dead ends, the root cause, and the fix.</p>
+  </section>
+
+  {featured && (
+    <section class="container featured-wrap" aria-label="Featured write-up">
+      <a class="featured" href={`/yapping/${featured.id}`}>
+        {featured.data.image && (
+          <span class="fimg"><img src={featured.data.image.src} alt={featured.data.image.alt} width="640" height="400" loading="eager" decoding="async" /></span>
+        )}
+        <span class="fbody">
+          <span class="meta">
+            <span class="chip chip-dark">Featured</span>
+            <span class="chip">{capitalize(featured.data.category)}</span>
+            {formatMonth(featured.data.date)} · {readMinutes(featured.body)} min read
+          </span>
+          <span class="display ftitle">{featured.data.title}</span>
+          <span class="fsum">{featured.data.summary}</span>
+          <span class="fcta">Read the write-up <span class="arrow" aria-hidden="true">→</span></span>
+        </span>
+      </a>
+    </section>
+  )}
+
+  <section class="container list" aria-labelledby="all-h">
+    <div class="list-head">
+      <h2 id="all-h">All write-ups</h2>
+      {usedCategories.length > 1 && (
+        <div class="tabs" role="group" aria-label="Filter by category">
+          <button class="tab" type="button" aria-pressed="true" data-cat="all">All</button>
+          {usedCategories.map((c) => <button class="tab" type="button" aria-pressed="false" data-cat={c}>{capitalize(c)}</button>)}
+        </div>
+      )}
+    </div>
+
+    {posts.length > 0 ? (
+      <ul class="rows posts">
+        {posts.map((p) => (
+          <li data-cat={p.data.category}>
+            <a class="row" href={`/yapping/${p.id}`}>
+              <time class="mono when" datetime={p.data.date.toISOString()}>{formatMonth(p.data.date)}</time>
+              <span class="what">
+                <span class="row-title">{p.data.title}</span>
+                <span class="line">{p.data.line ?? p.data.summary}</span>
+              </span>
+              <span class="mono side"><span class="chip">{capitalize(p.data.category)}</span>{readMinutes(p.body)} min</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="empty muted">No write-ups yet. The first one is on its way.</p>
+    )}
+  </section>
+
+  <section class="follow-wrap" aria-labelledby="follow-h">
+    <div class="follow">
+      <div class="follow-text">
+        <h2 id="follow-h" class="display">Seen this exact bug?</h2>
+        <p>I'd like to hear how you fixed it. New write-ups go out on the feed below.</p>
+      </div>
+      <div class="follow-btns">
+        <a class="btn btn-pill on-dark solid" href="/contact">Get in touch</a>
+        <a class="btn btn-pill on-dark" href="/yapping/rss.xml">RSS feed</a>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<style>
+  .container { max-width: 1200px; margin: 0 auto; padding-left: var(--gutter-wide); padding-right: var(--gutter-wide); }
+  .hero { padding-top: clamp(48px, 7vw, 96px); padding-bottom: 56px; }
+  .count { margin-bottom: 24px; font-size: 13px; }
+  .hero h1 { font-size: clamp(52px, 8.8vw, 128px); line-height: 0.9; letter-spacing: -0.02em; max-width: 980px; }
+  .hero h1 span { display: block; }
+  .lede { margin-top: 28px; max-width: 600px; font-size: clamp(17px, 1.5vw, 20px); line-height: 1.5; color: var(--muted); }
+
+  .featured-wrap { padding-bottom: 72px; }
+  .featured {
+    text-decoration: none; color: var(--ink); display: flex; flex-wrap: wrap; gap: clamp(24px, 4vw, 56px); align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: clamp(16px, 2vw, 24px);
+    transition: border-color 150ms ease;
+  }
+  .fimg { flex: 1 1 440px; min-width: 0; display: block; }
+  .fimg img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 20px; transition: transform 320ms var(--ease-out); }
+  .fbody { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: clamp(8px, 2vw, 24px); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .ftitle { font-size: clamp(28px, 3vw, 40px); letter-spacing: -0.015em; line-height: 1.08; }
+  .fsum { font-size: 18px; line-height: 1.55; color: var(--muted); }
+  .fcta { font-weight: 500; }
+
+  .list { padding-bottom: 104px; }
+  .list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+  .list-head h2 { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
+  .tabs { display: none; flex-wrap: wrap; gap: 8px; }
+  :global(.js) .tabs { display: flex; }
+  .tab {
+    font-size: 14px; font-weight: 500; min-height: 44px; padding: 0 18px; border-radius: 999px; cursor: pointer;
+    border: 1px solid #D6D3CC; background: var(--surface); color: var(--ink);
+    transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+  .tab:active { transform: scale(0.97); }
+  .tab[aria-pressed='true'] { border-color: var(--ink); background: var(--ink); color: var(--ground); }
+  .row { text-decoration: none; color: var(--ink); display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 40px; padding: 28px 0; }
+  .posts li.in { animation: rise 260ms var(--ease-out) both; }
+  .posts li[hidden] { display: none; }
+  .when { flex: 0 0 120px; font-size: 13px; color: var(--muted); }
+  .what { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .row-title { font-size: clamp(20px, 2vw, 26px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.2; transition: color 150ms ease; }
+  .line { font-size: 16px; line-height: 1.5; color: var(--muted); }
+  .side { flex: 0 0 auto; display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); }
+  .empty { padding: 28px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+  .follow-wrap { padding: 0 var(--gutter-wide) 24px; }
+  .follow {
+    max-width: 1200px; margin: 0 auto; background: var(--code); color: var(--ground); border-radius: 32px;
+    padding: clamp(40px, 6vw, 80px) clamp(24px, 6vw, 72px);
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 32px;
+  }
+  .follow-text { max-width: 640px; }
+  .follow h2 { font-size: clamp(36px, 4.8vw, 72px); line-height: 1.02; letter-spacing: -0.02em; }
+  .follow p { margin-top: 16px; font-size: 18px; line-height: 1.55; color: #C9C7C1; }
+  .follow-btns { display: flex; flex-wrap: wrap; gap: 12px; }
+  .on-dark { min-height: 52px; padding: 0 24px; font-weight: 500; font-size: 16px; color: var(--ground); border: 1px solid #4A4945; background: transparent; }
+  .on-dark.solid { background: var(--ground); color: var(--code); border-color: var(--ground); }
+  .on-dark:hover { color: var(--ground); }
+  .on-dark.solid:hover { color: var(--code); }
+
+  @media (hover: hover) and (pointer: fine) {
+    .featured:hover { border-color: var(--line-hover); color: var(--ink); }
+    .featured:hover .fimg img { transform: translateY(-4px); }
+    .tab[aria-pressed='false']:hover { border-color: var(--ink); }
+    .row:hover { color: var(--ink); }
+    .row:hover .row-title { color: var(--muted); }
+    .on-dark:hover { border-color: var(--ground); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .posts li.in { animation: fade 240ms ease both; }
+    .tab:active { transform: none; }
+    .featured:hover .fimg img { transform: none; }
+  }
+</style>
+
+<script>
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.tab'));
+  const items = Array.from(document.querySelectorAll<HTMLLIElement>('.posts li'));
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const cat = tab.dataset.cat;
+      tabs.forEach((t) => t.setAttribute('aria-pressed', String(t === tab)));
+      items.forEach((li) => {
+        const show = cat === 'all' || li.dataset.cat === cat;
+        li.hidden = !show;
+        li.classList.remove('in');
+        if (show) { void li.offsetWidth; li.classList.add('in'); }
+      });
+    });
+  });
+</script>

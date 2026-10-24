@@ -174,13 +174,15 @@ ORDERS = {
 
 
 def recent(spotify_id: str, limit: int = 5, order: str = "new") -> list[sqlite3.Row]:
-    """With track_count and like_count (its songs the user liked, wherever they liked them).
-    Newest first, or by `order` (a key of ORDERS). limit=-1 means all of them (SQLite's "no limit")."""
+    """With track_count, like_count (its songs the user liked, wherever they liked them) and minutes
+    (NULL for playlists from before track lists were kept). Newest first, or by `order` (a key of ORDERS).
+    limit=-1 means all of them (SQLite's "no limit")."""
     with get_conn() as conn:
         return conn.execute(
             "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title,"
             " (SELECT count(*) FROM playlist_tracks t JOIN track_likes l ON l.spotify_id = playlists.spotify_id"
-            "  AND l.uri = t.uri WHERE t.playlist_id = playlists.id) AS like_count"
+            "  AND l.uri = t.uri WHERE t.playlist_id = playlists.id) AS like_count,"
+            " (SELECT sum(duration_ms) / 60000.0 FROM playlist_tracks WHERE playlist_id = playlists.id) AS minutes"
             f" FROM playlists WHERE spotify_id = ? ORDER BY {ORDERS[order]} LIMIT ?",
             (spotify_id, limit),
         ).fetchall()

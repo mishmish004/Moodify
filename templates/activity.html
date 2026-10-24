@@ -1,36 +1,42 @@
 {% extends "base.html" %}
+{% set nav = "friends" %}
 {% block title %}Moodify · activity{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/map.css">{% endblock %}
 {% block content %}
-<h1>Activity</h1>
-<p>The last 30 days for you{% if friend_count %} and the {{ friend_count }} friend{{ "" if friend_count == 1 else "s" }} who show{{ "s" if friend_count == 1 else "" }} their taste{% endif %}. Only playlist titles show, never what anyone typed.</p>
-<div id="activity" class="map activity" data-src="/activity.json">
-  <section aria-labelledby="h-timeline" class="timeline-section" hidden>
-    <h2 id="h-timeline">Mood timeline</h2>
-    <p class="note">A mark for each playlist: bigger is longer, and the colour shows its energy (see the key).</p>
-    <div class="controls replay">
-      <button type="button" id="replay-play">Replay the week</button>
-      <button type="button" id="replay-back" aria-label="Previous day">◀ Day</button>
-      <button type="button" id="replay-next" aria-label="Next day">Day ▶</button>
-      <span id="replay-day" class="note" aria-live="polite"></span>
-    </div>
-    <div id="timeline-legend" class="legend"></div>
-    <div id="timeline"></div>
-    <div id="timeline-table"></div>
-  </section>
-  <section aria-labelledby="h-feed">
-    <h2 id="h-feed">What's been happening</h2>
-    {% if items %}
-    <ol class="feed list plain" id="feed">
-      {% for i in items %}
-      <li data-day="{{ i.day }}" class="{{ i.kind }}"><span class="what"><strong>{{ i.who }}</strong> {{ i.verb }} {% if i.title %}{% if i.playlist_id %}<a href="/playlists/{{ i.playlist_id }}">{{ i.title }}</a>{% else %}<em>{{ i.title }}</em>{% endif %}{% endif %}{{ i.after }}<small>{{ i.at[:16] }} UTC</small></span></li>
-      {% endfor %}
-    </ol>
-    {% else %}
-    <p class="muted">Nothing in the last 30 days.</p>
-    {% endif %}
-  </section>
-  <div id="map-tip" class="map-tip" role="tooltip" hidden></div>
+<div class="mf-stack-6" style="max-width: 760px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <a class="mf-back" href="/friends"><span aria-hidden="true">←</span> Friends</a>
+    <h1 class="mf-h1">Activity</h1>
+    <p class="mf-lead">The last 30 days for you{% if friend_count %} and the {{ friend_count }} friend{{ "" if friend_count == 1 else "s" }} who show{{ "s" if friend_count == 1 else "" }} their taste{% endif %}. Only playlist titles show, never what anyone typed.</p>
+  </div>
+  <div id="activity" class="map activity mf-stack-7" data-src="/activity.json">
+    <section aria-labelledby="h-timeline" class="timeline-section mf-stack-3" hidden>
+      <h2 id="h-timeline" class="mf-h2">Mood timeline</h2>
+      <p class="note">A mark for each playlist: bigger is longer, and the colour shows its energy (see the key).</p>
+      <div class="controls replay">
+        <button class="mf-btn mf-btn--primary mf-btn--sm" type="button" id="replay-play">Replay the week</button>
+        <button class="mf-btn mf-btn--quiet mf-btn--sm" type="button" id="replay-back" aria-label="Previous day">◀ Day</button>
+        <button class="mf-btn mf-btn--quiet mf-btn--sm" type="button" id="replay-next" aria-label="Next day">Day ▶</button>
+        <span id="replay-day" class="note" aria-live="polite"></span>
+      </div>
+      <div id="timeline-legend" class="legend"></div>
+      <div id="timeline"></div>
+      <div id="timeline-table"></div>
+    </section>
+    <section class="mf-stack-3" aria-labelledby="h-feed">
+      <h2 id="h-feed" class="mf-h2">What's been happening</h2>
+      {% if items %}
+      <ol class="feed mf-list" id="feed">
+        {% for i in items %}
+        <li data-day="{{ i.day }}" class="mf-feed-item {{ i.kind }}"><p><strong>{{ i.who }}</strong> {{ i.verb }} {% if i.title %}{% if i.playlist_id %}<a href="/playlists/{{ i.playlist_id }}">{{ i.title }}</a>{% else %}<em>{{ i.title }}</em>{% endif %}{% endif %}{{ i.after }}</p><p class="mf-xs mf-muted">{{ i.at[:16] }} UTC</p></li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="mf-well mf-muted">Nothing in the last 30 days.</p>
+      {% endif %}
+    </section>
+    <div id="map-tip" class="map-tip" role="tooltip" hidden></div>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}<script src="/static/activity.js"></script>{% endblock %}

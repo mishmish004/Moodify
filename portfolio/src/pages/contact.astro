@@ -1,0 +1,278 @@
+---
+import Turnstile from '../components/Turnstile.astro';
+import Site from '../layouts/Site.astro';
+import { LIMITS, TOPICS } from '../lib/forms';
+import { contact } from '../site/pages';
+import { site } from '../site/site';
+---
+
+<Site title="Say hello — amish" description="Write to Amish: a role, a project, or a bug you found on this site." current="contact">
+  <section class="hero pad" aria-labelledby="c-h">
+    <p class="label rise">contact</p>
+    <h1 id="c-h" class="display rise d1">Say hello.</h1>
+    {(contact.openTo || contact.replyNote) && (
+      <div class="status rise d2">
+        {contact.openTo && <span class="chip"><span class="dot" aria-hidden="true"></span>{contact.openTo}</span>}
+        {contact.replyNote && <span class="muted note">{contact.replyNote}</span>}
+      </div>
+    )}
+  </section>
+
+  <div class="cols pad">
+    <section class="quick" aria-labelledby="direct-h">
+      <h2 id="direct-h" class="label">the quick way</h2>
+      <div class="panel email-box">
+        <p class="display email">{site.email}</p>
+        <div class="email-btns">
+          <button class="btn btn-dark btn-md copy" type="button" data-copy={site.email} aria-label="Copy email address">
+            <span class="swap idle" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>
+              Copy email
+            </span>
+            <span class="swap done" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+              <span data-done-text>Copied</span>
+            </span>
+          </button>
+          <a class="btn btn-line btn-md" href={`mailto:${site.email}`}>Open in mail <span class="arrow arrow-up" aria-hidden="true">↗</span></a>
+        </div>
+        <p class="sr-only" role="status" aria-live="polite" data-copy-status></p>
+      </div>
+      <ul class="rows">
+        <li><a class="row-link" href={site.github.url}><span class="row-title">GitHub <span class="mono handle">{site.github.handle}</span></span><span class="arrow arrow-up" aria-hidden="true">↗</span></a></li>
+        <li><a class="row-link" href={site.linkedin.url}><span class="row-title">LinkedIn <span class="mono handle">{site.linkedin.handle}</span></span><span class="arrow arrow-up" aria-hidden="true">↗</span></a></li>
+      </ul>
+    </section>
+
+    <section class="write" aria-labelledby="form-h" id="form">
+      <h2 id="form-h" class="label">or write it here</h2>
+
+      <div class="panel sent" role="status" hidden data-sent>
+        <p class="display sent-title">Sent. Thanks, <span data-sent-name>friend</span>.</p>
+        <p class="muted">It's in my inbox. I'll reply to <span data-sent-email>you</span>.</p>
+        <button class="btn btn-line btn-sm another" type="button" data-reset>Write another</button>
+      </div>
+
+      <form class="form" action="/api/contact" method="post" data-contact>
+        <div class="alert" role="alert" hidden data-failed>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#B42318" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"></circle><path d="M10 5.5v5.5M10 13.8v.3"></path></svg>
+          <span><strong>That didn't send.</strong> Your message is still here. Try again, or copy it and email me directly.</span>
+        </div>
+
+        <fieldset class="topics">
+          <legend>What's it about? <span class="muted opt">(optional)</span></legend>
+          <div class="chips">
+            {TOPICS.map((t, i) => (
+              <span class="chip-opt">
+                <input type="radio" name="topic" id={`topic-${i}`} value={t} />
+                <label for={`topic-${i}`}>{t}</label>
+              </span>
+            ))}
+          </div>
+        </fieldset>
+
+        <div class="two">
+          <div class="field-wrap">
+            <label for="c-name">Your name</label>
+            <input id="c-name" class="field" name="name" type="text" autocomplete="name" required maxlength={LIMITS.name} aria-describedby="c-name-err" />
+            <span id="c-name-err" class="field-err" data-error-for="name" hidden></span>
+          </div>
+          <div class="field-wrap">
+            <label for="c-email">Your email</label>
+            <input id="c-email" class="field" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required maxlength={LIMITS.email} aria-describedby="c-email-err" />
+            <span id="c-email-err" class="field-err" data-error-for="email" hidden></span>
+          </div>
+        </div>
+        <div class="field-wrap">
+          <label for="c-msg">Message</label>
+          <textarea id="c-msg" class="field" name="message" rows="7" required maxlength={LIMITS.message} aria-describedby="c-msg-err" placeholder="A role, a project, a bug you found on this site…"></textarea>
+          <span id="c-msg-err" class="field-err" data-error-for="message" hidden></span>
+        </div>
+
+        <div class="hp" aria-hidden="true">
+          <label for="c-company">Company</label>
+          <input id="c-company" name="company" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <Turnstile />
+
+        <div class="send-row">
+          <button class="btn btn-dark send" type="submit" data-send>
+            <span class="spin" aria-hidden="true" hidden data-spin></span>
+            <span data-send-label>Send</span> <span class="arrow" aria-hidden="true" data-send-arrow>→</span>
+          </button>
+          <p class="muted small">Goes straight to my inbox. <a href="/privacy">What happens to it</a></p>
+        </div>
+      </form>
+    </section>
+  </div>
+</Site>
+
+<style>
+  .pad { padding-left: var(--gutter); padding-right: var(--gutter); }
+  .hero { padding-top: clamp(32px, 5vw, 72px); padding-bottom: clamp(48px, 6vw, 80px); display: flex; flex-direction: column; gap: 28px; }
+  h1 { font-size: clamp(56px, 8vw, 128px); line-height: 0.9; letter-spacing: -0.03em; }
+  .status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .status .chip { padding: 6px 12px; }
+  .note { font-size: 17px; }
+
+  .cols { display: flex; flex-wrap: wrap; gap: 48px clamp(32px, 5vw, 80px); align-items: flex-start; }
+  .quick { flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+  .email-box { display: flex; flex-direction: column; gap: 12px; padding: 24px; }
+  .email { font-size: clamp(24px, 2.2vw, 32px); line-height: 1.1; letter-spacing: -0.015em; }
+  .email-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  .copy { display: inline-grid; }
+  .swap { grid-area: 1 / 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 200ms ease, filter 200ms ease; }
+  .done { opacity: 0; filter: blur(2px); }
+  .copy.copied .idle { opacity: 0; filter: blur(2px); }
+  .copy.copied .done { opacity: 1; filter: none; }
+  .handle { font-size: 13px; color: var(--muted); }
+
+  .write { flex: 999 1 560px; min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: 20px; }
+  .sent { display: flex; flex-direction: column; gap: 14px; padding: clamp(24px, 3vw, 40px); }
+  .sent[hidden] { display: none; }
+  .sent-title { font-size: clamp(32px, 3.4vw, 48px); line-height: 1; letter-spacing: -0.02em; }
+  .sent .muted { font-size: 17px; line-height: 1.55; }
+  .another { align-self: flex-start; }
+  .form { display: flex; flex-direction: column; gap: 20px; }
+  .form[hidden] { display: none; }
+  .alert[hidden] { display: none; }
+
+  .topics { margin: 0; padding: 0; border: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 10px; font-weight: 500; }
+  .opt { font-weight: 400; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip-opt { position: relative; }
+  .chip-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+  .chip-opt label {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--field-line); background: var(--surface); color: var(--ink); font-size: 15px;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 160ms var(--ease-out);
+    -webkit-user-select: none; user-select: none;
+  }
+  .chip-opt label:active { transform: scale(0.97); }
+  .chip-opt input:checked + label { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+  .chip-opt input:focus-visible + label { outline: 2px solid var(--ink); outline-offset: 3px; }
+  @media (hover: hover) and (pointer: fine) { .chip-opt input:not(:checked) + label:hover { border-color: var(--ink); } }
+
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 20px; }
+  .field-err[hidden] { display: none; }
+  .send-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .send { min-height: 52px; padding: 0 24px; font-size: 17px; }
+  .send[aria-busy='true'] { cursor: progress; }
+  .send [hidden] { display: none; }
+  .small { font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .swap { transition: opacity 150ms ease; filter: none !important; }
+    .chip-opt label:active { transform: none; }
+  }
+</style>
+
+<script>
+  import { validateContact } from '../lib/forms';
+  import { setFieldError, submitForm } from '../scripts/submit';
+
+  // ---- copy email ----
+  const copyBtn = document.querySelector<HTMLButtonElement>('[data-copy]');
+  const copyStatus = document.querySelector<HTMLElement>('[data-copy-status]');
+  const doneText = document.querySelector<HTMLElement>('[data-done-text]');
+  let copyTimer: number | undefined;
+  copyBtn?.addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(copyBtn.dataset.copy!); ok = true; } catch { ok = false; }
+    copyBtn.classList.add('copied');
+    if (doneText) doneText.textContent = ok ? 'Copied' : 'Select and copy';
+    copyBtn.setAttribute('aria-label', ok ? 'Email copied' : 'Copy email address');
+    if (copyStatus) copyStatus.textContent = ok ? 'Email address copied.' : 'Couldn’t copy. Select the address and copy it.';
+    window.clearTimeout(copyTimer);
+    copyTimer = window.setTimeout(() => {
+      copyBtn.classList.remove('copied');
+      copyBtn.setAttribute('aria-label', 'Copy email address');
+      if (copyStatus) copyStatus.textContent = '';
+    }, 2000);
+  });
+
+  // ---- the form ----
+  const form = document.querySelector<HTMLFormElement>('[data-contact]')!;
+  const sent = document.querySelector<HTMLElement>('[data-sent]')!;
+  const failed = form.querySelector<HTMLElement>('[data-failed]')!;
+  const send = form.querySelector<HTMLButtonElement>('[data-send]')!;
+  const spin = form.querySelector<HTMLElement>('[data-spin]')!;
+  const sendLabel = form.querySelector<HTMLElement>('[data-send-label]')!;
+  const sendArrow = form.querySelector<HTMLElement>('[data-send-arrow]')!;
+  const FIELDS = ['name', 'email', 'message'] as const;
+  let tried = false;
+  let busy = false;
+
+  // Our own messages replace the browser's bubbles once the script is running
+  form.noValidate = true;
+
+  // A second tap on the chosen topic clears it (the topic is optional). By the time `click`
+  // fires the radio is already checked, so compare with the one chosen before.
+  let topic: string | null = null;
+  form.querySelectorAll<HTMLInputElement>('input[name="topic"]').forEach((radio) => {
+    radio.addEventListener('click', () => {
+      if (topic === radio.value) { radio.checked = false; topic = null; } else { topic = radio.value; }
+    });
+  });
+  form.addEventListener('reset', () => { topic = null; });
+
+  const values = () => Object.fromEntries(new FormData(form).entries());
+  const showErrors = (errors: Partial<Record<string, string>>) => FIELDS.forEach((f) => setFieldError(form, f, errors[f]));
+
+  // After the first attempt, errors clear as soon as a field is fixed
+  form.addEventListener('input', () => {
+    if (!tried) return;
+    const r = validateContact(values());
+    showErrors(r.ok ? {} : r.errors);
+  });
+
+  const setBusy = (on: boolean) => {
+    busy = on;
+    send.setAttribute('aria-busy', String(on));
+    send.setAttribute('aria-disabled', String(on));
+    spin.hidden = !on;
+    sendArrow.hidden = on;
+    sendLabel.textContent = on ? 'Sending…' : 'Send';
+  };
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    tried = true;
+    const r = validateContact(values());
+    if (!r.ok) {
+      showErrors(r.errors);
+      const first = FIELDS.find((f) => r.errors[f]);
+      if (first) (form.elements.namedItem(first) as HTMLElement | null)?.focus();
+      return;
+    }
+    showErrors({});
+    failed.hidden = true;
+    setBusy(true);
+    const res = await submitForm(form);
+    setBusy(false);
+    if (res.ok) {
+      sent.querySelector('[data-sent-name]')!.textContent = r.value.name;
+      sent.querySelector('[data-sent-email]')!.textContent = r.value.email;
+      form.hidden = true;
+      sent.hidden = false;
+      sent.querySelector<HTMLButtonElement>('[data-reset]')?.focus();
+    } else if (res.kind === 'invalid') {
+      showErrors(res.errors);
+    } else {
+      failed.hidden = false;
+      failed.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  sent.querySelector('[data-reset]')?.addEventListener('click', () => {
+    form.reset();
+    tried = false;
+    showErrors({});
+    sent.hidden = true;
+    form.hidden = false;
+    form.querySelector<HTMLInputElement>('#c-name')?.focus();
+  });
+</script>
