@@ -519,22 +519,24 @@ How it was built:
 Goal: "what would Sam put on for this?": a playlist built from a friend's taste, saved in your account, without touching theirs.
 
 Build
-- [ ] On `/friends/{id}`, if they allow it: "Make a playlist the way Sam would hear it" with a prompt box
-- [ ] The build swaps in the friend's profile: their summary, their known songs from the library, their avoid rules. Your onboarding answers don't apply; familiarity means songs *they* know
-- [ ] Only their taste profile and library are used. Their prompts, reviews, ratings, lessons and support-note playlists are never read (the build takes a `Profile`, nothing else)
-- [ ] Saved in **your** account as "Moodify: <title> (as Sam hears it)"; the page says whose taste was used
-- [ ] Logged for the friend: "Amish made 'Sunday cooking' the way you'd hear it"
-- [ ] The friend's Spotify token is never used, and nothing is written to their account
+- [x] On `/friends/{id}`, if they allow it: "Make a playlist the way Sam would hear it" with a prompt box
+- [x] The build swaps in the friend's profile: their summary, their known songs from the library, their avoid rules. Your onboarding answers don't apply; familiarity means songs *they* know
+- [x] Only their taste profile and library are used. Their prompts, reviews, ratings, lessons and support-note playlists are never read (the build takes a `Profile`, nothing else)
+- [x] Saved in **your** account as "Moodify: <title> (as Sam hears it)"; the page says whose taste was used
+- [x] Logged for the friend: "Amish made 'Sunday cooking' the way you'd hear it"
+- [x] The friend's Spotify token is never used, and nothing is written to their account
 
 Tests (`tests/test_p21_listen_as.py`)
-- [ ] needs `allow_listen_as`; otherwise 403 and nothing built
-- [ ] the brief and suggestion prompts contain the friend's summary and **not** yours (assert both); the known list is the friend's
-- [ ] the friend's avoid rules apply; yours don't
-- [ ] only your token is used; the playlist name ends "(as Sam hears it)"; one access-log row
-- [ ] the build function cannot receive anything but a `Profile` (signature test), so private data can't leak in later phases
-- [ ] `live`: a synthetic jazz-and-classical friend, prompt "gym": print the tracks for a manual look, and check the suggestion prompt carried the friend's taste
+- [x] needs `allow_listen_as`; otherwise 403 and nothing built
+- [x] the brief and suggestion prompts contain the friend's summary and **not** yours (assert both); the known list is the friend's
+- [x] the friend's avoid rules apply; yours don't
+- [x] only your token is used; the playlist name ends "(as Sam hears it)"; one access-log row
+- [x] the build function cannot receive anything but a `Profile` (signature test), so private data can't leak in later phases
+- [x] `live`: a synthetic jazz-and-classical friend, prompt "gym": print the tracks for a manual look, and check the suggestion prompt carried the friend's taste
 
 Gate: `pytest tests/test_p21_listen_as.py` green, and the live result sounds like the synthetic friend, not like you.
+
+Done 2026-10-24 apart from your listen. Live: "gym" the way a synthetic jazz-and-classical friend hears it gave upbeat jazz (Take the "A" Train, Blue Rondo à la Turk, Night Train, So What, Take Five, …) with none of your rap. The brief and suggestion prompts held the friend's summary and not yours (https://open.spotify.com/playlist/5Riic2Pkgg23OI5eDV8nXr, private, in your account). How it works: `listen_as.build_as(user, mood, profile, trace)` runs the Phase 20 build core with the friend's `taste.Profile`, which now also carries their name, familiarity answer and avoid rules. A non-Profile raises TypeError. Your memory, your onboarding and your no-repeat list don't apply. Consent is checked when the build starts. Migration 13 adds `playlists.heard_as` (SET NULL when the friend leaves), and the playlist page says whose taste was used. 12 tests.
 
 ---
 

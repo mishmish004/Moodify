@@ -24,6 +24,9 @@
 <p class="notice">If things feel heavy right now, you don't have to carry it alone. Free, confidential support, wherever you are: <a href="https://findahelpline.com">findahelpline.com</a>.</p>
 {% endif %}
 <h1>Moodify: {{ title }}</h1>
+{% if heard_as %}
+<p class="muted">Made the way {{ heard_as }} would hear it: from {{ heard_as }}'s taste and the songs they know, not yours.</p>
+{% endif %}
 {% if blend %}
 <p class="muted">A Moodify Blend with {{ (blend.members[1:] | map(attribute="name") | list) | join(", ") }}.</p>
 {% endif %}

@@ -193,6 +193,10 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS blend_members_by_user ON blend_members (spotify_id);
     """,
+    # 13 (Phase 21): whose taste a "hear it like a friend" playlist was made with
+    """
+    ALTER TABLE playlists ADD COLUMN heard_as TEXT REFERENCES users(spotify_id) ON DELETE SET NULL;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

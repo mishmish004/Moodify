@@ -11,8 +11,8 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import (blend, jobs, library, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing,
-                 taste, users)
+from src import (blend, jobs, library, likes, links, listen_as, memory, playlist, playlists, prompts, reflect, search_cache,
+                 sharing, taste, users)
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -271,6 +271,7 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "auto_open": auto_open, "phone": links.is_phone(request.headers.get("user-agent")),
         "shows_taste": sharing.get(user["spotify_id"])["taste"],
         "blend": blend.for_playlist(playlist_id, user["spotify_id"], tracks),
+        "heard_as": listen_as.heard_as(row),
     })
 
 
@@ -498,6 +499,20 @@ def make_blend(request: Request, user: sqlite3.Row = Depends(onboarded_user),
     job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
     if job is None:
         jobs.start(blend.run, job_id, user["spotify_id"], mood, friends, lean or None, public is not None)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+# --- hear it like a friend (Phase 21) ------------------------------------------------------------------------
+
+@app.post("/friends/{friend_id}/listen")
+def listen_like(request: Request, friend_id: str, user: sqlite3.Row = Depends(onboarded_user),
+                mood: str = Form(..., min_length=1, max_length=2000)):
+    if friend_id == user["spotify_id"] or not sharing.allowed(friend_id, user["spotify_id"], "listen_as"):
+        return _not_shared(request, user)
+    job = jobs.running_for(user["spotify_id"])
+    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    if job is None:
+        jobs.start(listen_as.run, job_id, user["spotify_id"], mood, friend_id)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 

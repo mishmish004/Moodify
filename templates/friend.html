@@ -19,6 +19,14 @@
 {% else %}
 <p class="muted">{{ name }} doesn't show their taste to friends.</p>
 {% endif %}
+{% if shared.listen_as %}
+<form method="post" action="/friends/{{ friend.spotify_id }}/listen" data-busy="Making it…">
+  <label for="mood">Make a playlist the way {{ name }} would hear it</label>
+  <textarea id="mood" name="mood" required maxlength="2000" rows="3" placeholder="e.g. gym, 40 minutes · sunday cooking · late night drive"></textarea>
+  <button type="submit">Make it</button>
+  <small class="hint">Built from {{ name }}'s taste and the songs they know, not yours, and saved in your Spotify. Nothing goes into {{ name }}'s account; {{ name }} can see you made it.</small>
+</form>
+{% endif %}
 {% if shared.blend %}
 <p><a class="button" href="/blend?with={{ friend.spotify_id }}">Make a Blend with {{ name }}</a></p>
 {% endif %}

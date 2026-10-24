@@ -9,7 +9,7 @@ rebuild the user's rows of the shared music library (Phase 19), which the pool i
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Callable, TypeVar
+from typing import Callable, Optional, TypeVar
 
 from src import library, users
 from src.core.exceptions import ReauthRequired, SpotifyError
@@ -63,9 +63,15 @@ class Listening:
 
 @dataclass(frozen=True)
 class Profile:
+    """A taste as builds see it. For a friend (Phase 21) it's all a build gets of them: no prompts, reviews,
+    ratings, lessons or login, only what "show/use my taste" covers."""
     summary: str
     pool: list[Track]  # songs the user knows, most telling first
     labels: tuple[str, ...] = ()  # per pool song, shown after it (a Blend says whose it is); may be empty
+    name: str = ""                       # whose taste, for a friend's profile
+    familiar_percent: Optional[int] = None  # their onboarding answer, as a share of known songs
+    avoid: tuple[str, ...] = ()          # their onboarding "avoid", as phrases
+    no_explicit: bool = False
 
 
 def build_summary(onboarding: dict, listening: Listening) -> str:

@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS playlists (
     -- Phase 15: "Fix it with this review" makes a new version; this points at the one it fixed
     parent_id        INTEGER REFERENCES playlists(id) ON DELETE SET NULL,
     -- Phase 18: kept from friends' views by its owner
-    hidden           INTEGER NOT NULL DEFAULT 0
+    hidden           INTEGER NOT NULL DEFAULT 0,
+    -- Phase 21: made the way this friend would hear it (src/listen_as.py)
+    heard_as         TEXT REFERENCES users(spotify_id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS playlists_by_user ON playlists (spotify_id, created_at);
