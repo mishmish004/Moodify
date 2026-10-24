@@ -106,7 +106,7 @@ def test_build_summary_drops_listening_data_to_fit():
 
 def test_fresh_summary_is_served_from_cache(user, respx_mock):
     users.set_onboarding("friend1", ONBOARDING)
-    users.set_taste_summary("friend1", "cached summary", _stamp(hours_ago=1), pool_json="[]")
+    users.set_taste_summary("friend1", "cached summary", _stamp(hours_ago=1))
     assert taste.summary_for(users.get("friend1")) == "cached summary"  # any Spotify call would fail the test
 
 

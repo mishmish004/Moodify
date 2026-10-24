@@ -145,6 +145,31 @@ MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS taste_access_by_owner ON taste_access (owner, at);
     CREATE INDEX IF NOT EXISTS taste_access_by_viewer ON taste_access (viewer);
     """,
+    # 11 (Phase 19): the shared music library. The known-songs pool moves into it, so every cached profile is
+    # rebuilt once (which fills the library) and the old JSON copy goes
+    """
+    CREATE TABLE IF NOT EXISTS tracks (
+        uri           TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        artists_json  TEXT NOT NULL,
+        duration_ms   INTEGER NOT NULL,
+        explicit      INTEGER NOT NULL DEFAULT 0,
+        first_seen    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_seen     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS library (
+        spotify_id    TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        uri           TEXT NOT NULL REFERENCES tracks(uri) ON DELETE CASCADE,
+        source        TEXT NOT NULL CHECK (source IN ('top', 'recent', 'liked', 'own_playlist', 'moodify')),
+        weight        INTEGER NOT NULL,
+        position      INTEGER NOT NULL,
+        refreshed_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (spotify_id, uri, source)
+    );
+    CREATE INDEX IF NOT EXISTS library_by_uri ON library (uri);
+    UPDATE users SET taste_updated_at = NULL;
+    ALTER TABLE users DROP COLUMN taste_pool_json;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

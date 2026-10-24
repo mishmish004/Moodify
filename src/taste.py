@@ -3,14 +3,15 @@ The taste profile: one paragraph about a user for the LLM prompt, plus a pool of
 
 Built by plain string formatting from the onboarding answers plus what Spotify knows:
 top artists (lately and all-time), top tracks, recently played, Liked Songs, followed
-artists and the user's own playlists. Summary and pool are cached together for a day.
+artists and the user's own playlists. The summary is cached for a day; the same reads
+rebuild the user's rows of the shared music library (Phase 19), which the pool is read from.
 """
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Callable, TypeVar
 
-from src import users
+from src import library, users
 from src.core.exceptions import ReauthRequired, SpotifyError
 from src.core.logger import MoodifyLogger
 from src.spotify.client import SpotifyClient, Track
@@ -133,20 +134,24 @@ def profile_for(user) -> Profile:
     """The cached profile, rebuilt when it's missing or older than STALE_AFTER.
 
     Each Spotify source is best effort: one that fails is left out, and the profile is then not
-    cached, so the next build tries again. A dead refresh token (ReauthRequired) is passed up so
-    the caller can send the user back to /login.
+    cached (nor the library replaced), so the next build tries again. A dead refresh token
+    (ReauthRequired) is passed up so the caller can send the user back to /login.
     """
-    # No pool means a summary cached before Phase 10, built from top items only: rebuild it
-    if user["taste_summary"] and user["taste_pool_json"] is not None and not _stale(user["taste_updated_at"]):
-        return Profile(user["taste_summary"], _load_pool(user["taste_pool_json"]))
+    if user["taste_summary"] and not _stale(user["taste_updated_at"]):
+        return Profile(user["taste_summary"], library.pool(user["spotify_id"], POOL_SIZE))
     onboarding = json.loads(user["onboarding_json"] or "{}")
     listening = read_listening(user)
     profile = Profile(build_summary(onboarding, listening), known_pool(listening))
     if listening.complete:
-        users.set_taste_summary(
-            user["spotify_id"], profile.summary, datetime.now(timezone.utc).strftime(TIMESTAMP), _dump_pool(profile.pool)
-        )
+        library.replace(user["spotify_id"], library_sources(listening))
+        users.set_taste_summary(user["spotify_id"], profile.summary, datetime.now(timezone.utc).strftime(TIMESTAMP))
     return profile
+
+
+def library_sources(listening: Listening) -> dict[str, list[Track]]:
+    """The reads, by library source (src/library.py)."""
+    return {"top": listening.top_tracks, "recent": listening.recent_tracks, "liked": listening.liked,
+            "own_playlist": listening.playlist_tracks}
 
 
 T = TypeVar("T")
@@ -180,16 +185,6 @@ def read_listening(user) -> Listening:
         for playlist in [p for p in own if p.readable][:OWN_PLAYLISTS_TO_READ]:
             listening.playlist_tracks += best_effort(f"playlist {playlist.id}", lambda: sp.playlist_items(playlist.id), [])
     return listening
-
-
-def _dump_pool(pool: list[Track]) -> str:
-    return json.dumps([[t.uri, t.name, list(t.artists), t.duration_ms, t.explicit] for t in pool])
-
-
-def _load_pool(raw) -> list[Track]:
-    # Pools cached before Phase 11 have no explicit flag (4 fields)
-    return [Track(entry[0], entry[1], tuple(entry[2]), entry[3], bool(entry[4:5] and entry[4]))
-            for entry in json.loads(raw or "[]")]
 
 
 def _stale(updated_at) -> bool:

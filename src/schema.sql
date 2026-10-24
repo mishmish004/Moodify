@@ -10,9 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     taste_summary     TEXT,
     taste_updated_at  TEXT,
     created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- Phase 10: space-separated scopes from the last login, and the cached known-songs pool (src/taste.py)
+    -- Phase 10: space-separated scopes from the last login
     granted_scopes    TEXT,
-    taste_pool_json   TEXT,
     -- Phase 14: a like in Moodify also saves the song to Spotify's Liked Songs (the user's setting)
     likes_to_spotify  INTEGER NOT NULL DEFAULT 1,
     -- Phase 16: the memory text every build's prompt gets (src/memory.py), NULL until rendered again
@@ -163,3 +162,25 @@ CREATE TABLE IF NOT EXISTS taste_access (
 );
 CREATE INDEX IF NOT EXISTS taste_access_by_owner ON taste_access (owner, at);
 CREATE INDEX IF NOT EXISTS taste_access_by_viewer ON taste_access (viewer);
+
+-- Phase 19: the shared music library (src/library.py). Track details once for everyone; who has which track,
+-- from which source, with what weight. Rows not refreshed for 30 days are deleted at startup
+CREATE TABLE IF NOT EXISTS tracks (
+    uri           TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    artists_json  TEXT NOT NULL,
+    duration_ms   INTEGER NOT NULL,
+    explicit      INTEGER NOT NULL DEFAULT 0,
+    first_seen    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS library (
+    spotify_id    TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    uri           TEXT NOT NULL REFERENCES tracks(uri) ON DELETE CASCADE,
+    source        TEXT NOT NULL CHECK (source IN ('top', 'recent', 'liked', 'own_playlist', 'moodify')),
+    weight        INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    refreshed_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (spotify_id, uri, source)
+);
+CREATE INDEX IF NOT EXISTS library_by_uri ON library (uri);

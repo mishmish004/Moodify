@@ -19,7 +19,7 @@ KINDS = list(sharing.SWITCHES)
 def _friend(spotify_id="friend2", name="Sam Rivera", taste=False, blend=False, listen_as=False, summary="Loves jazz and Bach."):
     users.upsert(spotify_id, name, f"refresh-{spotify_id}", auth.SCOPES)
     users.set_onboarding(spotify_id, {"genres": "jazz", "artists": "Bill Evans", "energy": "low"})
-    users.set_taste_summary(spotify_id, summary, "2026-10-24 08:00:00", "[]")
+    users.set_taste_summary(spotify_id, summary, "2026-10-24 08:00:00")
     if taste or blend or listen_as:
         sharing.save(spotify_id, taste, blend, listen_as)
     return spotify_id

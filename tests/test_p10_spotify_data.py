@@ -160,7 +160,9 @@ def test_profile_reads_every_source_caches_it_and_skips_moodify_playlists(user, 
     assert [c.request.url.path for c in routes["items"].calls] == ["/v1/playlists/p1/items"]  # not followed-only, not Moodify's
     assert {"E85", "Recent 0", "Liked 0", "Gym Song"} <= {t.name for t in profile.pool}
     row = users.get("friend1")
-    assert row["taste_summary"] == profile.summary and json.loads(row["taste_pool_json"])
+    assert row["taste_summary"] == profile.summary
+    from src import library
+    assert library.pool("friend1") == profile.pool  # Phase 19: the pool is kept in the library
     # Cached: a second read makes no Spotify calls and gives the same pool
     calls = top.call_count
     again = taste.profile_for(users.get("friend1"))
@@ -177,9 +179,11 @@ def test_a_failing_source_is_left_out_and_nothing_is_cached(user, respx_mock):
     assert users.get("friend1")["taste_summary"] is None  # tried again next time
 
 
-def test_summary_cached_before_phase_10_is_rebuilt(user, respx_mock):
-    # Fresh, but cached by Phase 4 code: no pool, and none of the new sources in it
+def test_summary_cached_before_phase_19_is_rebuilt(user, respx_mock):
+    # Fresh, but cached before the library existed: migration 11 clears taste_updated_at, so it's rebuilt
     users.set_taste_summary("friend1", "phase 4 summary", taste.datetime.now(taste.timezone.utc).strftime(taste.TIMESTAMP))
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET taste_updated_at = NULL")
     respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "expires_in": 3600})
     respx_mock.get(f"{API_URL}/me/top/artists").respond(200, json={"items": [{"name": "Drake"}]})
     respx_mock.get(f"{API_URL}/me/top/tracks").respond(200, json={"items": []})

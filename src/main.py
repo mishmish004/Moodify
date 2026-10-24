@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing, taste, users
+from src import jobs, library, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing, taste, users
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
         MoodifyLogger.get_logger("jobs").warning("%d build(s) interrupted by a restart", interrupted)
     search_cache.prune()
     memory.expire_unused()
+    library.prune()
     yield
 
 

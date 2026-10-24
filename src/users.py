@@ -26,12 +26,12 @@ def set_onboarding(spotify_id: str, onboarding: dict) -> None:
         )
 
 
-def set_taste_summary(spotify_id: str, summary: str, updated_at: str, pool_json: Optional[str] = None) -> None:
-    """The summary and the known-songs pool are cached together (src/taste.py)."""
+def set_taste_summary(spotify_id: str, summary: str, updated_at: str) -> None:
+    """The cached taste summary (src/taste.py). The known-songs pool lives in the library (Phase 19)."""
     with get_conn() as conn:
         conn.execute(
-            "UPDATE users SET taste_summary = ?, taste_pool_json = ?, taste_updated_at = ? WHERE spotify_id = ?",
-            (summary, pool_json, updated_at, spotify_id),
+            "UPDATE users SET taste_summary = ?, taste_updated_at = ? WHERE spotify_id = ?",
+            (summary, updated_at, spotify_id),
         )
 
 
@@ -56,6 +56,8 @@ def get(spotify_id: str) -> Optional[sqlite3.Row]:
 
 
 def delete(spotify_id: str) -> None:
-    """Remove the user and, through ON DELETE CASCADE, everything stored about them."""
+    """Remove the user and, through ON DELETE CASCADE, everything stored about them. Tracks in the shared
+    library that nobody else has go too (Phase 19)."""
     with get_conn() as conn:
         conn.execute("DELETE FROM users WHERE spotify_id = ?", (spotify_id,))
+        conn.execute("DELETE FROM tracks WHERE uri NOT IN (SELECT uri FROM library)")

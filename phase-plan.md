@@ -446,26 +446,28 @@ Done 2026-10-24 apart from your read of `/sharing`. A person without a `sharing`
 Goal: one place holding each person's music (what they play, save and keep), in a shape that compares across people, without keeping Spotify data longer than the app needs it.
 
 Build
-- [ ] `tracks(uri PK, name, artists_json, duration_ms, explicit, first_seen, last_seen)`: track details stored once, shared by everyone who has the track
-- [ ] `library(spotify_id, uri, source, weight, refreshed_at)`. Sources: `top_short`, `top_long`, `recent`, `liked`, `own_playlist`, `moodify` (tracks in playlists Moodify made for them). Default weights 3, 2, 2, 1, 1, 1, kept in one table in `src/library.py`
-- [ ] Filled from Phase 10's reads at each taste rebuild, with **no extra Spotify calls**. A user's rows are replaced in one transaction, so a song removed from Liked Songs leaves the library
-- [ ] At most 600 rows per user, the heaviest kept
-- [ ] Retention: rows not refreshed for 30 days are deleted at startup; tracks no one references are deleted with them; disconnect deletes the user's rows, and orphan tracks follow
-- [ ] `library.for_user(id)`, `library.top_artists(id, n)`, `library.common(a, b)`: shared tracks and artists, weighted
-- [ ] The known-songs pool (Phase 10) reads from the library instead of its own JSON copy, one source of truth (migration drops `users.taste_pool_json` after the switch)
+- [x] `tracks(uri PK, name, artists_json, duration_ms, explicit, first_seen, last_seen)`: track details stored once, shared by everyone who has the track
+- [x] `library(spotify_id, uri, source, weight, refreshed_at)`. Sources: `top_short`, `top_long`, `recent`, `liked`, `own_playlist`, `moodify` (tracks in playlists Moodify made for them). Default weights 3, 2, 2, 1, 1, 1, kept in one table in `src/library.py`
+- [x] Filled from Phase 10's reads at each taste rebuild, with **no extra Spotify calls**. A user's rows are replaced in one transaction, so a song removed from Liked Songs leaves the library
+- [x] At most 600 rows per user, the heaviest kept
+- [x] Retention: rows not refreshed for 30 days are deleted at startup; tracks no one references are deleted with them; disconnect deletes the user's rows, and orphan tracks follow
+- [x] `library.for_user(id)`, `library.top_artists(id, n)`, `library.common(a, b)`: shared tracks and artists, weighted
+- [x] The known-songs pool (Phase 10) reads from the library instead of its own JSON copy, one source of truth (migration drops `users.taste_pool_json` after the switch)
 
 Tests (`tests/test_p19_library.py`)
-- [ ] a rebuild writes every source with its weight; a track in several sources keeps one row per source and its weights add up in `for_user`
-- [ ] a refresh replaces: a song gone from Liked Songs is gone from the library
-- [ ] the 600-row cap keeps the heaviest
-- [ ] `common(a, b) == common(b, a)`; no overlap gives an empty list
-- [ ] rows 31 days old are pruned at startup, rows 29 days old stay; orphan tracks go too
-- [ ] disconnect leaves no library rows for the user and no orphan tracks
-- [ ] the Spotify call count of a rebuild is the same as in Phase 10 (assert per route)
-- [ ] the pool built from the library equals the Phase 10 pool for the same reads
-- [ ] `live`: your rebuild prints rows per source and stays at or under 600
+- [x] a rebuild writes every source with its weight; a track in several sources keeps one row per source and its weights add up in `for_user`
+- [x] a refresh replaces: a song gone from Liked Songs is gone from the library
+- [x] the 600-row cap keeps the heaviest
+- [x] `common(a, b) == common(b, a)`; no overlap gives an empty list
+- [x] rows 31 days old are pruned at startup, rows 29 days old stay; orphan tracks go too
+- [x] disconnect leaves no library rows for the user and no orphan tracks
+- [x] the Spotify call count of a rebuild is the same as in Phase 10 (assert per route)
+- [x] the pool built from the library equals the Phase 10 pool for the same reads
+- [x] `live`: your rebuild prints rows per source and stays at or under 600
 
 Gate: `pytest tests/test_p19_library.py` green, and your library's counts per source look right to you.
+
+Done 2026-10-24 apart from your look at the counts. Live: your library holds 391 rows: 10 top, 34 recent (50 plays, some repeated), 200 liked, 53 from your own playlists and 94 from Moodify's. Top artists by weight: Drake 24, Don Toliver 21, Gunna 16, Travis Scott 15. The 150-song pool read back from the library equals the one built from the reads. Built differently from the list above: Spotify's top tracks are read for the 6-month range only, and this phase adds no calls, so there's one `top` source (weight 3) instead of `top_short`/`top_long`. Weights: top 3, recent 2, liked 1, own playlist 1, Moodify 1. `library.position` keeps each source's order, so the pool can be rebuilt exactly. A failed read leaves the library as it was. Migration 11 clears every cached profile, so each one is rebuilt once and fills the library, then drops `users.taste_pool_json`. The real database was backed up before it ran. Orphan tracks are deleted in code (after a replace, at startup, on disconnect), not by a trigger: a trigger would also drop a track another refresh was about to re-add, together with its Phase 22 features. 18 tests.
 
 ---
 
