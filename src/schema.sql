@@ -184,3 +184,25 @@ CREATE TABLE IF NOT EXISTS library (
     PRIMARY KEY (spotify_id, uri, source)
 );
 CREATE INDEX IF NOT EXISTS library_by_uri ON library (uri);
+
+-- Phase 20: Blends (src/blend.py). The playlist is the owner's; members' rows and credits go when they disconnect
+CREATE TABLE IF NOT EXISTS blends (
+    id           INTEGER PRIMARY KEY,
+    playlist_id  INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    owner        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    lean         TEXT REFERENCES users(spotify_id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS blend_members (
+    blend_id     INTEGER NOT NULL REFERENCES blends(id) ON DELETE CASCADE,
+    spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL,
+    PRIMARY KEY (blend_id, spotify_id)
+);
+CREATE TABLE IF NOT EXISTS blend_credits (
+    blend_id     INTEGER NOT NULL REFERENCES blends(id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL,
+    spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+    PRIMARY KEY (blend_id, position, spotify_id)
+);
+CREATE INDEX IF NOT EXISTS blend_members_by_user ON blend_members (spotify_id);

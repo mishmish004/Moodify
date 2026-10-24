@@ -65,6 +65,7 @@ class Listening:
 class Profile:
     summary: str
     pool: list[Track]  # songs the user knows, most telling first
+    labels: tuple[str, ...] = ()  # per pool song, shown after it (a Blend says whose it is); may be empty
 
 
 def build_summary(onboarding: dict, listening: Listening) -> str:
@@ -124,6 +125,23 @@ def known_pool(listening: Listening) -> list[Track]:
 
 def familiar_percent(onboarding: dict) -> int:
     return FAMILIAR_PERCENT.get(onboarding.get("familiar"), FAMILIAR_PERCENT[DEFAULT_FAMILIAR])
+
+
+def stored_summary(user) -> str:
+    """A user's taste from what's stored, never from Spotify: the cached summary, else one built from their
+    onboarding answers alone. Used for friends (Phases 20-21), whose Spotify logins Moodify never uses."""
+    if user["taste_summary"]:
+        return user["taste_summary"]
+    return build_summary(json.loads(user["onboarding_json"] or "{}"), Listening())
+
+
+def condense(summary: str, limit: int) -> str:
+    """The summary cut to `limit` characters at the end of a sentence; the most telling parts come first."""
+    if len(summary) <= limit:
+        return summary
+    cut = summary[:limit]
+    end = cut.rfind(". ")
+    return cut[: end + 1] if end > limit // 3 else cut[: limit - 1] + "…"
 
 
 def summary_for(user) -> str:

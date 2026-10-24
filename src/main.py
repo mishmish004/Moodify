@@ -4,14 +4,15 @@ import sqlite3
 from contextlib import asynccontextmanager
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import jobs, library, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing, taste, users
+from src import (blend, jobs, library, likes, links, memory, playlist, playlists, prompts, reflect, search_cache, sharing,
+                 taste, users)
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
@@ -212,6 +213,8 @@ BUILD_FAILURES = {
                  "The app's Spotify quota is used up for now. Try again in an hour or so."),
     jobs.INTERRUPTED: ("Interrupted", "Moodify restarted while making this playlist. Nothing was saved. Try again."),
     jobs.ERROR: ("Something went wrong", "The playlist couldn't be made, and nothing was saved. Try again."),
+    blend.NOT_SHARED: ("Not shared any more", "Someone you picked switched off sharing before the playlist started."
+                                              " Nothing was made."),
 }
 
 
@@ -267,6 +270,7 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
         "fixes": playlists.fixes(playlist_id, user["spotify_id"]),
         "auto_open": auto_open, "phone": links.is_phone(request.headers.get("user-agent")),
         "shows_taste": sharing.get(user["spotify_id"])["taste"],
+        "blend": blend.for_playlist(playlist_id, user["spotify_id"], tracks),
     })
 
 
@@ -467,6 +471,34 @@ def friend_page(request: Request, friend_id: str, user: sqlite3.Row = Depends(cu
         "summary": friend["taste_summary"] if shared["taste"] else None,
         "playlists": sharing.visible_playlists(friend_id) if shared["taste"] else [],
     })
+
+
+# --- Moodify Blend (Phase 20) -------------------------------------------------------------------------------
+
+@app.get("/blend")
+def blend_page(request: Request, user: sqlite3.Row = Depends(onboarded_user), with_: list[str] = Query([], alias="with")):
+    return templates.TemplateResponse(request, "blend.html", {
+        "user": user, "friends": sharing.friends(user["spotify_id"], "blend"), "picked": set(with_),
+        "max_friends": blend.MAX_FRIENDS,
+    })
+
+
+@app.post("/blend")
+def make_blend(request: Request, user: sqlite3.Row = Depends(onboarded_user),
+               mood: str = Form(..., min_length=1, max_length=2000), friends: list[str] = Form([]),
+               lean: str = Form(""), public: Optional[str] = Form(None)):
+    try:
+        blend.check(user["spotify_id"], friends)
+    except blend.NotShared:
+        if not 1 <= len(friends) <= blend.MAX_FRIENDS:
+            return _message(request, "Pick 1 to 4 friends", "A Blend is you plus one to four friends who allow it.",
+                            status_code=400, user=user)
+        return _not_shared(request, user)
+    job = jobs.running_for(user["spotify_id"])
+    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    if job is None:
+        jobs.start(blend.run, job_id, user["spotify_id"], mood, friends, lean or None, public is not None)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
 @app.post("/playlists/{playlist_id}/hide")

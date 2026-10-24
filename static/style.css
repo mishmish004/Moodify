@@ -143,3 +143,26 @@ button.small { min-height: 2.75rem; margin-top: .5rem; padding: .3rem 1rem; font
 .switches .check { margin-top: 1.25rem; }
 .list.plain li { min-height: 44px; padding: .5rem 0; }
 .summary { overflow-wrap: anywhere; }
+
+/* Phase 20: Blend member colours. The dataviz reference palette's first five categorical slots, in fixed order,
+   checked with its validator against these surfaces (2026-10-24): light on #ffffff passes with a contrast
+   warning for slots 3-5, so every bar carries its name and value as text; dark on #121212 passes outright. */
+:root { --member-1: #2a78d6; --member-2: #eb6834; --member-3: #1baf7a; --member-4: #eda100; --member-5: #e87ba4; --hairline: #e1e0d9; }
+@media (prefers-color-scheme: dark) {
+  :root { --member-1: #3987e5; --member-2: #d95926; --member-3: #199e70; --member-4: #c98500; --member-5: #d55181; --hairline: #2c2c2a; }
+}
+.member-1 { background: var(--member-1); } .member-2 { background: var(--member-2); } .member-3 { background: var(--member-3); }
+.member-4 { background: var(--member-4); } .member-5 { background: var(--member-5); }
+.swatch { display: inline-block; width: 10px; height: 10px; margin-right: .3rem; border-radius: 2px; vertical-align: baseline; }
+.credit { white-space: nowrap; }
+.shares { margin-top: 1.5rem; }
+.share { display: grid; grid-template-columns: minmax(6rem, 9rem) 1fr 3rem; align-items: center; gap: .75rem; min-height: 32px; }
+.share-name { overflow-wrap: anywhere; }
+.share-track { position: relative; height: 12px; background: var(--hairline); border-radius: 4px; }
+.share-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; }
+.share-floor { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); }
+.share-value { text-align: right; font-variant-numeric: tabular-nums; }
+.shares table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.shares th, .shares td { text-align: left; padding: .4rem .5rem .4rem 0; border-bottom: 1px solid var(--line); }
+fieldset.pick { margin: 1rem 0 0; padding: 0; border: 0; }
+fieldset.pick legend { font-weight: 600; padding: 0; }

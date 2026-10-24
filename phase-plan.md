@@ -476,27 +476,41 @@ Done 2026-10-24 apart from your look at the counts. Live: your library holds 391
 Goal: pick friends, type a prompt, get one playlist that fits the prompt and everyone's taste fairly.
 
 Build
-- [ ] `/blend`: choose 1–4 friends who allow blends (you are always in it), and a prompt box with the same tolerance as Phase 11. Optionally lean toward one person: equal by default
-- [ ] Blend taste: each member's summary condensed to at most 600 characters, labelled with their first name. The blended known-songs list puts **common ground** first (tracks in two or more members' libraries), then each member's heaviest tracks in turn, each labelled with whose they are
-- [ ] Hard rules are the **union** of all members': if anyone avoids country, the blend avoids it; anyone's "no explicit" applies to everyone. Familiarity refers to the blended list
-- [ ] Brief and sections work as in Phases 11–13. Each suggested song says who it's mainly for (`for`: a member, or `everyone`)
-- [ ] Fair share: each member's songs, counting their own and shared ones, fill at least (1/n − 10%) of the minutes. A member below that gets one top-up call, as short sections do
-- [ ] Saved **only in the requester's account**, as "Moodify Blend: Amish × Sam × Priya: <title>", with members named in the description. Members' Spotify tokens are never used, only their stored library and profile
-- [ ] `blends(id, playlist_id, owner)` and `blend_members(blend_id, spotify_id)`; each member's access log gets a row; members see "Amish made a blend with you" in their activity (Phase 24)
-- [ ] Blend page: each track marked with whose taste it came from (initials) or "common ground"; a share bar per member (the dataviz rules apply: one colour per member in a fixed order)
-- [ ] Public/private as in open question 5
+- [x] `/blend`: choose 1–4 friends who allow blends (you are always in it), and a prompt box with the same tolerance as Phase 11. Optionally lean toward one person: equal by default
+- [x] Blend taste: each member's summary condensed to at most 600 characters, labelled with their first name. The blended known-songs list puts **common ground** first (tracks in two or more members' libraries), then each member's heaviest tracks in turn, each labelled with whose they are
+- [x] Hard rules are the **union** of all members': if anyone avoids country, the blend avoids it; anyone's "no explicit" applies to everyone. Familiarity refers to the blended list
+- [x] Brief and sections work as in Phases 11–13. Each suggested song says who it's mainly for (`for`: a member, or `everyone`)
+- [x] Fair share: each member's songs, counting their own and shared ones, fill at least (1/n − 10%) of the minutes. A member below that gets one top-up call, as short sections do
+- [x] Saved **only in the requester's account**, as "Moodify Blend: Amish × Sam × Priya: <title>", with members named in the description. Members' Spotify tokens are never used, only their stored library and profile
+- [x] `blends(id, playlist_id, owner)` and `blend_members(blend_id, spotify_id)`; each member's access log gets a row; members see "Amish made a blend with you" in their activity (Phase 24)
+- [x] Blend page: each track marked with whose taste it came from (initials) or "common ground"; a share bar per member (the dataviz rules apply: one colour per member in a fixed order)
+- [x] Public/private as in open question 5
 
 Tests (`tests/test_p20_blend.py`)
-- [ ] only friends who allow blends can be picked; anyone else → 403, nothing built
-- [ ] **no member's refresh token is ever used**: the token route sees only the requester's
-- [ ] the union of avoid rules reaches the brief and suggestion prompts; one member's "no explicit" filters explicit tracks
-- [ ] common-ground songs come first in the known list, each member's songs are labelled
-- [ ] fair share holds within tolerance; an under-served member triggers exactly one top-up call, for that member
-- [ ] playlist name and description list every member; one access-log row per member
-- [ ] a member who switched off before the build can no longer be picked; the build checks consent once, at the start
-- [ ] `live`: you plus a synthetic friend whose taste is very different (jazz and classical) with "sunday cooking" → each of you at least 40% of the minutes, judged by whose list each track came from
+- [x] only friends who allow blends can be picked; anyone else → 403, nothing built
+- [x] **no member's refresh token is ever used**: the token route sees only the requester's
+- [x] the union of avoid rules reaches the brief and suggestion prompts; one member's "no explicit" filters explicit tracks
+- [x] common-ground songs come first in the known list, each member's songs are labelled
+- [x] fair share holds within tolerance; an under-served member triggers exactly one top-up call, for that member
+- [x] playlist name and description list every member; one access-log row per member
+- [x] a member who switched off before the build can no longer be picked; the build checks consent once, at the start
+- [x] `live`: you plus a synthetic friend whose taste is very different (jazz and classical) with "sunday cooking" → each of you at least 40% of the minutes, judged by whose list each track came from
 
 Gate: `pytest tests/test_p20_blend.py` green, the live blend passes, and once a real friend is on the deployed app, one real blend sounds fair to both of you.
+
+Done 2026-10-24 apart from the real-friend blend. Live: you plus a synthetic jazz-and-classical friend, "sunday cooking", gave 15 tracks: you 55% (31 min), the friend 45% (26 min), each above the 40% floor, and no top-up was needed. The playlist is in your Spotify, private. The synthetic friend was deleted afterwards.
+
+How it was built:
+- **One build core.** `playlist.make(user, mood, Recipe)` serves your own playlists (`build`), Blends and Phase 21. A Recipe carries the taste profile, memory, name, description note, rule tidy-up and an optional fair-share balance.
+- **Friends' data.** It comes only from what's stored (`taste.stored_summary`, onboarding, library), never their login. A test checks that every token refresh carries only the requester's refresh token.
+- **Credit.** A track counts for whoever has it in their library, else for whoever the model's `for_whom` names ("everyone" or no name: all of them). Shared songs count fully for each person.
+- **Placing.** Songs are tried in turns (songs for everyone first, then one per person), so placement can't fill a section with one person's songs.
+- **Top-up.** It asks for songs for the under-served person and swaps them in for tracks of people who stay above their floor without them. A section stays inside its length window.
+- **Avoid rules.** Phrases lose a leading "no"/"avoid" ("no country" → "country"). A phrase that means "no explicit" sets that rule instead of being listed twice.
+- **Storage.** Migration 12 adds `blends`, `blend_members` and `blend_credits`. A friend who disconnects takes their rows and credits with them; the owner's playlist stays.
+- **The page.** Each track shows the initials of whose taste it came from, or "common ground". A share bar per person shows minutes against their fair minimum, with a table view. Colours are the dataviz reference palette's first five slots, in fixed order, checked with its validator on Moodify's own surfaces (#ffffff, #121212). Light mode warns on contrast for slots 3–5, so every bar carries its name and value as text.
+
+25 tests.
 
 ---
 

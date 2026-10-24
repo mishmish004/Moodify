@@ -170,6 +170,29 @@ MIGRATIONS = [
     UPDATE users SET taste_updated_at = NULL;
     ALTER TABLE users DROP COLUMN taste_pool_json;
     """,
+    # 12 (Phase 20): Blends, who is in each, and whose taste each track came from
+    """
+    CREATE TABLE IF NOT EXISTS blends (
+        id           INTEGER PRIMARY KEY,
+        playlist_id  INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+        owner        TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        lean         TEXT REFERENCES users(spotify_id) ON DELETE SET NULL,
+        created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS blend_members (
+        blend_id     INTEGER NOT NULL REFERENCES blends(id) ON DELETE CASCADE,
+        spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        position     INTEGER NOT NULL,
+        PRIMARY KEY (blend_id, spotify_id)
+    );
+    CREATE TABLE IF NOT EXISTS blend_credits (
+        blend_id     INTEGER NOT NULL REFERENCES blends(id) ON DELETE CASCADE,
+        position     INTEGER NOT NULL,
+        spotify_id   TEXT NOT NULL REFERENCES users(spotify_id) ON DELETE CASCADE,
+        PRIMARY KEY (blend_id, position, spotify_id)
+    );
+    CREATE INDEX IF NOT EXISTS blend_members_by_user ON blend_members (spotify_id);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

@@ -13,7 +13,8 @@ earlier brief and its review go in as a correction, and the new playlist points 
 "More like this" is a build with `like_of`: that playlist's brief, liked songs and review seed it.
 """
 import json
-from typing import Optional
+from dataclasses import dataclass
+from typing import Callable, Optional
 
 from src import jobs, likes, memory, playlists, search_cache, taste, users
 from src.arc import arrange, timeline
@@ -31,6 +32,7 @@ RECENT_PLAYLISTS = 3     # their songs aren't used again unless liked
 MAX_REPEATS = 2          # liked songs from those playlists, per new playlist
 RECENT_LISTED = 40       # of those songs named in the suggestion prompt
 DESCRIPTION_CHARS = 300  # Spotify's limit for a playlist description
+NAME_CHARS = 100
 
 
 class BuildFailed(Exception):
@@ -63,40 +65,85 @@ def run(job_id: int, spotify_id: str, mood: str, fix_of: Optional[int] = None, l
         jobs.finish(job_id, playlist_id)
 
 
+@dataclass
+class Recipe:
+    """What a build follows besides the prompt: whose taste, which memory, how the result is named.
+    build() makes one from the user's own profile; Blends (Phase 20) and "hear it like a friend" (Phase 21)
+    make their own from stored profiles, so their builds never read anyone's Spotify but the requester's."""
+    profile: taste.Profile
+    familiar_percent: int                                  # share of known songs unless the prompt says otherwise
+    recall: Optional[Callable[[set[str]], memory.Parts]] = None  # the requester's memory, for their own playlists
+    correction: str = ""
+    feedback: str = ""
+    repeats: Optional["_Repeats"] = None
+    name: Callable[[Brief], str] = lambda brief: f"Moodify: {brief.title}"
+    note: str = ""                                         # opens the playlist description
+    public: bool = False
+    parent_id: Optional[int] = None
+    tidy: Callable[[Brief], Brief] = lambda brief: brief   # e.g. a Blend's union of everyone's avoid rules
+    balance: Optional[object] = None                       # a Blend's fair share (src/blend.py)
+
+
+@dataclass
+class Built:
+    playlist_id: int
+    tracks: list[Track]
+    finder: "_Finder"
+
+
 def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None, like_of: Optional[int] = None) -> int:
     """Returns the new playlists row id. Raises BuildFailed when there is nothing to make;
     SpotifyQuotaExceeded and ReauthRequired propagate. In every failure no playlist is created.
     `fix_of`: the id of the user's playlist whose review this build corrects. `like_of`: the id of the
     user's playlist to make more like."""
     spotify_id = user["spotify_id"]
-    mood = clean_mood(mood)
     trace.step("Reading your taste")
     profile = taste.profile_for(user)
     parent = playlists.get(fix_of, spotify_id) if fix_of else None
     seed = playlists.get(like_of, spotify_id) if like_of else None
     correction, feedback = fix_notes(parent, spotify_id) if parent else more_notes(seed, spotify_id) if seed else ("", "")
-    for_prompt = memory.prompt_parts(spotify_id, memory.words(mood))
+    version = f" (v{playlists.version(parent['id']) + 1})" if parent else ""
+    recipe = Recipe(
+        profile=profile, familiar_percent=taste.familiar_percent(json.loads(user["onboarding_json"] or "{}")),
+        recall=lambda wanted: memory.prompt_parts(spotify_id, wanted), correction=correction, feedback=feedback,
+        repeats=_Repeats(spotify_id, skip=parent["id"] if parent else None, also=seed["id"] if seed else None),
+        name=lambda brief: f"Moodify: {brief.title}{version}", parent_id=parent["id"] if parent else None,
+    )
+    return make(user, mood, recipe, trace).playlist_id
+
+
+def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
+    """The build itself, for whichever recipe. Only `user`'s Spotify is used: to search, and to save the
+    playlist in their account."""
+    spotify_id = user["spotify_id"]
+    mood = clean_mood(mood)
+    profile = recipe.profile
+    no_memory = memory.Parts("", "", ())
+    for_prompt = recipe.recall(memory.words(mood)) if recipe.recall else no_memory
     trace.step("Reading your prompt")
-    brief = read_prompt(mood, profile.summary, trace, spotify_id=spotify_id, memory=for_prompt.block,
-                        correction=correction, recalled=for_prompt.recalled)
+    brief = recipe.tidy(read_prompt(mood, profile.summary, trace, spotify_id=spotify_id, memory=for_prompt.block,
+                                    correction=recipe.correction, recalled=for_prompt.recalled))
     targets = section_targets(brief)
     trace.event("brief", title=brief.title, sections=len(brief.sections), support_note=brief.support_note,
                 minutes=[round(t, 1) for t in targets])
-    remembered = memory.prompt_parts(spotify_id, memory.brief_words(brief) | memory.words(mood))
-    memory.mark_used(spotify_id, for_prompt.ids + remembered.ids)
-    repeats = _Repeats(spotify_id, skip=parent["id"] if parent else None, also=seed["id"] if seed else None)
+    remembered = recipe.recall(memory.brief_words(brief) | memory.words(mood)) if recipe.recall else no_memory
+    if recipe.recall:
+        memory.mark_used(spotify_id, for_prompt.ids + remembered.ids)
+    repeats = recipe.repeats
     trace.event("memory", block_chars=len(remembered.block), recalled=list(dict.fromkeys(for_prompt.ids + remembered.ids)),
-                recent_blocked=len(repeats.blocked), recent_liked=len(repeats.liked))
-    onboarding_percent = taste.familiar_percent(json.loads(user["onboarding_json"] or "{}"))
-    ask = {"known": profile.pool, "familiar_percent": familiar_percent(brief, onboarding_percent),
+                recent_blocked=len(repeats.blocked) if repeats else 0, recent_liked=len(repeats.liked) if repeats else 0)
+    ask = {"known": profile.pool, "known_labels": profile.labels,
+           "familiar_percent": familiar_percent(brief, recipe.familiar_percent),
            "brief": brief, "spotify_id": spotify_id, "memory": remembered.block, "recalled": remembered.recalled,
-           "feedback": feedback, "recent": repeats.listed}
+           "feedback": recipe.feedback, "recent": repeats.listed if repeats else []}
 
     trace.step("Asking for song ideas")
     counts = [songs_to_ask_for(t) for t in targets]
     songs = suggest_songs(mood, profile.summary, n=sum(counts), counts=counts, trace=trace, **ask)
     if not songs:
         raise BuildFailed(jobs.NO_SUGGESTIONS)
+    if recipe.balance:
+        songs = recipe.balance.order(songs)
     fills = [SectionFill(t, brief.hard_rules) for t in targets]
     finder = _Finder(spotify_id, brief, profile.pool, trace, repeats)
     trace.step("Finding the songs on Spotify")
@@ -108,34 +155,41 @@ def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None
             extra_counts = [songs_to_ask_for(f.missing) if i in short else 0 for i, f in enumerate(fills)]
             extra = suggest_songs(mood, profile.summary, n=sum(extra_counts), counts=extra_counts, exclude=songs,
                                   trace=trace, **ask)
+            if recipe.balance:
+                extra = recipe.balance.order(extra)
             finder.place(sp, extra, fills)
             songs = songs + extra
+        if recipe.balance:
+            songs = songs + recipe.balance.settle(
+                lambda counts, note: suggest_songs(mood, profile.summary, n=sum(counts), counts=counts, exclude=songs,
+                                                   trace=trace, **{**ask, "feedback": "\n\n".join(
+                                                       x for x in (recipe.feedback, note) if x)}),
+                sp, finder, fills, trace)
         if not any(f.tracks for f in fills):
             raise BuildFailed(jobs.NO_MATCHES)
         ordered = arrange([f.tracks for f in fills], finder.energy, finder.roles, brief)
         tracks = [t for section in ordered for t in section]
         minutes = round(sum(f.total for f in fills))
         trace.step("Saving the playlist to your Spotify")
-        description = _description(brief, [f.total for f in fills], minutes)
-        name = f"Moodify: {brief.title}" + (f" (v{playlists.version(parent['id']) + 1})" if parent else "")
-        playlist = sp.create_playlist(name, description)
+        description = _description(brief, [f.total for f in fills], minutes, recipe.note)
+        playlist = sp.create_playlist(recipe.name(brief)[:NAME_CHARS], description, public=recipe.public)
         sp.add_items(playlist.id, [t.uri for t in tracks])
     sections = [i for i, section in enumerate(ordered) for _ in section]
     row_id = playlists.insert(
-        user["spotify_id"], mood, playlist.url, tracks, brief.model_dump_json(), sections,
+        spotify_id, mood, playlist.url, tracks, brief.model_dump_json(), sections,
         [finder.energy.get(t.uri) for t in tracks], [finder.roles.get(t.uri) for t in tracks],
-        parent_id=parent["id"] if parent else None,
+        parent_id=recipe.parent_id,
     )
     pool_uris = {t.uri for t in profile.pool}
     known = sum(t.uri in pool_uris for t in tracks)
     MoodifyLogger.get_logger("playlist").info(
         "%s: %d tracks, %d min (%d known) from %d searches (%d suggestions) for %r",
-        user["spotify_id"], len(tracks), minutes, known, finder.searched, len(songs), brief.title,
+        spotify_id, len(tracks), minutes, known, finder.searched, len(songs), brief.title,
     )
     trace.event("built", playlist_id=row_id, tracks=len(tracks), minutes=minutes, known=known,
                 searched=finder.searched, cache_hits=finder.cache_hits, suggested=len(songs),
                 section_minutes=[round(f.total, 1) for f in fills], targets=[round(t, 1) for t in targets])
-    return row_id
+    return Built(row_id, tracks, finder)
 
 
 def fix_notes(parent, spotify_id: str) -> tuple[str, str]:
@@ -173,14 +227,15 @@ def more_notes(seed, spotify_id: str) -> tuple[str, str]:
     return "\n".join(lines), "More like an earlier playlist:\n" + "\n".join(lines[2:] if seed["brief_json"] else lines[1:])
 
 
-def _description(brief: Brief, section_minutes: list[float], minutes: int) -> str:
+def _description(brief: Brief, section_minutes: list[float], minutes: int, note: str = "") -> str:
     """The timeline for a playlist with several sections ("0–14 Summer morning → 14–44 Workout → ..."),
-    else the summary; always within Spotify's limit."""
+    else the summary, after `note` if any; always within Spotify's limit."""
+    lead = f"{note} " if note else ""
     if len(brief.sections) > 1:
-        text = f"{timeline(brief, section_minutes)}. Made by Moodify."
+        text = f"{lead}{timeline(brief, section_minutes)}. Made by Moodify."
         if len(text) <= DESCRIPTION_CHARS:
             return text
-    text = f"Made by Moodify: {brief.summary} ({minutes} min)"
+    text = f"{lead}Made by Moodify: {brief.summary} ({minutes} min)"
     return text if len(text) <= DESCRIPTION_CHARS else text[: DESCRIPTION_CHARS - 1] + "…"
 
 
@@ -214,31 +269,53 @@ class _Finder:
         self.used: set[str] = set()                # URIs already in the playlist
         self.energy: dict[str, int] = {}           # by URI, from the song that placed it
         self.roles: dict[str, Optional[str]] = {}
+        self.songs: dict[str, Song] = {}
+
+    def section_of(self, song: Song, fills: list[SectionFill]) -> SectionFill:
+        return fills[min(max((song.section or 1) - 1, 0), len(fills) - 1)]
+
+    def lookup(self, sp: SpotifyClient, song: Song, of: int) -> Optional[Track]:
+        """The Spotify track for a suggested song, if it may go in the playlist: found, not looked at before in
+        this build, not already in it, not a repeat from a recent playlist. None also past MAX_SEARCHES."""
+        key = (normalize_title(song.title), normalize_artist(song.artist))
+        if key in self.tried:
+            return None
+        if self.searched >= MAX_SEARCHES:
+            self.trace.event("limit", searches=self.searched)
+            return None
+        self.tried.add(key)
+        track = self._find(sp, song, of)
+        if track is None or track.uri in self.used:
+            return None
+        repeat = self.repeats is not None and track.uri in self.repeats.liked
+        if self.repeats is not None and (track.uri in self.repeats.blocked or repeat and self.repeats.left <= 0):
+            self.trace.event("skipped", title=track.name, reason="in a recent playlist")
+            return None
+        return track
+
+    def keep(self, track: Track, song: Song) -> None:
+        """Record a track that went into the playlist, with what the song that placed it said."""
+        self.used.add(track.uri)
+        if self.repeats is not None and track.uri in self.repeats.liked:
+            self.repeats.left -= 1
+        if song.energy:
+            self.energy[track.uri] = min(10, max(1, song.energy))
+        self.roles[track.uri] = song.role
+        self.songs[track.uri] = song
 
     def place(self, sp: SpotifyClient, songs: list[Song], fills: list[SectionFill]) -> None:
         for song in songs:
-            fill = fills[min(max((song.section or 1) - 1, 0), len(fills) - 1)]
-            key = (normalize_title(song.title), normalize_artist(song.artist))
-            if fill.done or key in self.tried:
+            fill = self.section_of(song, fills)
+            if fill.done:
                 continue
             if self.searched >= MAX_SEARCHES:
                 self.trace.event("limit", searches=self.searched)
                 return
-            self.tried.add(key)
-            track = self._find(sp, song, len(songs))
-            if track is None or track.uri in self.used:
-                continue
-            repeat = self.repeats is not None and track.uri in self.repeats.liked
-            if self.repeats is not None and (track.uri in self.repeats.blocked or repeat and self.repeats.left <= 0):
-                self.trace.event("skipped", title=track.name, reason="in a recent playlist")
+            track = self.lookup(sp, song, len(songs))
+            if track is None:
                 continue
             if fill.offer(track):
-                self.used.add(track.uri)
-                if repeat:
-                    self.repeats.left -= 1
-                if song.energy:
-                    self.energy[track.uri] = min(10, max(1, song.energy))
-                self.roles[track.uri] = song.role
+                self.keep(track, song)
             else:
                 self.trace.event("skipped", title=track.name, minutes=round(track.duration_ms / 60_000, 1),
                                  reason="length rule" if not fill.done else "section full")

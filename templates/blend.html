@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Moodify · make a Blend{% endblock %}
+{% block content %}
+<h1>Moodify Blend</h1>
+<p>One playlist from your prompt and several people's taste, with a fair share for each. It's saved in your Spotify only.</p>
+{% if friends %}
+<form method="post" action="/blend" data-busy="Making your Blend…">
+  <fieldset class="pick">
+    <legend>Who's in it, besides you? (1 to {{ max_friends }})</legend>
+    {% for f in friends %}
+    <label class="check"><input type="checkbox" name="friends" value="{{ f.spotify_id }}" {% if f.spotify_id in picked %}checked{% endif %}> {{ f.display_name or f.spotify_id }}</label>
+    {% endfor %}
+  </fieldset>
+  <label for="mood">The mood, the moment, or what you're doing together</label>
+  <textarea id="mood" name="mood" required maxlength="2000" rows="3" placeholder="e.g. sunday cooking, then a slow evening. Say it however you like."></textarea>
+  <label for="lean">Lean toward</label>
+  <select id="lean" name="lean">
+    <option value="">Nobody: equal shares</option>
+    <option value="{{ user.spotify_id }}">Me</option>
+    {% for f in friends %}<option value="{{ f.spotify_id }}">{{ f.display_name or f.spotify_id }}</option>{% endfor %}
+  </select>
+  <label class="check"><input type="checkbox" name="public" value="on"> Make it public, so the others can open the link</label>
+  <small class="hint">Spotify can't share a playlist with only some people. Private, only you can open it in Spotify.</small>
+  <button type="submit" class="wide">Make the Blend</button>
+</form>
+<p><small>Moodify uses their stored taste and music library, never their Spotify login, and each of them can see that you made a Blend with them.</small></p>
+{% else %}
+<p>Nobody lets friends include them in Blends yet. When someone switches it on under their sharing settings, they show up here.</p>
+{% endif %}
+{% endblock %}

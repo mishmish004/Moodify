@@ -131,9 +131,9 @@ class SpotifyClient:
         data = self._request("GET", "/search", params=params)
         return [_track(item) for item in data["tracks"]["items"] if item]
 
-    def create_playlist(self, name: str, description: str = "") -> Playlist:
+    def create_playlist(self, name: str, description: str = "", public: bool = False) -> Playlist:
         # public defaults to true on Spotify's side; mood playlists stay private unless the user shares them
-        data = self._request("POST", "/me/playlists", json={"name": name, "description": description, "public": False})
+        data = self._request("POST", "/me/playlists", json={"name": name, "description": description, "public": public})
         return Playlist(data["id"], data["external_urls"]["spotify"])
 
     def add_items(self, playlist_id: str, uris: list[str]) -> None:

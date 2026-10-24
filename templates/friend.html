@@ -19,4 +19,7 @@
 {% else %}
 <p class="muted">{{ name }} doesn't show their taste to friends.</p>
 {% endif %}
+{% if shared.blend %}
+<p><a class="button" href="/blend?with={{ friend.spotify_id }}">Make a Blend with {{ name }}</a></p>
+{% endif %}
 {% endblock %}
