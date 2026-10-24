@@ -5,9 +5,6 @@ page into plain HTML at build time, so it loads fast on phones and needs only a 
 JavaScript where something moves. It runs on a Cloudflare Worker. Two small endpoints save the
 contact form and Moodify access requests to Supabase.
 
-The whole site sits behind Google sign-in: until a visitor signs in, every page, file and form
-endpoint sends them to `/sign-in`. Any Google account gets in. See [Google sign-in](#google-sign-in-once).
-
 | Page | URL | Content lives in |
 | --- | --- | --- |
 | Home: serious-work, dilly-dallying | `/` | `src/content/projects/`, `src/site/pages.ts` (`home`) |
@@ -17,7 +14,6 @@ endpoint sends them to `/sign-in`. Any Google account gets in. See [Google sign-
 | Privacy + "Want to try Moodify?" | `/privacy` | `src/pages/privacy.astro`, `moodifyAccess` in `pages.ts` |
 | Secret page (7 taps on the logo) | `/good-morning`, `/good-morning/<file>` | `src/content/songs/*.md`, `life` in `pages.ts` |
 | RSS for the incident log | `/yapping/rss.xml` | generated |
-| Sign-in (the only page open to everyone) | `/sign-in` | `src/pages/sign-in.astro`; the gate is `src/lib/auth.ts` |
 
 ## Run it
 
@@ -31,9 +27,6 @@ npm run check      # types
 npm run build      # what Cloudflare runs
 npm run preview    # the build on the real Workers runtime; reads .dev.vars
 ```
-
-Both `dev` and `preview` ask for a Google sign-in too, so copy `.dev.vars.example` to `.dev.vars`
-and fill in the three Google sign-in values first.
 
 ## Writing
 
@@ -63,32 +56,6 @@ build, set `PUBLIC_SHOW_DRAFTS=true`.
 Read messages in Table Editor. For Moodify requests, set `status` to `added` once you've added
 the person in the Spotify developer dashboard.
 
-## Google sign-in (once)
-
-`src/worker.ts` runs before every request, static files included, and sends anyone who isn't signed
-in to `/sign-in`. Signing in is Google's OpenID Connect flow (`src/lib/auth.ts`); the session is a
-signed cookie that lasts 30 days, and nothing is stored on a server. "sign out" is in the footer.
-
-1. [Google Cloud console](https://console.cloud.google.com/) → pick or create a project →
-   **Google Auth Platform** → Get started. App name `mish4mish.com`, your email for support,
-   audience **External**.
-2. **Branding** → Authorized domains: add `mish4mish.com`.
-3. **Audience** → **Publish app**. While it says *Testing*, only the test users listed there can
-   sign in. The site asks only for `openid` and `email`, so publishing needs no review by Google.
-4. **Clients** → Create client → **Web application**. Authorized redirect URIs:
-   - `https://mish4mish.com/auth/callback`
-   - `http://localhost:4321/auth/callback` (for `npm run dev` and `npm run preview`)
-5. Worker → Settings → **Variables and secrets** → add as *Secret*: `GOOGLE_CLIENT_ID`,
-   `GOOGLE_CLIENT_SECRET` (both from step 4) and `AUTH_SECRET`, 32+ random characters:
-   `node -e "console.log(crypto.randomBytes(32).toString('base64url'))"`.
-
-Until all three secrets are set, nobody gets in and the sign-in page says sign-in isn't working.
-Changing `AUTH_SECRET` signs everyone out.
-
-What the gate changes: link previews (WhatsApp, LinkedIn), the RSS feed and the sitemap show only
-the sign-in page to anyone not signed in. Every file a page loads now runs the Worker, and the free
-plan allows 100,000 Worker requests a day.
-
 ## Cloudflare (once)
 
 1. Workers & Pages → Create → **Import a repository** → this repo.
@@ -97,7 +64,7 @@ plan allows 100,000 Worker requests a day.
    - Deploy command: `npx wrangler deploy`
    - Build variable `NODE_VERSION=24` (Astro 7 needs Node 22.23.4 or newer)
 2. Worker → Settings → **Variables and secrets** → add as *Secret*:
-   `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the three from [Google sign-in](#google-sign-in-once).
+   `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`.
 3. Deploy. `wrangler.jsonc` attaches the Worker to `mish4mish.com` and creates the DNS record.
    Delete any existing A/AAAA/CNAME record for the apex first, or the attach fails.
 4. **www → apex:** Rules → Redirect Rules → template *Redirect from WWW to root*. It needs a
