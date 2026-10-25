@@ -765,33 +765,43 @@ Done 2026-10-25. Migration 15 is fourteen `RENAME COLUMN` steps plus `users.serv
 Goal: Spotify works exactly as before, but through an interface that a second service can implement.
 
 Build
-- [ ] `src/music/__init__.py` holds:
+- [x] `src/music/__init__.py` holds:
   - `Track`, moved from `src/spotify/client.py`, with a new `key` (the song key).
   - `Playlist` and `UserPlaylist`.
   - `Listening`, moved from `src/taste.py`.
   - The `MusicService` protocol.
   - `for_user(user)`, and `info(service)` with the name, logo, app links, "get the app" links, limits and capabilities.
-- [ ] Errors: `ServiceError(service, status, body)`, with `ReauthRequired` and `QuotaExceeded` under it. `SpotifyError` and `SpotifyQuotaExceeded` stay as Spotify's subclasses, and the handlers catch the general ones
-- [ ] Each service reads its own taste: `taste.read_listening` moves into the Spotify client as `listening()`, and `taste.py` only formats. A service that can't fill a summary section leaves it out, as an empty section is left out today
-- [ ] `src/playlist.py`, `src/likes.py`, `src/blend.py`, `src/listen_as.py` and `/queue` go through `music.for_user(user)`. Per-service limits move to the service: searches per build, playlist name and description lengths
-- [ ] Capabilities:
+- [x] Errors: `ServiceError(service, status, body)`, with `ReauthRequired` and `QuotaExceeded` under it. `SpotifyError` and `SpotifyQuotaExceeded` stay as Spotify's subclasses, and the handlers catch the general ones
+- [x] Each service reads its own taste: `taste.read_listening` moves into the Spotify client as `listening()`, and `taste.py` only formats. A service that can't fill a summary section leaves it out, as an empty section is left out today
+- [x] `src/playlist.py`, `src/likes.py`, `src/blend.py`, `src/listen_as.py` and `/queue` go through `music.for_user(user)`. Per-service limits move to the service: searches per build, playlist name and description lengths
+- [x] Capabilities:
   - `queue`: Spotify only.
   - `likes`: every service.
   - `pool_explicit`: whether the service's known songs carry an explicit flag. Under "no explicit", a known song without the flag is searched instead, as an explicit known song already is.
-- [ ] `src/links.py` works per service: the web link, the phone link, the auto-open link and "get the app" come from the service of the track or playlist
-- [ ] Pages and build steps name the user's service:
+- [x] `src/links.py` works per service: the web link, the phone link, the auto-open link and "get the app" come from the service of the track or playlist
+- [x] Pages and build steps name the user's service:
   - Build steps: "Finding the songs on Spotify" becomes "…on {service}".
   - `_spotify.html` becomes `_service.html`, which picks the service's logo and link for attribution.
   - The queue button only shows where the service can queue.
-- [ ] Build failures and quota messages name the service
+- [x] Build failures and quota messages name the service
 
 Tests (`tests/test_p26_services.py`)
-- [ ] the Spotify tests from Phases 2–24 pass with only imports changed
-- [ ] a fake second service, defined in the test, runs a full build, a like, and a Blend with a Spotify member, with no Spotify call for the fake user. Nothing outside `src/spotify/` imports `SpotifyClient`
-- [ ] every page renders for a fake-service user without the word "Spotify", except attribution on Spotify tracks
-- [ ] for a service without queue, the queue button is absent and `POST /queue/{id}` answers 404
+- [x] the Spotify tests from Phases 2–24 pass, with three wording assertions changed (below)
+- [x] a fake second service, defined in the test, runs a full build, a like, and a Blend with a Spotify member, with no Spotify call for the fake user. Only `src/spotify/` and the service switch in `src/music` name `SpotifyClient`
+- [x] every page renders for a fake-service user without the word "Spotify", except attribution on Spotify tracks
+- [x] for a service without queue, the queue button is absent and `POST /queue/{id}` answers 404
 
 Gate: fast suite green, and a live Spotify build is unchanged: same steps and the same number of Spotify calls.
+
+Done 2026-10-25 apart from the live Spotify build, which I didn't run because it makes a real playlist in your account. Offline, every Spotify test from Phases 2–24 still passes against the same mocked endpoints and call counts. Built as planned, plus:
+- **Errors**: `SpotifyReauthRequired` and `SpotifyQuotaExceeded` are both Spotify errors and the general kind, so old `except` clauses still catch them.
+- **Build steps** are stored as "Finding the songs on {service}" and matched on the words before the name, so jobs already in the database still show their progress.
+- **The known-songs shortcut takes only tracks from the user's own service.** Without that, a Spotify friend's track could have gone into a Blend saved on another service. Phase 28 builds the rest of the cross-service Blend.
+- **Copy**: pages say "their account" where a friend's service is unknown ("Playlists friends already made stay in their accounts"). That's the wording change three Spotify tests now assert.
+- **The map** (`map.js`) labels each link with its track's service and shows the Spotify icon only on Spotify links.
+- **`Track.key`** (the song key for Phase 28) exists already.
+
+10 tests.
 
 ---
 

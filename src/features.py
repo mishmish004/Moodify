@@ -25,7 +25,7 @@ from src.core.config import get_settings
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
 from src.jobs import NO_TRACE, Trace
-from src.spotify.client import Track
+from src.music import Track
 
 BATCH = 50
 SCALES = ("energy", "mood", "texture", "groove", "vocals")  # each 1 to 10

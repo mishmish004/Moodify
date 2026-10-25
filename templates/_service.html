@@ -1,38 +1,56 @@
-{# Spotify's design guidelines: Spotify metadata always comes with the Spotify logo and links back to Spotify.
+{# Phase 26: each service's marks and links. A link's service comes from its address (src/links.py service_of).
+   Spotify's design guidelines: Spotify metadata always comes with the Spotify logo and links back to Spotify.
    The full logo goes next to playlists; the icon alone is allowed where there's no room, so rows get the icon.
-   Official files only: black on light, white on dark (style.css flips them with the theme). #}
+   Official files only: black on light, white on dark (style.css flips them with the theme).
+   A service without its own marks here yet is named in words. #}
 
-{% macro logo(alt="Spotify") -%}
-<img class="mf-sp-logo" src="/static/spotify-logo.svg" alt="{{ alt }}" width="88" height="24">
+{% macro logo(service="spotify", alt=none) -%}
+{% if service == "spotify" -%}
+<img class="mf-sp-logo" src="/static/spotify-logo.svg" alt="{{ 'Spotify' if alt is none else alt }}" width="88" height="24">
+{%- else -%}
+<span class="mf-strong">{{ service_info(service).name }}</span>
+{%- endif %}
 {%- endmacro %}
 
-{% macro icon() -%}
+{% macro icon(service="spotify") -%}
+{% if service == "spotify" -%}
 <img class="mf-sp-icon" src="/static/spotify-icon.svg" alt="" width="25" height="24">
+{%- else -%}
+<span class="mf-xs mf-muted">{{ service_info(service).name }}</span>
+{%- endif %}
 {%- endmacro %}
 
-{# Links go through app_link (src/links.py): on a phone a tap opens the Spotify app. Import these macros
+{# Links go through app_link (src/links.py): on a phone a tap opens the music app. Import these macros
    "with context" so the filter can see the request's user agent. #}
 
-{# The required "OPEN SPOTIFY" button, with the full logo #}
+{# The button that opens a playlist on its service: Spotify requires "OPEN SPOTIFY" with the full logo #}
 {% macro open_app(url) -%}
+{% set service = url | service_of or "spotify" %}
+{% if service == "spotify" -%}
 <a class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block" href="{{ url | app_link }}">{{ logo(alt="") }}<span>OPEN SPOTIFY</span></a>
+{%- else -%}
+<a class="mf-btn mf-btn--primary mf-btn--xl mf-btn--block" href="{{ url | app_link }}"><span>Open in {{ service_info(service).name }}</span></a>
+{%- endif %}
 {%- endmacro %}
 
-{% macro get_spotify() -%}
-<p class="mf-small mf-muted mf-get-spotify">No Spotify app? <a class="mf-strong" href="{{ get_spotify_url() }}">GET SPOTIFY FREE</a></p>
+{% macro get_app(service="spotify") -%}
+{% if service == "spotify" -%}
+<p class="mf-small mf-muted mf-get-spotify">No Spotify app? <a class="mf-strong" href="{{ get_app_url('spotify') }}">GET SPOTIFY FREE</a></p>
+{%- endif %}
 {%- endmacro %}
 
 {% macro title_of(p) -%}
 {{ "Moodify: " ~ p.title if p.title else (p.prompt | truncate(80)) }}
 {%- endmacro %}
 
-{# Rows from playlists.recent(), with like_count and rating: the title opens the playlist in Moodify, the icon opens it in Spotify #}
+{# Rows from playlists.recent(), with like_count and rating: the title opens the playlist in Moodify, the mark opens it on its service #}
 {% macro playlist_list(rows) -%}
 <ul class="mf-list">
   {% for p in rows %}
+  {% set service = p.url | service_of or "spotify" %}
   <li class="mf-prow">
     <a class="mf-link-row" href="/playlists/{{ p.id }}"><span class="mf-link-row__title">{{ title_of(p) }}</span><span class="mf-link-row__meta">{{ p.created_at | day }}{% if p.minutes %} · {{ p.minutes | duration }}{% endif %} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</span></a>
-    <a class="mf-sp-link" href="{{ p.url | app_link }}" aria-label="Open {{ title_of(p) }} in Spotify">{{ icon() }}</a>
+    <a class="mf-sp-link" href="{{ p.url | app_link }}" aria-label="Open {{ title_of(p) }} in {{ service_info(service).name }}">{{ icon(service) }}</a>
   </li>
   {% endfor %}
 </ul>

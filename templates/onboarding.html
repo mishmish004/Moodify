@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Moodify · about your taste{% endblock %}
+{% set svc = service_info(user.service) %}
 {% set err_icon %}<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M10 5.5v5.5M10 13.6v.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>{% endset %}
 {% macro options(name, choices, picked) -%}
 <div class="mf-options">
@@ -16,7 +17,7 @@
   <div class="mf-stack-3">
     {% if first %}<p class="mf-eyebrow">Welcome, {{ user.display_name or "friend" }}.</p>{% endif %}
     <h1 class="mf-h1">About your taste</h1>
-    <p class="mf-lead">Seven questions. Moodify uses your answers together with your Spotify listening. You can change them any time.</p>
+    <p class="mf-lead">Seven questions. Moodify uses your answers together with your {{ svc.name }} listening. You can change them any time.</p>
     <div class="mf-notice mf-notice--error" role="alert" tabindex="-1" data-problems{% if not errors %} hidden{% endif %}><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"></circle><path d="M10 5.5v5.5M10 13.8v.3"></path></svg>
       <p><span class="mf-notice__title" data-problems-title>{{ "One answer is missing." if errors | length == 1 else "Some answers are missing." }}</span>
         <span data-problems-list>{% for key, text in errors.items() %}{% if key == "genres" %} <a href="#q1">Pick a genre</a> (question 1).{% elif key == "artists" %} <a href="#q2">Add at least one artist you love</a> (question 2).{% elif key == "energy" %} <a href="#q3">Pick the energy you usually want</a> (question 3).{% else %} {{ text }}{% endif %}{% endfor %}</span></p>

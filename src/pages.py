@@ -29,31 +29,33 @@ def duration(minutes: Optional[float]) -> str:
 
 # --- the build's steps (progress page) -------------------------------------------------------------
 
-# The steps src/playlist.py reports, in order. "Asking for a few more songs" happens inside step 4.
+# The steps src/playlist.py reports, in order, as they start; the last two end with the service's name
+# ("Finding the songs on Spotify"). "Asking for a few more songs" happens inside step 4.
 BUILD_STEPS = [
     "Reading your taste",
     "Reading your prompt",
     "Asking for song ideas",
-    "Finding the songs on Spotify",
-    "Saving the playlist to your Spotify",
+    "Finding the songs on {service}",
+    "Saving the playlist to your {service}",
 ]
 FIND = 3
 COUNT = re.compile(r"\((\d+)/(\d+)\)")
 
 
-def build_steps(step: Optional[str], failed: bool = False) -> list[dict]:
+def build_steps(step: Optional[str], failed: bool = False, service: str = "Spotify") -> list[dict]:
     """Every step with its state (done, now, wait or failed) and the words that say so.
-    `step` is jobs.step: the text of the step running, or the one a failed build stopped in."""
+    `step` is jobs.step: the text of the step running, or the one a failed build stopped in.
+    `service` is the name of the user's service."""
     current = 0
     for i, name in enumerate(BUILD_STEPS):
-        if step and step.startswith(name):
+        if step and step.startswith(name.split(" {", 1)[0]):  # any service's name
             current = i
     if step and step.startswith("Asking for a few more songs"):
         current = FIND
     count = COUNT.search(step or "") if current == FIND else None
 
     steps = []
-    for i, name in enumerate(BUILD_STEPS):
+    for i, name in enumerate(step.format(service=service) for step in BUILD_STEPS):
         if i < current:
             state, status = "done", "Done"
         elif i > current:

@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, field
 
 from src.brief import Brief, HardRules
-from src.spotify.client import Track
+from src.music import Track
 
 DEFAULT_TOTAL = 60   # minutes, when the prompt names no length
 MAX_TOTAL = 180      # 3 hours: Spotify search quota

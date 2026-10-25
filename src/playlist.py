@@ -1,8 +1,8 @@
 """
-mood -> a real playlist in the user's Spotify account.
+mood -> a real playlist in the user's account on their music service.
 
 read the prompt into a brief (LLM) -> work out minutes per section -> suggest songs per section (LLM)
--> find each on Spotify (known-songs pool, search cache, or search) -> fill each section to its length
+-> find each on the service (known-songs pool, search cache, or search) -> fill each section to its length
 -> create the playlist -> add items -> save the row and its tracks.
 Sections still short after the first round get one extra suggestion call, for those sections only.
 run() is the background entry point: it records how the build ended on its job.
@@ -16,23 +16,21 @@ import json
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from src import jobs, likes, memory, playlists, search_cache, taste, users
+from src import jobs, likes, memory, music, playlists, search_cache, taste, users
 from src.arc import arrange, timeline
 from src.brief import Brief, familiar_percent, read_prompt
-from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
+from src.core.exceptions import QuotaExceeded, ReauthRequired
 from src.core.logger import MoodifyLogger
 from src.fill import SectionFill, section_targets, songs_to_ask_for
 from src.jobs import NO_TRACE, Trace
 from src.match import normalize_artist, normalize_title, pick, primary_artist
-from src.spotify.client import SpotifyClient, Track
+from src.music import MusicService, Track
 from src.suggest import Song, clean_mood, suggest_songs
 
-MAX_SEARCHES = 150       # per build, cache hits not counted: Spotify's quota is per developer account
 RECENT_PLAYLISTS = 3     # their songs aren't used again unless liked
 MAX_REPEATS = 2          # liked songs from those playlists, per new playlist
 RECENT_LISTED = 40       # of those songs named in the suggestion prompt
-DESCRIPTION_CHARS = 300  # Spotify's limit for a playlist description
-NAME_CHARS = 100
+# Searches per build and playlist name and description lengths are the service's (src/music)
 
 
 class BuildFailed(Exception):
@@ -53,7 +51,7 @@ def run(job_id: int, user_id: str, mood: str, fix_of: Optional[int] = None, like
         playlist_id = build(user, mood, Trace(job_id), fix_of=fix_of, like_of=like_of)
     except BuildFailed as exc:
         jobs.fail(job_id, exc.reason)
-    except SpotifyQuotaExceeded as exc:
+    except QuotaExceeded as exc:
         log.warning("quota/rate limit hit during job %d: %s", job_id, exc)
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:
@@ -69,7 +67,7 @@ def run(job_id: int, user_id: str, mood: str, fix_of: Optional[int] = None, like
 class Recipe:
     """What a build follows besides the prompt: whose taste, which memory, how the result is named.
     build() makes one from the user's own profile; Blends (Phase 20) and "hear it like a friend" (Phase 21)
-    make their own from stored profiles, so their builds never read anyone's Spotify but the requester's."""
+    make their own from stored profiles, so their builds never use anyone's service but the requester's."""
     profile: taste.Profile
     familiar_percent: int                                  # share of known songs unless the prompt says otherwise
     recall: Optional[Callable[[set[str]], memory.Parts]] = None  # the requester's memory, for their own playlists
@@ -93,7 +91,7 @@ class Built:
 
 def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None, like_of: Optional[int] = None) -> int:
     """Returns the new playlists row id. Raises BuildFailed when there is nothing to make;
-    SpotifyQuotaExceeded and ReauthRequired propagate. In every failure no playlist is created.
+    QuotaExceeded and ReauthRequired propagate. In every failure no playlist is created.
     `fix_of`: the id of the user's playlist whose review this build corrects. `like_of`: the id of the
     user's playlist to make more like."""
     user_id = user["user_id"]
@@ -113,9 +111,10 @@ def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None
 
 
 def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
-    """The build itself, for whichever recipe. Only `user`'s Spotify is used: to search, and to save the
+    """The build itself, for whichever recipe. Only `user`'s service is used: to search, and to save the
     playlist in their account."""
     user_id = user["user_id"]
+    service = music.info(user["service"])
     mood = clean_mood(mood)
     profile = recipe.profile
     no_memory = memory.Parts("", "", ())
@@ -145,9 +144,9 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
     if recipe.balance:
         songs = recipe.balance.order(songs)
     fills = [SectionFill(t, brief.hard_rules) for t in targets]
-    finder = _Finder(user_id, brief, profile.pool, trace, repeats)
-    trace.step("Finding the songs on Spotify")
-    with SpotifyClient.for_user(user) as sp:
+    finder = _Finder(user_id, brief, profile.pool, trace, repeats, service)
+    trace.step(f"Finding the songs on {service.name}")
+    with music.for_user(user) as sp:
         finder.place(sp, songs, fills)
         short = [i for i, f in enumerate(fills) if not f.done]
         if short:
@@ -170,9 +169,9 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
         ordered = arrange([f.tracks for f in fills], finder.energy, finder.roles, brief)
         tracks = [t for section in ordered for t in section]
         minutes = round(sum(f.total for f in fills))
-        trace.step("Saving the playlist to your Spotify")
-        description = _description(brief, [f.total for f in fills], minutes, recipe.note)
-        playlist = sp.create_playlist(recipe.name(brief)[:NAME_CHARS], description, public=recipe.public)
+        trace.step(f"Saving the playlist to your {service.name}")
+        description = _description(brief, [f.total for f in fills], minutes, recipe.note, service.description_chars)
+        playlist = sp.create_playlist(recipe.name(brief)[:service.name_chars], description, public=recipe.public)
         sp.add_items(playlist.id, [t.uri for t in tracks])
     sections = [i for i, section in enumerate(ordered) for _ in section]
     row_id = playlists.insert(
@@ -227,16 +226,16 @@ def more_notes(seed, user_id: str) -> tuple[str, str]:
     return "\n".join(lines), "More like an earlier playlist:\n" + "\n".join(lines[2:] if seed["brief_json"] else lines[1:])
 
 
-def _description(brief: Brief, section_minutes: list[float], minutes: int, note: str = "") -> str:
+def _description(brief: Brief, section_minutes: list[float], minutes: int, note: str, limit: int) -> str:
     """The timeline for a playlist with several sections ("0–14 Summer morning → 14–44 Workout → ..."),
-    else the summary, after `note` if any; always within Spotify's limit."""
+    else the summary, after `note` if any; always within the service's `limit`."""
     lead = f"{note} " if note else ""
     if len(brief.sections) > 1:
         text = f"{lead}{timeline(brief, section_minutes)}. Made by Moodify."
-        if len(text) <= DESCRIPTION_CHARS:
+        if len(text) <= limit:
             return text
     text = f"{lead}Made by Moodify: {brief.summary} ({minutes} min)"
-    return text if len(text) <= DESCRIPTION_CHARS else text[: DESCRIPTION_CHARS - 1] + "…"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 class _Repeats:
@@ -256,13 +255,15 @@ class _Repeats:
 
 
 class _Finder:
-    """Turns suggested songs into Spotify tracks and offers each to its section. Searches only while
-    the song's section still needs tracks, never twice for the same song, and at most MAX_SEARCHES.
-    Enforces the no-repeat rule in code, whatever the model suggested."""
+    """Turns suggested songs into tracks on the user's service and offers each to its section. Searches only
+    while the song's section still needs tracks, never twice for the same song, and at most the service's
+    max_searches. Enforces the no-repeat rule in code, whatever the model suggested."""
 
-    def __init__(self, user_id: str, brief: Brief, pool: list[Track], trace: Trace, repeats: Optional[_Repeats] = None):
+    def __init__(self, user_id: str, brief: Brief, pool: list[Track], trace: Trace, repeats: Optional[_Repeats],
+                 service: music.Info):
         self.user_id, self.brief, self.pool, self.trace = user_id, brief, pool, trace
         self.repeats = repeats
+        self.service = service
         self.searched = 0
         self.cache_hits = 0
         self.tried: set[tuple[str, str]] = set()  # songs already looked at in this build
@@ -274,13 +275,13 @@ class _Finder:
     def section_of(self, song: Song, fills: list[SectionFill]) -> SectionFill:
         return fills[min(max((song.section or 1) - 1, 0), len(fills) - 1)]
 
-    def lookup(self, sp: SpotifyClient, song: Song, of: int) -> Optional[Track]:
-        """The Spotify track for a suggested song, if it may go in the playlist: found, not looked at before in
-        this build, not already in it, not a repeat from a recent playlist. None also past MAX_SEARCHES."""
+    def lookup(self, sp: MusicService, song: Song, of: int) -> Optional[Track]:
+        """The track for a suggested song, if it may go in the playlist: found, not looked at before in this
+        build, not already in it, not a repeat from a recent playlist. None also past the search limit."""
         key = (normalize_title(song.title), normalize_artist(song.artist))
         if key in self.tried:
             return None
-        if self.searched >= MAX_SEARCHES:
+        if self.searched >= self.service.max_searches:
             self.trace.event("limit", searches=self.searched)
             return None
         self.tried.add(key)
@@ -303,12 +304,12 @@ class _Finder:
         self.roles[track.uri] = song.role
         self.songs[track.uri] = song
 
-    def place(self, sp: SpotifyClient, songs: list[Song], fills: list[SectionFill]) -> None:
+    def place(self, sp: MusicService, songs: list[Song], fills: list[SectionFill]) -> None:
         for song in songs:
             fill = self.section_of(song, fills)
             if fill.done:
                 continue
-            if self.searched >= MAX_SEARCHES:
+            if self.searched >= self.service.max_searches:
                 self.trace.event("limit", searches=self.searched)
                 return
             track = self.lookup(sp, song, len(songs))
@@ -323,12 +324,16 @@ class _Finder:
     def _allowed(self, track: Track) -> bool:
         return not (self.brief.hard_rules.no_explicit and track.explicit)
 
-    def _find(self, sp: SpotifyClient, song: Song, of: int) -> Track | None:
+    def _find(self, sp: MusicService, song: Song, of: int) -> Track | None:
         """From the known-songs pool when the LLM picked one from it (and it really is that song), else by
-        search. An explicit pool track under "no explicit" is searched instead: that can find the clean version."""
+        search. An explicit pool track under "no explicit" is searched instead: that can find the clean version.
+        So is a pool track from a service whose taste reads don't say what's explicit, and one from another
+        service than the user's (a friend's, in a Blend): only the user's service can go in their playlist."""
         pool = self.pool
         from_pool = pool[song.known - 1] if song.known and 1 <= song.known <= len(pool) else None
-        if from_pool and self._allowed(from_pool) and pick(song, [from_pool]):
+        usable = from_pool is not None and from_pool.service == self.service.service and (
+            self.service.pool_explicit or not self.brief.hard_rules.no_explicit)
+        if usable and self._allowed(from_pool) and pick(song, [from_pool]):
             self.trace.event("known", title=song.title, artist=song.artist, number=song.known)
             return from_pool
         artist = primary_artist(song.artist)
@@ -343,7 +348,7 @@ class _Finder:
         uri = pick(song, [c for c in candidates if self._allowed(c)])
         track = next((c for c in candidates if c.uri == uri), None)
         self.trace.event(
-            "search", step=f"Finding the songs on Spotify ({self.searched + self.cache_hits}/{of})",
+            "search", step=f"Finding the songs on {self.service.name} ({self.searched + self.cache_hits}/{of})",
             title=song.title, artist=song.artist, candidates=len(candidates), matched=track is not None, cached=cached,
             **({"explicit_skipped": sum(not self._allowed(c) for c in candidates)} if self.brief.hard_rules.no_explicit else {}),
         )

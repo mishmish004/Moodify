@@ -13,7 +13,7 @@ Energy is the LLM's judgement per song: Spotify's audio features are deprecated 
 from typing import Optional
 
 from src.brief import Brief
-from src.spotify.client import Track
+from src.music import Track
 
 MAX_BRIDGES = 2
 

@@ -5,7 +5,7 @@ saved in your account, without touching theirs.
 Needs the friend's "Let friends hear music like me" (Phase 18), checked when the build starts. The build
 gets the friend as a taste.Profile and nothing else: their stored summary, their known songs from the
 library, their onboarding familiarity and avoid rules. Their prompts, reviews, ratings, lessons and
-support-note playlists can't reach it, and neither can your own taste or memory. Only your Spotify login is
+support-note playlists can't reach it, and neither can your own taste or memory. Only your own service login is
 used: to search, and to save the playlist in your account.
 """
 import json
@@ -13,7 +13,7 @@ from typing import Optional
 
 from src import blend, jobs, library, playlists, sharing, taste, users
 from src.brief import Brief
-from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
+from src.core.exceptions import QuotaExceeded, ReauthRequired
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
 from src.jobs import NO_TRACE, Trace
@@ -76,7 +76,7 @@ def run(job_id: int, user_id: str, mood: str, friend_id: str) -> None:
         sharing.log(friend_id, user_id, "listen_as", playlist_id)
     except playlist.BuildFailed as exc:
         jobs.fail(job_id, exc.reason)
-    except SpotifyQuotaExceeded as exc:
+    except QuotaExceeded as exc:
         log.warning("quota/rate limit hit during job %d: %s", job_id, exc)
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:

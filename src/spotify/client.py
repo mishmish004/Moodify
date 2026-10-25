@@ -9,13 +9,13 @@ popularity and /me's country, email and product are gone, so nothing reads them.
 Playlist items are readable only for playlists the user owns or collaborates on (403 otherwise).
 """
 import time
-from dataclasses import dataclass
 from typing import Optional
 
 import httpx
 
 from src import users
 from src.core.exceptions import SpotifyError, SpotifyQuotaExceeded
+from src.music import Listening, Playlist, Track, UserPlaylist, best_effort
 from src.spotify import auth
 
 API_URL = "https://api.spotify.com/v1"
@@ -24,33 +24,10 @@ PAGE = 50              # the most items one page of library, history or playlist
 ADD_ITEMS_BATCH = 100  # most URIs one POST /playlists/{id}/items accepts
 MAX_WAIT = 10.0        # seconds; a longer Retry-After is a real back-off, not something to sleep through
 
-
-@dataclass(frozen=True)
-class Track:
-    uri: str
-    name: str
-    artists: tuple[str, ...]
-    duration_ms: int
-    explicit: bool = False  # Spotify's flag; "no explicit lyrics" is enforced with it (Phase 11)
-
-    @property
-    def url(self) -> str:
-        """open.spotify.com link: Spotify's guidelines want every track shown to link back."""
-        return "https://open.spotify.com/track/" + self.uri.rsplit(":", 1)[-1]
-
-
-@dataclass(frozen=True)
-class Playlist:
-    id: str
-    url: str
-
-
-@dataclass(frozen=True)
-class UserPlaylist:
-    """One of the user's playlists from GET /me/playlists. Only `readable` ones have items we can fetch."""
-    id: str
-    name: str
-    readable: bool  # owned by the user, or collaborative
+# Reads per taste rebuild (Phase 10)
+TOP_READ = 10
+LIKED_TO_READ = 200
+OWN_PLAYLISTS_TO_READ = 5
 
 
 class SpotifyClient:
@@ -80,6 +57,26 @@ class SpotifyClient:
 
     def me(self) -> dict:
         return self._request("GET", "/me")
+
+    def listening(self) -> Listening:
+        """About 15 reads: top items (3), history, Liked Songs (4 pages), follows, playlists (1 + 5)."""
+        listening = Listening()
+
+        def read(name, call, empty):
+            return best_effort(listening, self.spotify_id, name, call, empty)
+
+        listening.top_artists = read("top artists", lambda: self.top_artists(TOP_READ, "short_term"), [])
+        listening.all_time_artists = read("all-time artists", lambda: self.top_artists(TOP_READ, "long_term"), [])
+        listening.top_tracks = read("top tracks", lambda: self.top_tracks(TOP_READ), [])
+        listening.recent_tracks = read("recently played", self.recently_played, [])
+        listening.liked = read("liked songs", lambda: self.saved_tracks(LIKED_TO_READ), [])
+        listening.followed = read("followed artists", self.followed_artists, [])
+        # Moodify's own playlists would only feed its suggestions back to itself
+        own = [p for p in read("playlists", self.my_playlists, []) if not p.name.startswith("Moodify:")]
+        listening.playlist_names = [p.name for p in own]
+        for playlist in [p for p in own if p.readable][:OWN_PLAYLISTS_TO_READ]:
+            listening.playlist_tracks += read(f"playlist {playlist.id}", lambda: self.playlist_items(playlist.id), [])
+        return listening
 
     def top_artists(self, limit: int = 20, time_range: str = "medium_term") -> list[str]:
         """time_range: short_term (about 4 weeks), medium_term (6 months) or long_term (years)."""
@@ -151,6 +148,16 @@ class SpotifyClient:
 
     def remove_from_library(self, uris: list[str]) -> None:
         self._request("DELETE", "/me/library", params={"uris": ",".join(uris)})
+
+    # A like is a song in Liked Songs (MusicService)
+    def is_liked(self, uri: str) -> bool:
+        return self.library_contains([uri])[0]
+
+    def like(self, uri: str) -> None:
+        self.save_to_library([uri])
+
+    def unlike(self, uri: str) -> None:
+        self.remove_from_library([uri])
 
     def queue(self, uri: str) -> None:
         """Premium only, on the user's active device: expect a SpotifyError (403/404) otherwise."""

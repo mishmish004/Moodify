@@ -146,7 +146,7 @@ def test_spotify_unreachable_keeps_the_like(logged_in, respx_mock):
     respx_mock.post(auth.TOKEN_URL).respond(200, json={"access_token": "a", "expires_in": 3600})
     respx_mock.get(f"{API_URL}/me/library/contains").mock(side_effect=httpx.ConnectTimeout("slow"))
     resp = logged_in.post(f"/playlists/{pid}/tracks/0/like", headers=JSON)
-    assert resp.json() == {"liked": True, "notice": likes.NOTICES[("like", likes.FAILED)]}
+    assert resp.json() == {"liked": True, "notice": "Liked in Moodify, but your Spotify Liked Songs couldn't be updated."}
     assert len(_like_rows()) == 1
 
 

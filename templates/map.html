@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import logo %}
+{% from "_service.html" import logo with context %}
 {% set nav = "friends" %}
 {% block title %}Moodify · taste map{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ "/static/map.css" | fingerprint }}">{% endblock %}
@@ -24,7 +24,7 @@
       </section>
       <section class="mf-stack-3" aria-labelledby="h-tracks">
         <h2 id="h-tracks" class="mf-h2">Songs</h2>
-        <p class="note">Each dot is a song, bigger the more it's played, liked or kept. Tap one to see it and open it on Spotify.</p>
+        <p class="note">Each dot is a song, bigger the more it's played, liked or kept. Tap one to see it and open it where it's from.</p>
         <div class="controls">
           <label class="mf-label">Across <span class="mf-select-wrap"><select id="axis-x" class="mf-select"></select><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></span></label>
           <label class="mf-label">Up <span class="mf-select-wrap"><select id="axis-y" class="mf-select"></select><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></span></label>
@@ -46,7 +46,7 @@
     </div>
     <div id="map-tip" class="map-tip" role="tooltip" hidden></div>
   </div>
-  <p class="mf-xs mf-muted mf-sp-attrib">Only you and friends who switched on "Show my taste to friends" are on the map. They can see that you looked. Song details from {{ logo() }}</p>
+  <p class="mf-xs mf-muted mf-sp-attrib">Only you and friends who switched on "Show my taste to friends" are on the map. They can see that you looked. Song details from {{ logo(user.service) }}</p>
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ "/static/map.js" | fingerprint }}"></script>{% endblock %}

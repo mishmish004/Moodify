@@ -47,16 +47,19 @@ function moveTo(node, x, y, glide) {
 
 // --- tooltip ------------------------------------------------------------------------------------------------
 
-function showTip(x, y, lines, link) {
+// `track` (pinned tips only) gets a link to its own service; Spotify's links carry the Spotify icon
+function showTip(x, y, lines, track) {
   tip.replaceChildren();
   lines.forEach((line, i) => html(i === 0 ? "strong" : "span", line, tip));
   for (const span of tip.querySelectorAll("span")) span.style.display = "block";
-  if (link) {
+  if (track) {
     const a = html("a", null, tip);
-    a.href = link;
-    const img = html("img", null, a);
-    Object.assign(img, { src: "/static/spotify-icon.svg", alt: "", width: 21, height: 20 });
-    a.append("Open on Spotify");
+    a.href = track.url;
+    if (track.service === "spotify") {
+      const img = html("img", null, a);
+      Object.assign(img, { src: "/static/spotify-icon.svg", alt: "", width: 21, height: 20 });
+    }
+    a.append(`Open on ${track.service_name}`);
   }
   tip.hidden = false;
   const box = root.getBoundingClientRect();
@@ -224,7 +227,7 @@ function near(svg, e, pin) {
   const t = best.__track;
   showTip(e.clientX, e.clientY, [t.name, t.artists.join(", "),
     `${NAMES[axes.x]} ${fmt(axes.x, t[axes.x])} · ${NAMES[axes.y]} ${fmt(axes.y, t[axes.y])}`,
-    ...(t.common ? ["Common ground: a friend has it too"] : [])], pin ? t.url : null);
+    ...(t.common ? ["Common ground: a friend has it too"] : [])], pin ? t : null);
   if (pin) { pinned = best; tip.classList.add("pinned"); }
 }
 

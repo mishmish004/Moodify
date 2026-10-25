@@ -2,7 +2,7 @@
 Phase 20: Moodify Blend. Pick friends, type a prompt, get one playlist that fits the prompt and everyone's taste.
 
 Only stored data is used for the friends: their taste summary, onboarding answers and music library
-(Phase 19). Their Spotify logins are never touched; the playlist is searched and saved with the
+(Phase 19). Their service logins are never touched; the playlist is searched and saved with the
 requester's alone. Each friend's consent (Phase 18, "Let friends include me in Blends") is checked once,
 when the build starts.
 
@@ -20,12 +20,12 @@ from typing import Optional
 
 from src import jobs, library, playlists, sharing, taste, users
 from src.brief import Brief
-from src.core.exceptions import ReauthRequired, SpotifyQuotaExceeded
+from src.core.exceptions import QuotaExceeded, ReauthRequired
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
 from src.fill import SectionFill, minutes, songs_to_ask_for, window
 from src.jobs import NO_TRACE, Trace
-from src.spotify.client import Track
+from src.music import Track
 from src.suggest import Song
 
 MAX_FRIENDS = 4         # plus the requester: Development Mode allows 5 users
@@ -295,7 +295,7 @@ def run(job_id: int, user_id: str, mood: str, friend_ids: list[str], lean: Optio
         playlist_id = build_blend(user, mood, friend_ids, Trace(job_id), lean, public)
     except playlist.BuildFailed as exc:
         jobs.fail(job_id, exc.reason)
-    except SpotifyQuotaExceeded as exc:
+    except QuotaExceeded as exc:
         log.warning("quota/rate limit hit during blend job %d: %s", job_id, exc)
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:

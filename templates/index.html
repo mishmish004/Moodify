@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import logo, playlist_list, horizon with context %}
+{% from "_service.html" import logo, playlist_list, horizon with context %}
+{% set svc = service_info(user.service) %}
 {% set nav = "new" %}
 {% set name = (user.display_name or "").split(" ")[0] %}
 {% block content %}
@@ -7,7 +8,7 @@
 <div class="mf-cols">
   <section class="mf-stack-5" aria-labelledby="mood-h">
     {% if remaking %}
-    <div class="mf-notice" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10a6 6 0 1 1 1.8 4.3"></path><path d="M4 15.5V10h5.5"></path></svg><p>You're adjusting <span class="mf-strong">{{ remaking }}</span>. Change anything, then make it again. The first version stays in your Spotify.</p></div>
+    <div class="mf-notice" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10a6 6 0 1 1 1.8 4.3"></path><path d="M4 15.5V10h5.5"></path></svg><p>You're adjusting <span class="mf-strong">{{ remaking }}</span>. Change anything, then make it again. The first version stays in your {{ svc.name }}.</p></div>
     {% endif %}
     <div class="mf-stack-2">
       <p class="mf-eyebrow" data-greeting data-name="{{ name }}">{{ "Hi, " ~ name ~ "." if name else "Hi." }}</p>
@@ -18,7 +19,7 @@
       <p class="mf-error" id="mood-err" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M10 5.5v5.5M10 13.6v.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>Write something first. One word is enough.</p>
       <div class="mf-split"><span id="mood-hint" class="mf-hint">Sections, lengths and rules all work: "no sad songs", "30 min".</span><span id="mood-count" class="mf-count mf-if-js"><span data-count>{{ prompt | length }}</span> / 2,000</span></div>
       <button class="mf-btn mf-btn--primary mf-btn--block mf-btn--xl" type="submit">Make a playlist</button>
-      <p class="mf-hint" style="text-align: center">Takes a minute or two: an AI model reads your request and suggests songs, then each one is looked up on Spotify.</p>
+      <p class="mf-hint" style="text-align: center">Takes a minute or two: an AI model reads your request and suggests songs, then each one is looked up on {{ svc.name }}.</p>
     </form>
   </section>
 
@@ -37,7 +38,7 @@
       <summary>What the model is told about your taste<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg></summary>
       <div class="mf-disclosure__body">
         <p class="mf-small mf-ref">{{ summary }}</p>
-        <p class="mf-xs mf-muted mf-sp-attrib">Built from your answers and your listening on {{ logo() }}</p>
+        <p class="mf-xs mf-muted mf-sp-attrib">Built from your answers and your listening on {{ logo(user.service) }}</p>
         <div class="mf-cluster"><a class="mf-btn mf-btn--link" href="/onboarding">Change your answers</a></div>
       </div>
     </details>
@@ -51,7 +52,7 @@
 
 <section class="mf-stack-3 mf-leave" aria-labelledby="leave-h">
   <h2 id="leave-h" class="mf-h3">Leave Moodify</h2>
-  <p class="mf-small mf-muted">Deletes everything Moodify stored about you and logs you out. Playlists already in your Spotify stay there.</p>
+  <p class="mf-small mf-muted">Deletes everything Moodify stored about you and logs you out. Playlists already in your {{ svc.name }} stay there.</p>
   <button class="mf-btn mf-btn--danger mf-if-js" type="button" aria-expanded="false" aria-controls="delete-confirm" data-ask-delete style="align-self: flex-start">Disconnect and delete my data</button>
   {# Without JavaScript the confirm step shows straight away #}
   <form method="post" action="/disconnect" id="delete-confirm" class="mf-card mf-stack-3 mf-confirm mf-js-closed" aria-labelledby="del-h">

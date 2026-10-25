@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% set nav = "friends" %}
+{% set svc = service_info(user.service) %}
 {% block title %}Moodify · make a Blend{% endblock %}
 {% block content %}
 <div class="mf-stack-6" style="max-width: 640px; margin: 0 auto">
   <div class="mf-stack-2">
     <a class="mf-back" href="/friends"><span aria-hidden="true">←</span> Friends</a>
     <h1 class="mf-h1">Moodify Blend</h1>
-    <p class="mf-lead">One playlist from your prompt and several people's taste, with a fair share for each. It's saved in your Spotify only.</p>
+    <p class="mf-lead">One playlist from your prompt and several people's taste, with a fair share for each. It's saved in your {{ svc.name }} only.</p>
   </div>
   {% if friends %}
   <form method="post" action="/blend" class="mf-stack-5" data-busy="Making your Blend…">
@@ -33,10 +34,10 @@
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg>
       </div>
     </div>
-    <label class="mf-check"><input type="checkbox" name="public" value="on"><span class="mf-check__box" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"></path></svg></span><span class="mf-stack-2"><span>Make it public, so the others can open the link</span><span class="mf-hint">Spotify can't share a playlist with only some people. Private, only you can open it in Spotify.</span></span></label>
+    <label class="mf-check"><input type="checkbox" name="public" value="on"><span class="mf-check__box" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"></path></svg></span><span class="mf-stack-2"><span>Make it public, so the others can open the link</span><span class="mf-hint">{{ svc.name }} can't share a playlist with only some people. Private, only you can open it in {{ svc.name }}.</span></span></label>
     <button class="mf-btn mf-btn--primary mf-btn--block mf-btn--xl" type="submit">Make the Blend</button>
   </form>
-  <p class="mf-small mf-muted">Moodify uses their stored taste and music library, never their Spotify login, and each of them can see that you made a Blend with them.</p>
+  <p class="mf-small mf-muted">Moodify uses their stored taste and music library, never their own logins, and each of them can see that you made a Blend with them.</p>
   {% else %}
   <p class="mf-well mf-muted">Nobody lets friends include them in Blends yet. When someone switches it on under their sharing settings, they show up here.</p>
   {% endif %}

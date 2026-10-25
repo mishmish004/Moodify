@@ -1,6 +1,7 @@
 """
-Phase 17: Spotify links that open the Spotify app on phones.
+Phase 17: links that open the music app on phones. Phase 26: a link or URI says which service it belongs to.
 
+Spotify:
 - Android: an intent:// link opens the app directly, and falls back to the web page when it isn't installed.
 - iPhone/iPad: open.spotify.com links open the app on a tap (universal links). Opening it without a tap
   (when a playlist is ready) needs the spotify: URI, which raises the system "Open in Spotify?" prompt.
@@ -21,6 +22,10 @@ GET_SPOTIFY = {
     "ios": "https://apps.apple.com/app/spotify-music-and-podcasts/id324684580",
     "desktop": "https://www.spotify.com/download/",
 }
+GET_APP = {"spotify": GET_SPOTIFY}
+
+# Where each service's web pages live
+HOSTS = {"open.spotify.com": "spotify", "music.youtube.com": "youtube", "music.apple.com": "apple"}
 
 
 def device(user_agent: Optional[str]) -> Device:
@@ -34,6 +39,23 @@ def device(user_agent: Optional[str]) -> Device:
 
 def is_phone(user_agent: Optional[str]) -> bool:
     return device(user_agent) != "desktop"
+
+
+def service_of(link: str) -> Optional[str]:
+    """"spotify" for spotify:track:… or an open.spotify.com link, and so on; None for anything else."""
+    if link.startswith(("http://", "https://")):
+        return HOSTS.get(urlsplit(link).hostname or "")
+    service = link.split(":", 1)[0]
+    return service if service in set(HOSTS.values()) else None
+
+
+def track_url(uri: str) -> str:
+    """A track's web page from its URI ("<service>:track:<id>")."""
+    service, _, rest = uri.partition(":")
+    track_id = rest.rsplit(":", 1)[-1]
+    if service == "youtube":
+        return f"https://music.youtube.com/watch?v={quote(track_id, safe='')}"
+    return web_url("track", track_id)
 
 
 def web_url(kind: str, spotify_id: str) -> str:

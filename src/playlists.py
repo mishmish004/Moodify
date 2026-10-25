@@ -5,7 +5,7 @@ from typing import Optional
 
 from src.db import get_conn
 from src.memory import invalidate
-from src.spotify.client import Track
+from src.music import Track
 
 
 def insert(

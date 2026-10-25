@@ -1,5 +1,5 @@
 """
-Pick the Spotify track that is the song the LLM suggested, out of ≤10 search candidates.
+Pick the track (on the user's service) that is the song the LLM suggested, out of ≤10 search candidates.
 
 Plain normalization, no fuzzy-matching library: the search already did the
 fuzzy part, this step only rejects candidates that are a different song.
@@ -8,7 +8,7 @@ import re
 import unicodedata
 from typing import Optional
 
-from src.spotify.client import Track
+from src.music import Track
 from src.suggest import Song
 
 _FEAT = re.compile(r"\s+(feat\.?|ft\.?|featuring)\s.*$")

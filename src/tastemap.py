@@ -2,13 +2,13 @@
 Phase 23: the taste map's data, for you plus every friend who shows their taste (Phase 18).
 
 Only taste data goes out: names, per-dimension means and spreads, genre shares, decades, library tracks
-with their judged dimensions and Spotify links, taste matches and common ground. Never prompts, reviews,
+with their judged dimensions and links to their services, taste matches and common ground. Never prompts, reviews,
 ratings, lessons, or anything from hidden or support-note playlists (the library leaves those out).
 Each request logs one "view" per friend shown.
 """
 from typing import Optional
 
-from src import features, library, sharing, users
+from src import features, library, music, sharing, users
 
 TRACKS_PER_PERSON = 200   # the heaviest, enough to see a shape without drawing 600 dots per panel
 COMMON_SHOWN = 5
@@ -63,7 +63,7 @@ def data(viewer: str) -> dict:
                           "match": features.match(summaries[a["user_id"]], summaries[b["user_id"]])})
             both = library.common(a["user_id"], b["user_id"], COMMON_SHOWN)
             common.append({"a": a["user_id"], "b": b["user_id"], "artists": [name for name, _ in both.artists],
-                           "tracks": [{"name": t.name, "artists": list(t.artists), "url": t.url} for t, _ in both.tracks]})
+                           "tracks": [{"name": t.name, "artists": list(t.artists), **_link(t)} for t, _ in both.tracks]})
     for person in shown[1:]:
         sharing.log(person["user_id"], viewer, "view")
     return {
@@ -78,5 +78,10 @@ def _round(value: Optional[float]) -> Optional[float]:
 
 
 def _track(f: features.Feature, track, common: bool) -> dict:
-    return {"name": track.name, "artists": list(track.artists), "url": track.url, "weight": f.weight, "common": common,
+    return {"name": track.name, "artists": list(track.artists), **_link(track), "weight": f.weight, "common": common,
             **{d: getattr(f, d) for d in features.DIMENSIONS}, "genres": list(f.genres)}
+
+
+def _link(track) -> dict:
+    """Where the track opens: its page on its own service (Phase 26)."""
+    return {"url": track.url, "service": track.service, "service_name": music.info(track.service).name}

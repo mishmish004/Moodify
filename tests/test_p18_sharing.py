@@ -108,8 +108,8 @@ def test_switching_off_works_on_the_next_request(logged_in):
 def test_the_sharing_form(logged_in):
     page = logged_in.get("/sharing").text
     for words in ("Show my taste to friends", "Let friends include me in Blends", "Let friends hear music like me",
-                  "Never what you typed", "saves the playlist in their Spotify, not yours", "Nothing is ever added to yours",
-                  "Playlists friends already made stay in their Spotify"):
+                  "Never what you typed", "saves the playlist in their account, not yours", "Nothing is ever added to yours",
+                  "Playlists friends already made stay in their accounts"):
         assert words in page, words
     assert "checked" not in page
     resp = logged_in.post("/sharing", data={"show_taste": "on", "allow_listen_as": "on"})

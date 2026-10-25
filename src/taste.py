@@ -1,20 +1,18 @@
 """
 The taste profile: one paragraph about a user for the LLM prompt, plus a pool of songs they know.
 
-Built by plain string formatting from the onboarding answers plus what Spotify knows:
-top artists (lately and all-time), top tracks, recently played, Liked Songs, followed
-artists and the user's own playlists. The summary is cached for a day; the same reads
+Built by plain string formatting from the onboarding answers plus what the user's service knows
+(on Spotify: top artists lately and all-time, top tracks, recently played, Liked Songs, followed
+artists and the user's own playlists). The summary is cached for a day; the same reads
 rebuild the user's rows of the shared music library (Phase 19), which the pool is read from.
 """
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional, TypeVar
+from typing import Optional
 
-from src import features, library, users
-from src.core.exceptions import ReauthRequired, SpotifyError
-from src.core.logger import MoodifyLogger
-from src.spotify.client import SpotifyClient, Track
+from src import features, library, music, users
+from src.music import Listening, Track
 
 MAX_CHARS = 3000
 STALE_AFTER = timedelta(hours=24)  # recent plays go stale fast
@@ -28,9 +26,7 @@ LIKED_TRACKS = 15
 FOLLOWED = 15
 PLAYLIST_NAMES = 10
 
-# Reads from Spotify per rebuild, and the pool the LLM may pick known songs from
-LIKED_TO_READ = 200
-OWN_PLAYLISTS_TO_READ = 5
+# The pool the LLM may pick known songs from
 POOL_SIZE = 150
 
 # Onboarding answer -> share of each playlist taken from songs the user knows
@@ -45,20 +41,6 @@ QUESTIONS = (
     ("languages", "Languages they listen in"),
     ("avoid", "Avoid"),
 )
-
-
-@dataclass
-class Listening:
-    """Everything read from Spotify for one user. Empty lists are normal (new accounts, missing scopes)."""
-    top_artists: list[str] = field(default_factory=list)       # about the last 4 weeks
-    all_time_artists: list[str] = field(default_factory=list)  # years
-    top_tracks: list[Track] = field(default_factory=list)
-    recent_tracks: list[Track] = field(default_factory=list)
-    liked: list[Track] = field(default_factory=list)
-    followed: list[str] = field(default_factory=list)
-    playlist_names: list[str] = field(default_factory=list)
-    playlist_tracks: list[Track] = field(default_factory=list)
-    complete: bool = True  # False when a source failed: such a profile isn't cached
 
 
 @dataclass(frozen=True)
@@ -136,8 +118,8 @@ def familiar_percent(onboarding: dict) -> int:
 
 
 def stored_summary(user) -> str:
-    """A user's taste from what's stored, never from Spotify: the cached summary, else one built from their
-    onboarding answers alone. Used for friends (Phases 20-21), whose Spotify logins Moodify never uses."""
+    """A user's taste from what's stored, never from their service: the cached summary, else one built from their
+    onboarding answers alone. Used for friends (Phases 20-21), whose logins Moodify never uses."""
     if user["taste_summary"]:
         return user["taste_summary"]
     return build_summary(json.loads(user["onboarding_json"] or "{}"), Listening())
@@ -159,7 +141,7 @@ def summary_for(user) -> str:
 def profile_for(user) -> Profile:
     """The cached profile, rebuilt when it's missing or older than STALE_AFTER.
 
-    Each Spotify source is best effort: one that fails is left out, and the profile is then not
+    Each source is best effort: one that fails is left out, and the profile is then not
     cached (nor the library replaced), so the next build tries again. A dead refresh token
     (ReauthRequired) is passed up so the caller can send the user back to /login.
     """
@@ -181,37 +163,10 @@ def library_sources(listening: Listening) -> dict[str, list[Track]]:
             "own_playlist": listening.playlist_tracks}
 
 
-T = TypeVar("T")
-
-
 def read_listening(user) -> Listening:
-    """About 15 Spotify reads: top items (3), history, Liked Songs (4 pages), follows, playlists (1 + 5)."""
-    listening = Listening()
-    log = MoodifyLogger.get_logger("taste")
-
-    def best_effort(name: str, read: Callable[[], T], empty: T) -> T:
-        try:
-            return read()
-        except ReauthRequired:
-            raise
-        except SpotifyError as exc:
-            log.warning("%s unavailable for %s: %s", name, user["user_id"], exc)
-            listening.complete = False
-            return empty
-
-    with SpotifyClient.for_user(user) as sp:
-        listening.top_artists = best_effort("top artists", lambda: sp.top_artists(TOP_ARTISTS, "short_term"), [])
-        listening.all_time_artists = best_effort("all-time artists", lambda: sp.top_artists(TOP_ARTISTS, "long_term"), [])
-        listening.top_tracks = best_effort("top tracks", lambda: sp.top_tracks(TOP_TRACKS), [])
-        listening.recent_tracks = best_effort("recently played", sp.recently_played, [])
-        listening.liked = best_effort("liked songs", lambda: sp.saved_tracks(LIKED_TO_READ), [])
-        listening.followed = best_effort("followed artists", sp.followed_artists, [])
-        # Moodify's own playlists would only feed its suggestions back to itself
-        own = [p for p in best_effort("playlists", sp.my_playlists, []) if not p.name.startswith("Moodify:")]
-        listening.playlist_names = [p.name for p in own]
-        for playlist in [p for p in own if p.readable][:OWN_PLAYLISTS_TO_READ]:
-            listening.playlist_tracks += best_effort(f"playlist {playlist.id}", lambda: sp.playlist_items(playlist.id), [])
-    return listening
+    """What the user's service gives for their taste; each read is best effort (src/music)."""
+    with music.for_user(user) as service:
+        return service.listening()
 
 
 def _stale(updated_at) -> bool:

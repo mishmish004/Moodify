@@ -1,16 +1,17 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import icon, open_app, get_spotify with context %}
+{% from "_service.html" import icon, open_app, get_app with context %}
+{% set svc = service_info(user.service) %}
 {% set nav = "history" %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
 
-{# Every row links to the track on Spotify, with the Spotify icon, and has a ♥ form beside the link (a form
+{# Every row links to the track on its service, with that service's icon, and has a ♥ form beside the link (a form
    can't sit inside it). Numbering carries across sections; the like URL uses the stored position, number - 1 #}
 {% macro track_list(items, first) -%}
 <ol class="mf-tracks" start="{{ first }}">
   {% for t in items %}
   {%- set position = first + loop.index0 - 1 %}{% set on = t.uri in liked %}
-  <li class="mf-track" id="t{{ position }}"><a class="mf-track__link" href="{{ t.url | app_link }}" aria-label="{{ t.name }} by {{ t.artists | join(', ') }}, open in Spotify"><span class="mf-track__n">{{ position + 1 }}</span><span><span class="mf-track__name">{{ t.name }}</span><span class="mf-track__artists">{{ t.artists | join(", ") }}{% if blend %}{{ credit_badge(blend.credits[position]) }}{% endif %}</span></span>{{ icon() }}</a>
+  <li class="mf-track" id="t{{ position }}"><a class="mf-track__link" href="{{ t.url | app_link }}" aria-label="{{ t.name }} by {{ t.artists | join(', ') }}, open in {{ service_info(t.service).name }}"><span class="mf-track__n">{{ position + 1 }}</span><span><span class="mf-track__name">{{ t.name }}</span><span class="mf-track__artists">{{ t.artists | join(", ") }}{% if blend %}{{ credit_badge(blend.credits[position]) }}{% endif %}</span></span>{{ icon(t.service) }}</a>
     <form class="mf-like-form" method="post" action="/playlists/{{ playlist.id }}/tracks/{{ position }}/{{ "unlike" if on else "like" }}" data-feedback="like">
       <button class="mf-like" type="submit" aria-pressed="{{ "true" if on else "false" }}" aria-label="Like {{ t.name }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.8c0 5.5-7.5 10.1-7.5 10.1z"/></svg></button>
     </form></li>
@@ -34,9 +35,9 @@
       <a class="mf-back" href="/history"><span aria-hidden="true">←</span> All your playlists</a>
       <h1 class="mf-h1">Moodify: {{ title }}</h1>
       {% if tracks %}
-      <p class="mf-muted">{{ tracks | length }} tracks, {{ total_minutes | duration }}, saved as a private playlist in your Spotify account.</p>
+      <p class="mf-muted">{{ tracks | length }} tracks, {{ total_minutes | duration }}, saved as a private playlist in your {{ svc.name }} account.</p>
       {% else %}
-      <p class="mf-muted">Saved as a private playlist in your Spotify account.</p>
+      <p class="mf-muted">Saved as a private playlist in your {{ svc.name }} account.</p>
       {% endif %}
       {% if heard_as %}
       <p class="mf-muted">Made the way {{ heard_as }} would hear it: from {{ heard_as }}'s taste and the songs they know, not yours.</p>
@@ -53,11 +54,13 @@
     </div>
     <div class="mf-stack-3">
       {{ open_app(playlist.url) }}
-      {% if phone %}{{ get_spotify() }}{% endif %}
+      {% if phone %}{{ get_app(user.service) }}{% endif %}
+      {% if svc.can_queue %}
       <form method="post" action="/queue/{{ playlist.id }}" class="mf-stack-2" data-busy="Adding to your queue…">
         <button class="mf-btn mf-btn--quiet mf-btn--block" type="submit" aria-describedby="play-note">Play now</button>
         <p id="play-note" class="mf-hint" style="text-align: center">Needs Premium and Spotify open on one of your devices.</p>
       </form>
+      {% endif %}
     </div>
 
     {% if blend %}
@@ -131,10 +134,10 @@
     {% elif tracks %}
       {{ track_list(tracks, 1) }}
     {% else %}
-      <div class="mf-well mf-stack-2"><p class="mf-strong">This playlist was made before Moodify kept track lists.</p><p class="mf-muted">Open it in Spotify to see the songs.</p></div>
+      <div class="mf-well mf-stack-2"><p class="mf-strong">This playlist was made before Moodify kept track lists.</p><p class="mf-muted">Open it in {{ svc.name }} to see the songs.</p></div>
     {% endif %}
     {% if tracks %}
-    <p class="mf-small mf-muted">♥ the songs you like. {% if user.likes_to_service %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</p>
+    <p class="mf-small mf-muted">♥ the songs you like. {% if user.likes_to_service %}They're saved to your {{ svc.name }} {{ svc.likes }} too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</p>
     {% endif %}
   </section>
 
@@ -174,7 +177,7 @@
       {% endif %}
       <form method="post" action="/playlists/{{ playlist.id }}/fix" class="mf-stack-2" data-busy="Starting…">
         <button class="mf-btn mf-btn--primary" type="submit" aria-describedby="fix-note" style="align-self: flex-start">Fix it with this review</button>
-        <p id="fix-note" class="mf-hint">Makes a new version in your Spotify with your review applied. This one stays.</p>
+        <p id="fix-note" class="mf-hint">Makes a new version in your {{ svc.name }} with your review applied. This one stays.</p>
       </form>
     </div>
     {% endif %}
@@ -206,8 +209,8 @@
 {% block scripts %}<script src="{{ "/static/feedback.js" | fingerprint }}"></script>
 {% if auto_open %}
 <script>
-  // Phase 17: just built, on a phone: open the Spotify app on this playlist, once. A browser may block it
-  // (Chrome on Android wants a tap), which is why OPEN SPOTIFY stays on the page.
+  // Phase 17: just built, on a phone: open the music app on this playlist, once. A browser may block it
+  // (Chrome on Android wants a tap), which is why the open button stays on the page.
   (() => {
     const key = "moodify-opened-{{ playlist.id }}";
     try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (error) {}

@@ -13,7 +13,7 @@ from src import prompts
 from src.brief import Brief, describe
 from src.core.config import get_settings
 from src.jobs import NO_TRACE, Trace
-from src.spotify.client import Track
+from src.music import Track
 
 MAX_MOOD_CHARS = 2000  # Phase 11: detailed prompts are long, and cutting them drops rules
 

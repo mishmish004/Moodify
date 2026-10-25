@@ -16,15 +16,14 @@ from jinja2 import pass_context
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import (activity, blend, jobs, library, likes, links, listen_as, memory, pages, playlist, playlists, prompts,
-                 reflect, search_cache, sharing, taste, tastemap, users)
+from src import (activity, blend, jobs, library, likes, links, listen_as, memory, music, pages, playlist, playlists,
+                 prompts, reflect, search_cache, sharing, taste, tastemap, users)
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
-from src.core.exceptions import ReauthRequired, SpotifyError, SpotifyQuotaExceeded
+from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError, SpotifyError
 from src.core.logger import MoodifyLogger
 from src.db import init_db
 from src.spotify import auth
-from src.spotify.client import SpotifyClient
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
@@ -54,17 +53,20 @@ def _user_agent(context) -> str:
 
 @pass_context
 def _app_link(context, url: str) -> str:
-    """Phase 17: a Spotify link for the device asking, so a tap on a phone opens the Spotify app."""
+    """Phase 17: a link for the device asking, so a tap on a phone opens the music app."""
     return links.for_url(url, _user_agent(context))
 
 
 @pass_context
-def _get_spotify(context) -> str:
-    return links.GET_SPOTIFY[links.device(_user_agent(context))]
+def _get_app(context, service: str = "spotify") -> str:
+    return links.GET_APP[service][links.device(_user_agent(context))]
 
 
 templates.env.filters["app_link"] = _app_link
-templates.env.globals["get_spotify_url"] = _get_spotify
+templates.env.globals["get_app_url"] = _get_app
+# Phase 26: pages name the user's service, and mark each link with the service it opens
+templates.env.globals["service_info"] = music.info
+templates.env.filters["service_of"] = links.service_of
 
 
 @asynccontextmanager
@@ -127,11 +129,11 @@ def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
     return RedirectResponse("/login", status_code=303)
 
 
-@app.exception_handler(SpotifyQuotaExceeded)
-def _quota(request: Request, exc: SpotifyQuotaExceeded):
-    MoodifyLogger.get_logger("spotify").warning("quota/rate limit hit: %s", exc)
-    return _message(request, "Spotify is asking us to slow down",
-                    "The app's Spotify quota is used up for now. Try again in an hour or so.", tone="low")
+@app.exception_handler(QuotaExceeded)
+def _quota(request: Request, exc: QuotaExceeded):
+    MoodifyLogger.get_logger("music").warning("quota/rate limit hit: %s", exc)
+    title, text = BUILD_FAILURES[jobs.QUOTA]
+    return _message(request, title.format(service=exc.service), text.format(service=exc.service), tone="low")
 
 
 def _message(request: Request, title: str, text: str, status_code: int = 200, *, tone: Optional[str] = None,
@@ -178,7 +180,7 @@ def any_user(request: Request) -> sqlite3.Row:
 
 
 def current_user(request: Request, user: sqlite3.Row = Depends(any_user)) -> sqlite3.Row:
-    if auth.missing_scopes(user["granted_scopes"]):
+    if music.missing_scopes(user):
         # Logged in before Moodify asked for more access (Phase 10). One new login grants it; data stays
         request.session.clear()
         raise LoginRequired("scopes")
@@ -262,14 +264,14 @@ def _title(row: sqlite3.Row) -> str:
     return f"Moodify: {title}" if title else row["prompt"][:80]
 
 
-# How a failed build is explained, by jobs.error
+# How a failed build is explained, by jobs.error; {service} is the name of the user's service
 BUILD_FAILURES = {
     jobs.NO_SUGGESTIONS: ("No song ideas this time",
                           "The AI model didn't answer, even on a second try. Nothing was created. Try again in a minute."),
     jobs.NO_MATCHES: ("Nothing matched",
-                      "None of the suggested songs could be found on Spotify. Try describing the mood differently."),
-    jobs.QUOTA: ("Spotify is asking us to slow down",
-                 "The app's Spotify quota is used up for now. Try again in an hour or so."),
+                      "None of the suggested songs could be found on {service}. Try describing the mood differently."),
+    jobs.QUOTA: ("{service} is asking us to slow down",
+                 "The app's {service} quota is used up for now. Try again in an hour or so."),
     jobs.INTERRUPTED: ("Interrupted", "Moodify restarted while making this playlist. Nothing was saved. Try again."),
     jobs.ERROR: ("Something went wrong", "The playlist couldn't be made, and nothing was saved. Try again."),
     blend.NOT_SHARED: ("Not shared any more", "Someone you picked switched off sharing before the playlist started."
@@ -293,19 +295,21 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
     if job is None:
         return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user, code="404 · Not found")
     if job["status"] == "done":
-        # ?ready: the first view after a build, where a phone may open the Spotify app by itself (Phase 17)
+        # ?ready: the first view after a build, where a phone may open the music app by itself (Phase 17)
         return RedirectResponse(f"/playlists/{job['playlist_id']}?ready=1", status_code=303)
     if job["status"] == "failed":
         if job["error"] == jobs.REAUTH:
             request.session.clear()
             return RedirectResponse("/login", status_code=303)
-        title, text = BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR])
+        service = music.info(user["service"]).name
+        title, text = (words.format(service=service) for words in BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR]))
         return templates.TemplateResponse(request, "job.html", {
             "user": user, "job": job, "failed": True, "title": title, "text": text,
-            "steps": pages.build_steps(job["step"], failed=True),
+            "steps": pages.build_steps(job["step"], failed=True, service=service),
         })
     return templates.TemplateResponse(request, "job.html", {
-        "user": user, "job": job, "failed": False, "steps": pages.build_steps(job["step"]),
+        "user": user, "job": job, "failed": False,
+        "steps": pages.build_steps(job["step"], service=music.info(user["service"]).name),
     })
 
 
@@ -404,7 +408,7 @@ def like_track(request: Request, playlist_id: int, position: int, action: Litera
         outcome = likes.like(user, track["uri"], playlist_id)
     else:
         outcome = likes.unlike(user, track["uri"])
-    return _feedback_answer(request, f"/playlists/{playlist_id}#t{position}", likes.notice(action, outcome),
+    return _feedback_answer(request, f"/playlists/{playlist_id}#t{position}", likes.notice(action, outcome, user["service"]),
                             liked=action == "like")
 
 
@@ -440,7 +444,7 @@ def review_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depe
 
 @app.post("/playlists/{playlist_id}/fix")
 def fix_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
-    """A new version built from the same prompt with the review as a correction. The old one stays in Spotify."""
+    """A new version built from the same prompt with the review as a correction. The old one stays on the service."""
     row = playlists.get(playlist_id, user["user_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
@@ -492,7 +496,7 @@ def delete_lesson(request: Request, lesson_id: int, user: sqlite3.Row = Depends(
 def forget_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
     if not playlists.forget(playlist_id, user["user_id"]):
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
-    request.session["notice"] = "Moodify forgot that playlist. It's still in your Spotify."
+    request.session["notice"] = f"Moodify forgot that playlist. It's still in your {music.info(user['service']).name}."
     return RedirectResponse("/memory#playlists", status_code=303)
 
 
@@ -653,14 +657,15 @@ def settings_submit(request: Request, user: sqlite3.Row = Depends(current_user),
 @app.post("/queue/{playlist_id}")
 def queue_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
     row = playlists.get(playlist_id, user["user_id"])
-    if row is None:
+    # Only Spotify has a queue Moodify can fill, so the button is only shown there (Phase 26)
+    if row is None or not music.info(user["service"]).can_queue:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
                         code="404 · Not found")
     try:
-        with SpotifyClient.for_user(user) as sp:
+        with music.for_user(user) as service:
             for uri in json.loads(row["track_uris_json"]):
-                sp.queue(uri)
-    except SpotifyError as exc:
+                service.queue(uri)
+    except ServiceError as exc:
         if exc.status in (403, 404):
             return _message(request, "Can't play it from here",
                             "Playing from Moodify needs Spotify Premium and Spotify open on one of your devices."
@@ -725,9 +730,10 @@ async def onboarding_submit(request: Request, user: sqlite3.Row = Depends(curren
 @app.post("/disconnect")
 def disconnect(request: Request, user: sqlite3.Row = Depends(any_user)):
     # Spotify requires deleting a user's data within 5 days of disconnect; we do it now
+    service = music.info(user["service"])
     users.delete(user["user_id"])
     request.session.clear()
     return _message(request, "Disconnected",
                     "Moodify deleted everything it stored about you and logged you out. Playlists already in your"
-                    " Spotify are still there. To remove Moodify's access to Spotify as well, remove it at"
-                    " https://www.spotify.com/account/apps/", tone="low")
+                    f" {service.name} are still there. To remove Moodify's access to {service.name} as well, remove it at"
+                    f" {service.access_url}", tone="low")

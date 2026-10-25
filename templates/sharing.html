@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set nav = "friends" %}
+{% set svc = service_info(user.service) %}
 {% block title %}Moodify · sharing with friends{% endblock %}
 {% block content %}
 <div class="mf-stack-6" style="max-width: 640px; margin: 0 auto">
@@ -9,14 +10,14 @@
     <p class="mf-lead">Everyone on this Moodify is a friend of whoever runs it (at most 5 people). Nothing about you reaches them unless you switch it on here.</p>
   </div>
   <form method="post" action="/sharing" class="mf-stack-5">
-    <label class="mf-switch"><input type="checkbox" name="show_taste" value="on" {% if switches.taste %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Show my taste to friends</span><span class="mf-hint">Friends can see your taste profile (the summary Moodify made from your Spotify listening and your answers), your top artists, your place on the taste map, and your activity: the titles and dates of playlists Moodify made for you. Never what you typed.</span></span></label>
-    <label class="mf-switch"><input type="checkbox" name="allow_blends" value="on" {% if switches.blend %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Let friends include me in Blends</span><span class="mf-hint">A friend can make one playlist from a prompt and several people's taste, yours included. Moodify uses your stored taste and music library for it, and saves the playlist in their Spotify, not yours.</span></span></label>
-    <label class="mf-switch"><input type="checkbox" name="allow_listen_as" value="on" {% if switches.listen_as %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Let friends hear music like me</span><span class="mf-hint">A friend can make a playlist "the way you'd hear it", from your stored taste and music library. It's saved in their Spotify. Nothing is ever added to yours.</span></span></label>
+    <label class="mf-switch"><input type="checkbox" name="show_taste" value="on" {% if switches.taste %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Show my taste to friends</span><span class="mf-hint">Friends can see your taste profile (the summary Moodify made from your {{ svc.name }} listening and your answers), your top artists, your place on the taste map, and your activity: the titles and dates of playlists Moodify made for you. Never what you typed.</span></span></label>
+    <label class="mf-switch"><input type="checkbox" name="allow_blends" value="on" {% if switches.blend %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Let friends include me in Blends</span><span class="mf-hint">A friend can make one playlist from a prompt and several people's taste, yours included. Moodify uses your stored taste and music library for it, and saves the playlist in their account, not yours.</span></span></label>
+    <label class="mf-switch"><input type="checkbox" name="allow_listen_as" value="on" {% if switches.listen_as %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Let friends hear music like me</span><span class="mf-hint">A friend can make a playlist "the way you'd hear it", from your stored taste and music library. It's saved in their account. Nothing is ever added to yours.</span></span></label>
     <button class="mf-btn mf-btn--primary" type="submit" style="align-self: flex-start">Save</button>
   </form>
   <div class="mf-well mf-stack-2">
-    <p class="mf-small">Whatever you switch on, these are never shown to or used for anyone else: what you type for a playlist, your reviews and ratings, what Moodify learned from them, playlists made when you were going through something hard, and your Spotify login. Moodify never uses your Spotify login for a friend's playlist.</p>
-    <p class="mf-small">Switching something off works at once. Playlists friends already made stay in their Spotify; they're theirs.</p>
+    <p class="mf-small">Whatever you switch on, these are never shown to or used for anyone else: what you type for a playlist, your reviews and ratings, what Moodify learned from them, playlists made when you were going through something hard, and your {{ svc.name }} login. Moodify never uses your {{ svc.name }} login for a friend's playlist.</p>
+    <p class="mf-small">Switching something off works at once. Playlists friends already made stay in their accounts; they're theirs.</p>
   </div>
 
   <section class="mf-stack-3" aria-labelledby="log-h">

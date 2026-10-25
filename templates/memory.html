@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set nav = "memory" %}
+{% set svc = service_info(user.service) %}
 {% block title %}Moodify · what Moodify remembers{% endblock %}
 {% block content %}
 <div class="mf-stack-7" style="max-width: 760px; margin: 0 auto">
@@ -45,12 +46,12 @@
     <ul class="mf-list">
       {% for p in rows %}
       <li class="mf-prow"><a class="mf-link-row" href="/playlists/{{ p.id }}"><span class="mf-link-row__title">{{ p.title or (p.prompt | truncate(80)) }}</span><span class="mf-link-row__meta">{{ p.created_at | day }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}{% if p.review %} · reviewed{% endif %}</span></a>
-        <form method="post" action="/playlists/{{ p.id }}/forget" onsubmit="return confirm('Forget this playlist? Its likes, rating, review and lessons go too. It stays in your Spotify.')">
+        <form method="post" action="/playlists/{{ p.id }}/forget" onsubmit="return confirm('Forget this playlist? Its likes, rating, review and lessons go too. It stays in your {{ svc.name }}.')">
           <button class="mf-btn mf-btn--quiet mf-btn--sm" type="submit">Forget</button>
         </form></li>
       {% endfor %}
     </ul>
-    <p class="mf-small mf-muted">Forgetting a playlist deletes it from Moodify with its likes, rating, review and lessons. It stays in your Spotify.</p>
+    <p class="mf-small mf-muted">Forgetting a playlist deletes it from Moodify with its likes, rating, review and lessons. It stays in your {{ svc.name }}.</p>
     {% else %}
     <p class="mf-well mf-muted">No playlists yet.</p>
     {% endif %}

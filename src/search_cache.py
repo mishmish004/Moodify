@@ -1,5 +1,5 @@
 """
-Spotify search results, kept 7 days per user (phase-plan.md, caching layer 1).
+Search results from the user's service, kept 7 days per user (phase-plan.md, caching layer 1).
 
 The same song often comes up again in a user's next playlists, and every search costs quota.
 Kept per user, not shared: results follow each user's market, so a track one friend can play
@@ -9,7 +9,7 @@ import json
 from typing import Optional
 
 from src.db import get_conn
-from src.spotify.client import Track
+from src.music import Track
 
 TTL_DAYS = 7
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from src.db import get_conn
-from src.spotify.client import Track
+from src.music import Track
 
 # Source -> weight, in order of how much a source says about someone's taste. Spotify's top tracks are read
 # for the 6-month range only (Phase 10), and Phase 19 adds no calls, so there's one "top" source, not a

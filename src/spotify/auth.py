@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 import httpx
 
 from src.core.config import get_settings
-from src.core.exceptions import ReauthRequired, SpotifyError
+from src.core.exceptions import SpotifyError, SpotifyReauthRequired
 
 AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -80,7 +80,7 @@ def exchange_code(code: str, verifier: str) -> Tokens:
 
 
 def refresh(refresh_token: str) -> Tokens:
-    """New access token. Raises ReauthRequired when Spotify rejects the refresh token."""
+    """New access token. Raises SpotifyReauthRequired when Spotify rejects the refresh token."""
     data = _token_request({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -100,7 +100,7 @@ def _token_request(form: dict) -> dict:
         return _send("POST", TOKEN_URL, data=form)
     except SpotifyError as exc:
         if exc.status == 400 and _oauth_error(exc.body) == "invalid_grant":
-            raise ReauthRequired(exc.status, exc.body) from exc
+            raise SpotifyReauthRequired(exc.status, exc.body) from exc
         raise
 
 
