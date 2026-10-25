@@ -228,7 +228,7 @@ Gate: a friend has a playlist in their account that they didn't make themselves.
 
 ## Next
 
-Phases 9–24 are in `phase-plan.md`: Spotify data, prompt understanding, length, mood switches, likes and ratings, written reviews, memory, opening the app on phones (9–17), and friends: sharing with consent, a shared music library, Moodify Blend, hearing it like a friend, taste dimensions, the taste map and an animated activity feed (18–24).
+Phases 9–29 are in `phase-plan.md`: Spotify data, prompt understanding, length, mood switches, likes and ratings, written reviews, memory, opening the app on phones (9–17), and friends: sharing with consent, a shared music library, Moodify Blend, hearing it like a friend, taste dimensions, the taste map and an animated activity feed (18–24), and YouTube Music and Apple Music alongside Spotify (25–29).
 
 ---
 

@@ -1,6 +1,6 @@
-# Moodify phase plan: Phases 9–24
+# Moodify phase plan: Phases 9–29
 
-The next build plan, written 2026-10-23 after the first real run. Part 2 (Phases 18–24, friends) starts after Phase 17. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
+The next build plan, written 2026-10-23 after the first real run. Part 2 (Phases 18–24, friends) starts after Phase 17. Part 3 (Phases 25–29, YouTube Music and Apple Music) was added on 2026-10-25. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
 
 ```bash
 .venv/bin/python -m pytest -m "not live and not docker"   # fast, every commit
@@ -652,6 +652,274 @@ The feed is server-rendered HTML, so it works without JavaScript; `static/activi
 
 ---
 
+# Part 3: Every music service (Phases 25–29)
+
+Asked on 2026-10-25: make Moodify work for friends on YouTube Music and Apple Music, not only Spotify. Decided the same day:
+- **Any service can sign in.** A friend with only YouTube Music (or, later, Apple Music) gets what a Spotify friend gets: a taste read from their own service, playlists saved there, likes, memory, and the friends features with people on other services. One service per Moodify account.
+- **YouTube Music first.** Apple Music needs the Apple Developer Program ($99 a year) for its signing key. Phase 29 is written now and built once you've enrolled.
+- **YouTube Music goes through the official YouTube Data API** for sign-in, reads and writes. Songs are found with `ytmusicapi`'s no-login search.
+
+| Request | Read as | Phase |
+|---|---|---|
+| (needed by everything below) | A Moodify account is no longer a Spotify account: `user_id` everywhere, plus which service it uses. Nothing changes for current users | 25 |
+| (needed by everything below) | Every Spotify call goes through one music-service interface. Pages name the user's own service; Spotify-only features (the queue) only show for Spotify | 26 |
+| YouTube Music | Sign in with Google. Taste comes from your YouTube likes, playlists and subscriptions. Playlists are saved to YouTube, where YouTube Music shows them. Likes there are optional | 27 |
+| Friends on different services | The library, Blends, "hear it like a friend", taste dimensions and the map compare songs, not service IDs | 28 |
+| Apple Music | Sign in with Apple plus MusicKit. Taste comes from recently played, heavy rotation and your library. Playlists are saved to your Apple Music library | 29, after you enroll |
+
+Open questions (defaults stand until answered):
+7. Can one person connect two services (say Spotify and YouTube Music) to one Moodify account? Default: no. One service per account; a second service means a second account. Listed under Later.
+8. Should a ♥ in Moodify also like the song on YouTube? YouTube's policy wants express consent before liking on someone's behalf. Default: off for YouTube users, with the choice on the onboarding page and in settings.
+9. Cross-service Blends touch two Spotify rules (below). Default: build them, and `/sharing` says your songs can end up in a friend's playlist on another service. The alternative: Blends and "hear it like a friend" only between people on the same service.
+
+## What each service allows
+
+Checked on 2026-10-25.
+
+**YouTube Music** has no public API. What Moodify can use:
+- **YouTube Data API v3**, with Google sign-in. The scopes are `https://www.googleapis.com/auth/youtube`, plus `openid profile` to know who you are.
+  - It can create playlists, which YouTube Music lists in your library.
+  - It can read your liked videos (`videos.list?myRating=like`), your playlists and their items, and your subscriptions.
+  - It can like and unlike (`videos.rate`).
+  - It **can't read listening history**, and has nothing like "top tracks".
+- **Quota** is per Google Cloud project, so every YouTube user of Moodify shares it.
+  - The allowance is 10,000 units a day, reset at midnight Pacific time (12:30 or 13:30 IST).
+  - Reads cost 1 unit. `playlists.insert`, `playlistItems.insert` and `videos.rate` cost 50 each, and songs are added **one call per song**.
+  - A 30-song playlist costs 1,550 units, so about 6 playlists a day across all YouTube friends.
+  - `search.list` has its own bucket of 100 calls a day, which is why Moodify doesn't search through the API.
+  - Google takes requests for more quota through an audit form. That's a task for you, listed under Later.
+- **`ytmusicapi` search without a login** finds YouTube Music songs at no quota cost. Each result has the title, artists, length, explicit flag and video id. On 2026-10-25, `YTMusic().search("Midnight City M83", filter="songs")` returned M83's track first.
+  - It's unofficial: it calls YouTube Music's internal web API, can break when YouTube changes that, and isn't covered by YouTube's API terms.
+  - Logged-in `ytmusicapi` (history, library) has been broken since September 2026: issue #813 is open, and the maintainer sees no way forward. So Moodify uses it for search only.
+- **Google sign-in limits.**
+  - While the OAuth consent screen is in **Testing**, refresh tokens for the `youtube` scope expire after 7 days.
+  - Publishing it without Google's verification avoids that, but friends see an "unverified app" warning, and at most 100 users can sign in.
+  - Verification (privacy policy, home page on the domain, a demo video) removes the warning.
+- **YouTube API Services Developer Policies** add rules that Spotify's don't have:
+  - III.A.1, III.A.2: link to YouTube's Terms of Service. Users agree to a privacy policy before using Moodify, and that policy links Google's Privacy Policy and says access can be revoked in Google's security settings.
+  - III.D.2.3.a: on disconnect, revoke the token through Google and delete the data within 7 days. Moodify deletes at once.
+  - III.E.4.c: API data is kept for at most 30 days unless refreshed. The library's 30-day expiry already does this.
+  - III.E.3.d and I.2: writes on someone's behalf (playlists, likes) must be clearly started by the user and expressly consented to. That's why likes are off by default (question 8).
+  - III.F.2.a: pages showing YouTube content make it clear that YouTube is the source, with YouTube's branding.
+  - III.E.4.h: no "new or derived data or metrics" from API data. Taste summaries and Phase 22's dimensions are derived data for songs read through the API. That's the same kind of call as the 2026-10-22 decision on Spotify's III.13 and III.14. It holds for the friends-only build and is revisited if Moodify grows.
+
+**Apple Music** (Phase 29):
+- It has an official API. On the web, **MusicKit on the Web** shows Apple's sign-in and hands the page a Music User Token. Personal endpoints need an Apple Music subscriber.
+- An Apple Developer Program membership ($99 a year) is needed for the MusicKit key that signs developer tokens. Those are ES256 JWTs that last at most 6 months.
+- Apple never says who the user is, so Apple users sign in with **Sign in with Apple** (same membership) to get a stable account id.
+- Reads: recently played tracks, heavy rotation, library songs and playlists, recommendations, ratings. Writes: create a library playlist, add tracks, love a song.
+- Music User Tokens can't be refreshed. Developer forum reports (not Apple's docs) say they last about 6 months, after which the user reconnects.
+- No user cap like Spotify's 5.
+- Apple's licence limits MusicKit to giving users access to their Apple Music subscription. Read the MusicKit sections of the Developer Program License Agreement in full, including 3.3.11 on AI, before building Phase 29.
+
+**Spotify**, again, for features that cross services (Developer Policy, re-read 2026-10-25):
+- III.9: "Do not build an SDA that enables the transfer of data to another service, except for the purpose of enabling a user to transfer their personal data, or the metadata of the user's playlists to another service."
+- III.5: "Do not create any product or service which is integrated with streams or content from another service."
+- Example: a YouTube user makes a Blend with a Spotify friend. The friend's songs end up in a YouTube playlist, so the friend's data goes to another service at someone else's request. It's the same kind of call as 2026-10-22, so Phase 28 builds it behind the friend's Blend switch, whose text says so (question 9).
+
+## How Moodify changes
+
+- **Accounts.** `users.user_id` (was `spotify_id`) is Moodify's own id, and `users.service` says which client acts for the user. Current users keep their value, so sessions, friend links and OpenAI cache keys keep working. New users get `youtube:<Google sub>` and `apple:<Apple sub>`.
+- **Songs.** Every track still has a `uri`, prefixed by its service: `spotify:track:…` as today, `youtube:track:<videoId>`, `apple:track:<catalog id>`. Comparisons across services use a **song key**: `normalize_title(name)|normalize_artist(first artist)`, the normalization `src/match.py` already uses to accept search results.
+- **One interface, several clients.** `src/music/` holds the `MusicService` protocol, with these parts:
+  - `listening()` reads the user's taste.
+  - Playlists and songs: `search_track`, `create_playlist`, `add_items`.
+  - Likes: `liked`, `like`, `unlike`.
+  - The optional `queue`.
+  - The service's links, limits and name.
+
+  `src/spotify/` becomes the first implementation, with no change in behaviour. Build code calls `music.for_user(user)` and never imports a client.
+- **Quota is counted per service** in `service_quota(service, day, units)`. Before a YouTube build writes anything, it checks that it can afford its writes. If it can't, it fails with a clear message instead of leaving a half-made playlist.
+
+---
+
+## Phase 25: Accounts that aren't Spotify accounts
+
+Goal: the database and the code stop assuming a user is a Spotify account. Nothing visible changes.
+
+Build
+- [ ] Migration 15:
+  - Rename `spotify_id` to `user_id` in every table. `ALTER TABLE … RENAME COLUMN` also rewrites the foreign keys and indexes that point at it.
+  - Add `users.service TEXT NOT NULL DEFAULT 'spotify'`, checked to be `spotify`, `youtube` or `apple`.
+  - Rename the Spotify-named columns: `users.likes_to_spotify` → `likes_to_service`, `users.open_spotify` → `open_app`, `playlists.spotify_url` → `url`, `track_likes.added_to_spotify` → `added_to_service`.
+  - `schema.sql` gets the same names. The live database is backed up before the migration runs.
+- [ ] Existing users keep their id values, so their sessions, friend links and history keep working
+- [ ] In the code, `spotify_id` becomes `user_id` wherever it means the Moodify user. It stays `spotify_id` only where it really is a Spotify id (links, the Spotify client). The session key becomes `user_id`; a cookie that still holds `spotify_id` is read once and rewritten
+- [ ] `users.refresh_token` keeps its name and holds whatever credential the service's client acts with (for Apple, the Music User Token)
+
+Tests (`tests/test_p25_accounts.py`)
+- [ ] a version-14 database with users, playlists, likes, lessons, sharing, library, Blends and features upgrades with every row kept and `PRAGMA foreign_key_check` empty. A fresh database from `schema.sql` has the same tables and columns
+- [ ] after the upgrade, no table has a `spotify_id` column
+- [ ] a session cookie from before the upgrade still logs the user in
+- [ ] disconnect still deletes every row about the user, in every table
+- [ ] the fast suite passes, with assertions changed only for the renamed columns
+
+Gate: fast suite green, and an upgraded copy of the live database shows your history, memory and map as before.
+
+---
+
+## Phase 26: One interface for every music service
+
+Goal: Spotify works exactly as before, but through an interface that a second service can implement.
+
+Build
+- [ ] `src/music/__init__.py` holds:
+  - `Track`, moved from `src/spotify/client.py`, with a new `key` (the song key).
+  - `Playlist` and `UserPlaylist`.
+  - `Listening`, moved from `src/taste.py`.
+  - The `MusicService` protocol.
+  - `for_user(user)`, and `info(service)` with the name, logo, app links, "get the app" links, limits and capabilities.
+- [ ] Errors: `ServiceError(service, status, body)`, with `ReauthRequired` and `QuotaExceeded` under it. `SpotifyError` and `SpotifyQuotaExceeded` stay as Spotify's subclasses, and the handlers catch the general ones
+- [ ] Each service reads its own taste: `taste.read_listening` moves into the Spotify client as `listening()`, and `taste.py` only formats. A service that can't fill a summary section leaves it out, as an empty section is left out today
+- [ ] `src/playlist.py`, `src/likes.py`, `src/blend.py`, `src/listen_as.py` and `/queue` go through `music.for_user(user)`. Per-service limits move to the service: searches per build, playlist name and description lengths
+- [ ] Capabilities:
+  - `queue`: Spotify only.
+  - `likes`: every service.
+  - `pool_explicit`: whether the service's known songs carry an explicit flag. Under "no explicit", a known song without the flag is searched instead, as an explicit known song already is.
+- [ ] `src/links.py` works per service: the web link, the phone link, the auto-open link and "get the app" come from the service of the track or playlist
+- [ ] Pages and build steps name the user's service:
+  - Build steps: "Finding the songs on Spotify" becomes "…on {service}".
+  - `_spotify.html` becomes `_service.html`, which picks the service's logo and link for attribution.
+  - The queue button only shows where the service can queue.
+- [ ] Build failures and quota messages name the service
+
+Tests (`tests/test_p26_services.py`)
+- [ ] the Spotify tests from Phases 2–24 pass with only imports changed
+- [ ] a fake second service, defined in the test, runs a full build, a like, and a Blend with a Spotify member, with no Spotify call for the fake user. Nothing outside `src/spotify/` imports `SpotifyClient`
+- [ ] every page renders for a fake-service user without the word "Spotify", except attribution on Spotify tracks
+- [ ] for a service without queue, the queue button is absent and `POST /queue/{id}` answers 404
+
+Gate: fast suite green, and a live Spotify build is unchanged: same steps and the same number of Spotify calls.
+
+---
+
+## Phase 27: YouTube Music
+
+Goal: a friend with only YouTube Music signs in with Google and gets playlists in their YouTube Music library, made from their taste.
+
+Before building (you)
+- [ ] A Google Cloud project with **YouTube Data API v3** enabled
+- [ ] OAuth consent screen:
+  - External, with the scopes `openid`, `profile` and `.../auth/youtube`.
+  - App name Moodify, with the home page and privacy policy on `moodify.mish4mish.com`.
+  - Publishing status **In production** (unverified), so tokens don't expire after 7 days. Submit for verification later if the warning bothers friends.
+- [ ] OAuth client of type "Web application", with redirect URIs `https://moodify.mish4mish.com/callback/youtube` and `http://127.0.0.1:9091/callback/youtube`. Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
+
+Build
+- [ ] `src/youtube/auth.py`: authorization code flow with PKCE plus the client secret (Google's web clients need both), `access_type=offline`, and `prompt=consent` on the first login. The account id is the ID token's `sub` and the name is its `name`. `invalid_grant` raises `ReauthRequired`
+- [ ] Login page: "Continue with YouTube Music" next to "Continue with Spotify", with `POST /login/youtube` and `GET /callback/youtube`. Spotify's routes stay where they are, since Spotify's dashboard has `/callback` registered. The data section says what's read from each service
+- [ ] `src/youtube/client.py` implements `MusicService`:
+  - `listening()` reads, for about 15 units:
+    - liked videos (`videos.list?myRating=like`), Music category only, up to 4 pages of 50
+    - your playlists (`playlists.list?mine=true`), and the items of the first 5, with lengths from `videos.list` (50 ids per call)
+    - subscriptions (`subscriptions.list?mine=true`), as followed artists
+
+    There's no top or recent, and the summary says only what it has.
+  - Title and artist of a video: an "Artist - Topic" channel gives the artist and a clean title. Otherwise "Artist - Title (Official Video)" is split. Otherwise the channel name is the artist. `src/match.py` already drops "(Official Video)"-style tails.
+  - `search_track`: a `ytmusicapi` search with `filter="songs"` and 10 results, run in a thread with a 10-second timeout. Errors become `ServiceError`. Three failures in a row stop the search step, instead of trying 150 times.
+  - `create_playlist` calls `playlists.insert` with the playlist private, a title of at most 150 characters and a description of at most 5,000. `add_items` makes one `playlistItems.insert` call per song.
+  - Likes: `videos.getRating` (1 unit), and `videos.rate` with `like` or `none` (50 units).
+- [ ] Quota:
+  - `service_quota(service, day, units)`, where the day is a Pacific-time date. Every call adds its cost.
+  - Before a build starts, its writes for the target length (50 + 50 per song) must fit in what's left. If they don't, the build fails with "YouTube's daily limit for Moodify is used up. It resets at {time in IST}".
+  - A 403 `quotaExceeded` from Google gives the same message.
+- [ ] YouTube likes default to **off** for YouTube users. The onboarding page asks once ("Also like songs on YouTube when I ♥ them in Moodify"), and settings can change it
+- [ ] Links:
+  - Playlists open at `https://music.youtube.com/playlist?list=…`, songs at `https://music.youtube.com/watch?v=…`.
+  - On Android, an `intent://` link opens the YouTube Music app (`com.google.android.apps.youtube.music`), falling back to the web page.
+  - On iPhone, a tap on the music.youtube.com link opens the app.
+  - Opening the playlist by itself when it's ready works like Phase 17 where the phone allows it; otherwise there's the big button.
+- [ ] Branding: "Open in YouTube Music" with the YouTube Music icon from YouTube's brand resources. Every YouTube track links back to YouTube Music
+- [ ] `/privacy` covers:
+  - what Moodify stores, what goes to OpenAI, and how to delete it
+  - links to YouTube's Terms of Service and Google's Privacy Policy
+  - how to revoke access at https://myaccount.google.com/connections
+
+  It's linked from the login page and the footer, and the Google button says that signing in means agreeing to it.
+- [ ] Disconnect revokes the Google token at `https://oauth2.googleapis.com/revoke` before deleting the data
+- [ ] An account without a YouTube channel may not be able to own playlists. If `playlists.insert` answers `youtubeSignupRequired`, show how to create a channel. Check in the live test whether this happens
+- [ ] `ytmusicapi`, pinned, in `requirements.txt`
+
+Tests (`tests/test_p27_youtube.py`: Google APIs mocked with `respx`, `ytmusicapi` stubbed)
+- [ ] login: the state check, the code exchange, and a new `youtube:<sub>` user. A second login updates the token without touching onboarding
+- [ ] `listening()` handles Topic channels, "Artist - Title" uploads and plain uploads, and leaves out liked videos that aren't music
+- [ ] a full build makes one private playlist with one insert per song, counts the units, and saves `youtube:track:` URIs
+- [ ] a build that can't afford its writes fails before any write and gives the reset time. A 403 `quotaExceeded` during a build gives the same message
+- [ ] likes: with the setting off, there's no `videos.rate` call. With it on, a like rates `like`, and an unlike rates `none` only if Moodify did the like
+- [ ] three search errors in a row stop the searching. With nothing found, the build fails with "Nothing matched", never an unhandled error
+- [ ] disconnect calls the revoke endpoint and leaves no rows
+- [ ] every page for a YouTube user shows YouTube Music links and branding, and no queue button
+- [ ] `live`: your Google account signs in and builds a 20-minute playlist that shows in YouTube Music, and the quota counter matches the Google Cloud console
+
+Gate: `pytest tests/test_p27_youtube.py` green, and a playlist made on `moodify.mish4mish.com` with a YouTube account plays in the YouTube Music app on your phone.
+
+---
+
+## Phase 28: Friends on different services
+
+Goal: Blends, "hear it like a friend", the taste map and activity work between a Spotify friend and a YouTube Music friend.
+
+Build
+- [ ] `tracks.song_key`, indexed and filled for existing rows. `library.common`, a Blend's common ground, the map's "shared" marks and taste-match scores compare song keys, not URIs
+- [ ] `track_features` is keyed by song key, so a song is judged once whichever service it came from. The migration moves existing rows
+- [ ] A Blend or "hear it like a friend" playlist goes to the requester's service:
+  - Friends' known songs from another service reach the suggestion prompt by name and artist only.
+  - A picked song from another service is searched on the requester's service like any suggestion. The known-songs shortcut only applies to same-service tracks.
+  - Credits follow the song key.
+- [ ] The `/sharing` text for Blends and "hear it like a friend" says the songs can end up in a friend's playlist on Spotify, YouTube Music or Apple Music
+- [ ] Moodify can now have more than 5 people (only Spotify's allowlist stops at 5):
+  - Blends stay at 2–5 people.
+  - The map and activity show you and up to 4 friends, by default the ones you share the most songs with, with a picker for the others.
+- [ ] Track links on friends' pages and the map go to that track's own service
+
+Tests (`tests/test_p28_cross.py`)
+- [ ] the same song on Spotify and on YouTube has one song key, and `common` finds it between a Spotify user and a YouTube user
+- [ ] a YouTube user's Blend with a Spotify friend searches YouTube for the friend's picked songs and makes no Spotify call
+- [ ] the features migration keeps every judged song, and a song judged from Spotify isn't judged again when a YouTube user has it
+- [ ] with 6 people sharing, the map shows 5
+- [ ] every Phase 18 consent test still passes with people on mixed services
+
+Gate: fast suite green, and a live Blend between your Spotify account and a YouTube test account lands in each requester's own service.
+
+---
+
+## Phase 29: Apple Music (after you enroll)
+
+Goal: a friend with only Apple Music signs in with Apple and gets playlists in their Apple Music library.
+
+Before building (you)
+- [ ] Join the Apple Developer Program ($99 a year)
+- [ ] In Certificates, Identifiers & Profiles:
+  - Create a Media ID with MusicKit, and a MusicKit private key (.p8).
+  - The team ID and key ID go in `.env`. The key file is mounted read-only from outside the image.
+- [ ] Sign in with Apple: a Services ID for moodify.mish4mish.com with the return URL `https://moodify.mish4mish.com/callback/apple`, and its key
+- [ ] (me) Read the MusicKit sections of the Developer Program License Agreement in full, including 3.3.11 on AI, and add here what applies
+
+Build
+- [ ] Developer token: an ES256 JWT (`iss` the team, `kid` the key, at most 6 months, `origin` the site), cached and renewed a day before it expires. New dependency: PyJWT with `cryptography`
+- [ ] Sign in with Apple, as a redirect with `response_mode=form_post`. The ID token is checked against Apple's keys, its `sub` is the account id, and the user id is `apple:<sub>`
+- [ ] `/connect/apple`: MusicKit on the Web, loaded from Apple, asks for access and posts the Music User Token to Moodify, which stores it. Someone without a subscription gets a plain "Apple Music needs a subscription" page
+- [ ] `src/apple/client.py` implements `MusicService`:
+  - The storefront comes from `/v1/me/storefront`.
+  - `listening()` reads recently played tracks, heavy rotation, library songs (4 pages) and library playlists (the first 5).
+  - Search: `/v1/catalog/{storefront}/search?types=songs`.
+  - `create_playlist` calls `POST /v1/me/library/playlists`, and `add_items` calls `POST /v1/me/library/playlists/{id}/tracks` in as few calls as Apple allows.
+  - Likes: `PUT` and `DELETE /v1/me/ratings/songs/{id}`.
+  - The explicit flag comes from `contentRating` and lengths from `durationInMillis`.
+  - A 401 or 403 from a personal endpoint raises `ReauthRequired`, which sends the user to `/connect/apple`, not to a new sign-in.
+- [ ] Links: song links on `music.apple.com`, and library playlist links. "Open in Apple Music" uses Apple's badge
+- [ ] Disconnect deletes everything, and the page says how to remove Moodify at appleid.apple.com, since Apple has no API for that
+
+Tests (`tests/test_p29_apple.py`)
+- [ ] the developer token's claims and its renewal. Sign in with Apple tokens that are expired, for the wrong audience or badly signed are refused
+- [ ] `listening()` parsing. Search picks the right song, and a build creates one playlist and adds every song
+- [ ] a dead Music User Token sends the user to reconnect, and their data stays
+- [ ] `live`: your Apple Music account builds a playlist that shows in the Music app
+
+Gate: `pytest tests/test_p29_apple.py` green, and the playlist plays in Apple Music on a phone.
+
+---
+
 ## Later, only if needed
 
 - [ ] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones
@@ -664,6 +932,10 @@ The feed is server-rendered HTML, so it works without JavaScript; `static/activi
 - [ ] The pre-action clarification question from Phase 16 (optional there, not built): ask one question when a brief conflicts with an active lesson, auto-continuing after 20 s
 - [ ] "Play on this phone" from Phase 17 (optional there, not built): `GET /me/player/devices`, then `PUT /me/player/play` on the phone (Premium only)
 - [ ] Replace a playlist's songs in place for "Fix it" (check that Spotify's replace-items endpoint still works for Dev Mode first), if v1/v2 copies pile up
+- [ ] Two services on one Moodify account (Part 3, question 7)
+- [ ] Move one of your playlists to another service: your own playlist metadata, which Spotify's Policy III.9 allows
+- [ ] More YouTube quota through Google's audit form, if friends hit the daily limit (Phase 27)
+- [ ] Google verification of the consent screen, if the "unverified app" warning puts friends off (Phase 27)
 
 ## Sources
 
@@ -685,3 +957,12 @@ Spotify (Part 2)
 
 Model provider (the cache mechanics Moodify actually runs on)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), OpenAI: 1,024-token minimum, stable prefix first, compaction resets the cache, `prompt_cache_key` and retention options by model generation, cached-token usage fields
+
+Part 3, read on 2026-10-25
+- [Quota costs](https://developers.google.com/youtube/v3/determine_quota_cost), YouTube Data API: 10,000 units a day, `search.list` in its own 100-a-day bucket, 50 per playlist, item insert and rating
+- [YouTube API Services Developer Policies](https://developers.google.com/youtube/terms/developer-policies): III.A terms and privacy policy, III.C and III.E.3 writes only with consent, III.D.2.3 revoke and delete, III.E.4 30-day storage and no derived metrics, III.F branding
+- [Using OAuth 2.0 to access Google APIs](https://developers.google.com/identity/protocols/oauth2): refresh tokens expire in 7 days while the consent screen is in Testing
+- [ytmusicapi issue #813](https://github.com/sigma67/ytmusicapi/issues/813): logged-in OAuth broken since September 2026, still open, maintainer's comment of 2026-09-01
+- [Apple Music API](https://developer.apple.com/documentation/applemusicapi) and [User Authentication for MusicKit](https://developer.apple.com/documentation/applemusicapi/user-authentication-for-musickit): personal endpoints, the Music User Token, MusicKit on the Web; [MusicKit](https://developer.apple.com/musickit/): keys from Certificates, Identifiers & Profiles
+- [Apple Developer Forums, Apple Music API](https://developer.apple.com/forums/tags/apple-music-api): reports that Music User Tokens last about 6 months with no refresh (not Apple's docs)
+- [Spotify Developer Policy](https://developer.spotify.com/policy): III.5 integration with other services, III.9 transfers to another service
