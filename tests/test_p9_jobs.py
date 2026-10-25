@@ -165,7 +165,7 @@ def test_playlist_page_is_rebuilt_from_the_database(logged_in, respx_mock):
 def test_old_playlist_without_saved_tracks_still_opens(logged_in):
     with get_conn() as conn:
         row_id = conn.execute(
-            "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES (?, ?, ?, ?)",
+            "INSERT INTO playlists (user_id, prompt, url, track_uris_json) VALUES (?, ?, ?, ?)",
             ("friend1", "from phase 6", "https://open.spotify.com/playlist/old", '["spotify:track:a"]'),
         ).lastrowid
     page = logged_in.get(f"/playlists/{row_id}")
@@ -255,7 +255,7 @@ def test_phase_8_database_upgrades_without_losing_data(tmp_path):
     init_db(tmp_path / "new.db")
     assert _schema(tmp_path / "old.db") == _schema(tmp_path / "new.db")  # migrated == fresh
     conn = sqlite3.connect(tmp_path / "old.db")
-    assert conn.execute("SELECT spotify_id, onboarding_json FROM users").fetchall() == [("u1", "{}")]
+    assert conn.execute("SELECT user_id, onboarding_json FROM users").fetchall() == [("u1", "{}")]
     assert conn.execute("SELECT prompt FROM playlists").fetchall() == [("old",)]
     conn.close()
 
@@ -283,14 +283,14 @@ def test_live_first_real_prompt_now_gives_a_full_playlist():
         user = conn.execute("SELECT * FROM users WHERE onboarding_json IS NOT NULL ORDER BY created_at LIMIT 1").fetchone()
     if user is None:
         pytest.skip("no onboarded user in data/moodify.db: log in and complete /onboarding first")
-    job_id = jobs.create(user["spotify_id"], FIRST_REAL_PROMPT)
+    job_id = jobs.create(user["user_id"], FIRST_REAL_PROMPT)
     from src.playlist import run
-    run(job_id, user["spotify_id"], FIRST_REAL_PROMPT)
-    job = jobs.get(job_id, user["spotify_id"])
+    run(job_id, user["user_id"], FIRST_REAL_PROMPT)
+    job = jobs.get(job_id, user["user_id"])
     for event in jobs.events(job_id):
         if event["kind"] in ("llm", "built", "failed"):
             print(event)
     assert job["status"] == "done", job["error"]
     made = playlists.tracks(job["playlist_id"])
-    print(f"\n{len(made)} tracks: {playlists.get(job['playlist_id'], user['spotify_id'])['spotify_url']}")
+    print(f"\n{len(made)} tracks: {playlists.get(job['playlist_id'], user['user_id'])['url']}")
     assert len(made) >= 20

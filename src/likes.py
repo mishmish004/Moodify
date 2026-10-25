@@ -36,14 +36,14 @@ def like(user: sqlite3.Row, uri: str, playlist_id: int) -> str:
     """Store the like, then save the song to Liked Songs unless it's there already or the setting is off."""
     with get_conn() as conn:
         new = conn.execute(
-            "INSERT OR IGNORE INTO track_likes (spotify_id, uri, playlist_id) VALUES (?, ?, ?)",
-            (user["spotify_id"], uri, playlist_id),
+            "INSERT OR IGNORE INTO track_likes (user_id, uri, playlist_id) VALUES (?, ?, ?)",
+            (user["user_id"], uri, playlist_id),
         ).rowcount
         if new:
-            invalidate(conn, user["spotify_id"])
+            invalidate(conn, user["user_id"])
     if not new:
         return UNCHANGED
-    if not user["likes_to_spotify"]:
+    if not user["likes_to_service"]:
         return OFF
     try:
         with SpotifyClient.for_user(user) as sp:
@@ -56,21 +56,21 @@ def like(user: sqlite3.Row, uri: str, playlist_id: int) -> str:
         log.warning("couldn't save %s to Liked Songs: %s", uri, exc)
         return FAILED
     with get_conn() as conn:
-        conn.execute("UPDATE track_likes SET added_to_spotify = 1 WHERE spotify_id = ? AND uri = ?",
-                     (user["spotify_id"], uri))
+        conn.execute("UPDATE track_likes SET added_to_service = 1 WHERE user_id = ? AND uri = ?",
+                     (user["user_id"], uri))
     return SAVED
 
 
 def unlike(user: sqlite3.Row, uri: str) -> str:
     """Remove the like, and the song from Liked Songs if Moodify added it there."""
     with get_conn() as conn:
-        row = conn.execute("DELETE FROM track_likes WHERE spotify_id = ? AND uri = ? RETURNING added_to_spotify",
-                           (user["spotify_id"], uri)).fetchone()
+        row = conn.execute("DELETE FROM track_likes WHERE user_id = ? AND uri = ? RETURNING added_to_service",
+                           (user["user_id"], uri)).fetchone()
         if row is not None:
-            invalidate(conn, user["spotify_id"])
+            invalidate(conn, user["user_id"])
     if row is None:
         return UNCHANGED
-    if not row["added_to_spotify"]:
+    if not row["added_to_service"]:
         return KEPT
     try:
         with SpotifyClient.for_user(user) as sp:
@@ -88,13 +88,13 @@ def notice(action: str, outcome: str) -> Optional[str]:
     return NOTICES.get((action, outcome))
 
 
-def liked_uris(spotify_id: str, uris: list[str]) -> set[str]:
+def liked_uris(user_id: str, uris: list[str]) -> set[str]:
     """Which of these songs the user has liked, wherever they liked them."""
     if not uris:
         return set()
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT uri FROM track_likes WHERE spotify_id = ? AND uri IN ({','.join('?' * len(uris))})",
-            (spotify_id, *uris),
+            f"SELECT uri FROM track_likes WHERE user_id = ? AND uri IN ({','.join('?' * len(uris))})",
+            (user_id, *uris),
         ).fetchall()
     return {r["uri"] for r in rows}

@@ -105,8 +105,8 @@ def test_a_finished_build_on_desktop_only_has_the_button(logged_in, respx_mock):
 
 
 def test_setting_off_means_no_auto_open(logged_in, respx_mock):
-    logged_in.post("/settings", data={"likes_to_spotify": "on"})
-    assert users.get("friend1")["open_spotify"] == 0 and users.get("friend1")["likes_to_spotify"] == 1
+    logged_in.post("/settings", data={"likes_to_service": "on"})
+    assert users.get("friend1")["open_app"] == 0 and users.get("friend1")["likes_to_service"] == 1
     page = _build(logged_in, respx_mock, IPHONE).text
     assert "location.href" not in page and 'class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block"' in page
 
@@ -139,14 +139,14 @@ def test_iphone_links_stay_web_links_for_universal_links(logged_in):
     assert 'href="https://apps.apple.com/app/spotify-music-and-podcasts/id324684580">GET SPOTIFY FREE</a>' in page
 
 
-def test_settings_page_has_the_open_spotify_switch(logged_in):
+def test_settings_page_has_the_open_app_switch(logged_in):
     page = logged_in.get("/settings").text
-    assert 'name="open_spotify" value="on" checked' in page
-    logged_in.post("/settings", data={"open_spotify": "on"})
-    assert users.get("friend1")["open_spotify"] == 1 and users.get("friend1")["likes_to_spotify"] == 0
+    assert 'name="open_app" value="on" checked' in page
+    logged_in.post("/settings", data={"open_app": "on"})
+    assert users.get("friend1")["open_app"] == 1 and users.get("friend1")["likes_to_service"] == 0
 
 
-def test_existing_users_get_open_spotify_on_after_migrating(test_settings):
+def test_existing_users_get_open_app_on_after_migrating(test_settings):
     from .test_p9_jobs import V0_SCHEMA
     conn = sqlite3.connect(test_settings.DB_PATH)
     conn.executescript(V0_SCHEMA)
@@ -154,4 +154,4 @@ def test_existing_users_get_open_spotify_on_after_migrating(test_settings):
     conn.commit()
     conn.close()
     init_db()
-    assert users.get("old")["open_spotify"] == 1
+    assert users.get("old")["open_app"] == 1

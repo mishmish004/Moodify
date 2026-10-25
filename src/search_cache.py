@@ -18,27 +18,27 @@ def key(title: str, artist: str) -> str:
     return " ".join(f"{title}|{artist}".lower().split())
 
 
-def get(spotify_id: str, title: str, artist: str) -> Optional[list[Track]]:
+def get(user_id: str, title: str, artist: str) -> Optional[list[Track]]:
     """The cached candidates, or None when there's no fresh entry."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT tracks_json FROM search_cache WHERE spotify_id = ? AND query = ?"
+            "SELECT tracks_json FROM search_cache WHERE user_id = ? AND query = ?"
             f" AND fetched_at >= datetime('now', '-{TTL_DAYS} days')",
-            (spotify_id, key(title, artist)),
+            (user_id, key(title, artist)),
         ).fetchone()
     if row is None:
         return None
     return [Track(uri, name, tuple(artists), ms, explicit) for uri, name, artists, ms, explicit in json.loads(row[0])]
 
 
-def put(spotify_id: str, title: str, artist: str, tracks: list[Track]) -> None:
+def put(user_id: str, title: str, artist: str, tracks: list[Track]) -> None:
     payload = json.dumps([[t.uri, t.name, list(t.artists), t.duration_ms, t.explicit] for t in tracks])
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO search_cache (spotify_id, query, tracks_json) VALUES (?, ?, ?)"
-            " ON CONFLICT (spotify_id, query) DO UPDATE SET tracks_json = excluded.tracks_json,"
+            "INSERT INTO search_cache (user_id, query, tracks_json) VALUES (?, ?, ?)"
+            " ON CONFLICT (user_id, query) DO UPDATE SET tracks_json = excluded.tracks_json,"
             " fetched_at = CURRENT_TIMESTAMP",
-            (spotify_id, key(title, artist), payload),
+            (user_id, key(title, artist), payload),
         )
 
 

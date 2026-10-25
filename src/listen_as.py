@@ -26,7 +26,7 @@ def friend_profile(friend) -> taste.Profile:
     onboarding = json.loads(friend["onboarding_json"] or "{}")
     avoid = blend.avoid_phrases(onboarding)
     return taste.Profile(
-        summary=taste.stored_summary(friend), pool=library.pool(friend["spotify_id"]), name=sharing.first_name(friend),
+        summary=taste.stored_summary(friend), pool=library.pool(friend["user_id"]), name=sharing.first_name(friend),
         familiar_percent=taste.familiar_percent(onboarding),
         avoid=tuple(a for a in avoid if not blend.EXPLICIT_WORDS.search(a)),
         no_explicit=any(blend.EXPLICIT_WORDS.search(a) for a in avoid),
@@ -57,23 +57,23 @@ def build_as(user, mood: str, profile: taste.Profile, trace: Trace = NO_TRACE) -
     return playlist.make(user, mood, recipe, trace).playlist_id
 
 
-def run(job_id: int, spotify_id: str, mood: str, friend_id: str) -> None:
+def run(job_id: int, user_id: str, mood: str, friend_id: str) -> None:
     """Background entry, like playlist.run. Never raises. Consent is checked here, once, before anything of the
     friend's is read."""
     from src import playlist
     try:
-        user = users.get(spotify_id)
+        user = users.get(user_id)
         if user is None:
             return
         friend = users.get(friend_id)
-        if friend is None or not sharing.allowed(friend_id, spotify_id, "listen_as"):
+        if friend is None or not sharing.allowed(friend_id, user_id, "listen_as"):
             raise playlist.BuildFailed(blend.NOT_SHARED)
         trace = Trace(job_id)
         trace.step(f"Reading {sharing.first_name(friend)}'s taste")
         playlist_id = build_as(user, mood, friend_profile(friend), trace)
         with get_conn() as conn:
             conn.execute("UPDATE playlists SET heard_as = ? WHERE id = ?", (friend_id, playlist_id))
-        sharing.log(friend_id, spotify_id, "listen_as", playlist_id)
+        sharing.log(friend_id, user_id, "listen_as", playlist_id)
     except playlist.BuildFailed as exc:
         jobs.fail(job_id, exc.reason)
     except SpotifyQuotaExceeded as exc:

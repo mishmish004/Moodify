@@ -18,14 +18,14 @@ GENRE_SLOTS = 6           # genres coloured across the page; the rest of everyon
 def people(viewer: str) -> list:
     """You first, then friends showing their taste, at most 5 in all (Development Mode's user cap)."""
     me = users.get(viewer)
-    return ([me] if me else []) + [users.get(f["spotify_id"]) for f in sharing.friends(viewer, "taste")][:4]
+    return ([me] if me else []) + [users.get(f["user_id"]) for f in sharing.friends(viewer, "taste")][:4]
 
 
 def data(viewer: str) -> dict:
     shown = people(viewer)
     summaries, tracks_by, weights_by = {}, {}, {}
     for person in shown:
-        sid = person["spotify_id"]
+        sid = person["user_id"]
         rows = features.for_person(sid)
         summaries[sid] = features.summarize(rows)
         weights_by[sid] = {t.uri: (t, w) for t, w in library.for_user(sid)}
@@ -44,7 +44,7 @@ def data(viewer: str) -> dict:
 
     out_people = []
     for slot, person in enumerate(shown, start=1):
-        sid = person["spotify_id"]
+        sid = person["user_id"]
         summary = summaries[sid]
         genres = [(g, round(summary.genres.get(g, 0.0), 4)) for g in coloured if summary.genres.get(g)]
         other = round(max(0.0, 1 - sum(v for _, v in genres)), 4) if summary.genres else 0.0
@@ -59,13 +59,13 @@ def data(viewer: str) -> dict:
     pairs, common = [], []
     for i, a in enumerate(shown):
         for b in shown[i + 1:]:
-            pairs.append({"a": a["spotify_id"], "b": b["spotify_id"],
-                          "match": features.match(summaries[a["spotify_id"]], summaries[b["spotify_id"]])})
-            both = library.common(a["spotify_id"], b["spotify_id"], COMMON_SHOWN)
-            common.append({"a": a["spotify_id"], "b": b["spotify_id"], "artists": [name for name, _ in both.artists],
+            pairs.append({"a": a["user_id"], "b": b["user_id"],
+                          "match": features.match(summaries[a["user_id"]], summaries[b["user_id"]])})
+            both = library.common(a["user_id"], b["user_id"], COMMON_SHOWN)
+            common.append({"a": a["user_id"], "b": b["user_id"], "artists": [name for name, _ in both.artists],
                            "tracks": [{"name": t.name, "artists": list(t.artists), "url": t.url} for t, _ in both.tracks]})
     for person in shown[1:]:
-        sharing.log(person["spotify_id"], viewer, "view")
+        sharing.log(person["user_id"], viewer, "view")
     return {
         "dimensions": [{"key": d, "low": features.LABELS[d][0], "high": features.LABELS[d][1],
                         "min": 1940 if d == "era" else 1, "max": 2020 if d == "era" else 10} for d in features.DIMENSIONS],

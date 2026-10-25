@@ -164,14 +164,14 @@ def profile_for(user) -> Profile:
     (ReauthRequired) is passed up so the caller can send the user back to /login.
     """
     if user["taste_summary"] and not _stale(user["taste_updated_at"]):
-        return Profile(user["taste_summary"], library.pool(user["spotify_id"], POOL_SIZE))
+        return Profile(user["taste_summary"], library.pool(user["user_id"], POOL_SIZE))
     onboarding = json.loads(user["onboarding_json"] or "{}")
     listening = read_listening(user)
     profile = Profile(build_summary(onboarding, listening), known_pool(listening))
     if listening.complete:
-        library.replace(user["spotify_id"], library_sources(listening))
+        library.replace(user["user_id"], library_sources(listening))
         features.judge_soon()  # new library tracks get their taste dimensions in the background (Phase 22)
-        users.set_taste_summary(user["spotify_id"], profile.summary, datetime.now(timezone.utc).strftime(TIMESTAMP))
+        users.set_taste_summary(user["user_id"], profile.summary, datetime.now(timezone.utc).strftime(TIMESTAMP))
     return profile
 
 
@@ -195,7 +195,7 @@ def read_listening(user) -> Listening:
         except ReauthRequired:
             raise
         except SpotifyError as exc:
-            log.warning("%s unavailable for %s: %s", name, user["spotify_id"], exc)
+            log.warning("%s unavailable for %s: %s", name, user["user_id"], exc)
             listening.complete = False
             return empty
 

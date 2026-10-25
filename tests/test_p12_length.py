@@ -238,11 +238,11 @@ def test_live_45_minute_commute_is_40_to_50_minutes():
         user = conn.execute("SELECT * FROM users WHERE onboarding_json IS NOT NULL ORDER BY created_at LIMIT 1").fetchone()
     if user is None or auth.missing_scopes(user["granted_scopes"]):
         pytest.skip("needs an onboarded user who logged in after Phase 10")
-    job_id = jobs.create(user["spotify_id"], "45 minute commute, chill")
-    run(job_id, user["spotify_id"], "45 minute commute, chill")
-    job = jobs.get(job_id, user["spotify_id"])
+    job_id = jobs.create(user["user_id"], "45 minute commute, chill")
+    run(job_id, user["user_id"], "45 minute commute, chill")
+    job = jobs.get(job_id, user["user_id"])
     assert job["status"] == "done", job["error"]
     built = [e for e in jobs.events(job_id) if e["kind"] == "built"][0]
-    print(f"\n{built}\n{playlists.get(job['playlist_id'], user['spotify_id'])['spotify_url']}")
+    print(f"\n{built}\n{playlists.get(job['playlist_id'], user['user_id'])['url']}")
     total = sum(t.duration_ms for t in playlists.tracks(job["playlist_id"])) / 60_000
     assert 40.5 <= total <= 49.5

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {# Every outcome that isn't a normal page: a picture (sun up or low), a heading, a sentence, a way on #}
-{% from "_spotify.html" import open_spotify, sun with context %}
+{% from "_spotify.html" import open_app, sun with context %}
 {% block title %}Moodify · {{ title }}{% endblock %}
 {% block content %}
 <div class="mf-stack-5" style="max-width: 520px; margin: 40px auto 0">
@@ -11,8 +11,8 @@
     <p class="mf-lead">{{ text }}</p>
   </div>
   <div class="mf-stack-3">
-    {% if spotify_url %}{{ open_spotify(spotify_url) }}{% endif %}
-    <a class="mf-btn {{ 'mf-btn--quiet' if spotify_url or tone == 'low' and not code else 'mf-btn--primary' }} mf-btn--block" href="{{ back[1] }}">{{ back[0] }}</a>
+    {% if playlist_url %}{{ open_app(playlist_url) }}{% endif %}
+    <a class="mf-btn {{ 'mf-btn--quiet' if playlist_url or tone == 'low' and not code else 'mf-btn--primary' }} mf-btn--block" href="{{ back[1] }}">{{ back[0] }}</a>
   </div>
 </div>
 {% endblock %}

@@ -152,17 +152,24 @@ async def _http_error(request: Request, exc: StarletteHTTPException):
     """Unknown addresses get a page, not JSON. Other HTTP errors keep FastAPI's answer."""
     if exc.status_code != 404:
         return await http_exception_handler(request, exc)
-    spotify_id = request.session.get("spotify_id") if "session" in request.scope else None
-    user = users.get(spotify_id) if spotify_id else None
+    user_id = _session_user_id(request) if "session" in request.scope else None
+    user = users.get(user_id) if user_id else None
     return _message(request, "Nothing here",
                     "There's no page at this address. It may have moved, or the link has a typo.",
                     status_code=404, code="404 · Not found", user=user)
 
 
+def _session_user_id(request: Request) -> Optional[str]:
+    """The user id the session cookie holds. Cookies from before Phase 25 call it spotify_id: same value."""
+    if "spotify_id" in request.session:
+        request.session["user_id"] = request.session.pop("spotify_id")
+    return request.session.get("user_id")
+
+
 def any_user(request: Request) -> sqlite3.Row:
-    """The logged-in user, whatever Spotify access they granted. Only /disconnect settles for this."""
-    spotify_id = request.session.get("spotify_id")
-    user = users.get(spotify_id) if spotify_id else None
+    """The logged-in user, whatever access they granted their service. Only /disconnect settles for this."""
+    user_id = _session_user_id(request)
+    user = users.get(user_id) if user_id else None
     if user is None:
         # No cookie, or the row is gone (disconnected): drop whatever the cookie held
         request.session.clear()
@@ -216,7 +223,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
                             status_code=403, code="Can't log in")
         return _message(request, "Login failed", "Spotify login failed. Please try again.", status_code=502)
     users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token, tokens.scope)
-    request.session["spotify_id"] = profile["id"]
+    request.session["user_id"] = profile["id"]
     return RedirectResponse("/", status_code=303)
 
 
@@ -240,11 +247,11 @@ def home(request: Request, user: sqlite3.Row = Depends(onboarded_user), redo: Op
          again: Optional[int] = None):
     # "Adjust and redo" on a playlist page comes back here with that playlist's prompt in the box,
     # and "Back" after a failed build with what was written for it
-    remade = playlists.get(redo, user["spotify_id"]) if redo else None
-    failed = jobs.get(again, user["spotify_id"]) if again and not remade else None
+    remade = playlists.get(redo, user["user_id"]) if redo else None
+    failed = jobs.get(again, user["user_id"]) if again and not remade else None
     prompt = remade["prompt"] if remade else failed["prompt"] if failed else ""
     return templates.TemplateResponse(request, "index.html", {
-        "user": user, "summary": taste.summary_for(user), "recent": playlists.recent(user["spotify_id"]),
+        "user": user, "summary": taste.summary_for(user), "recent": playlists.recent(user["user_id"]),
         "prompt": prompt, "remaking": _title(remade) if remade else "",
     })
 
@@ -273,16 +280,16 @@ BUILD_FAILURES = {
 @app.post("/playlist")
 def make_playlist(user: sqlite3.Row = Depends(onboarded_user), mood: str = Form(..., min_length=1, max_length=2000)):
     # One build at a time per user: a second submit lands on the build already running
-    job = jobs.running_for(user["spotify_id"])
-    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    job = jobs.running_for(user["user_id"])
+    job_id = job["id"] if job else jobs.create(user["user_id"], mood)
     if job is None:
-        jobs.start(playlist.run, job_id, user["spotify_id"], mood)
+        jobs.start(playlist.run, job_id, user["user_id"], mood)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
 @app.get("/jobs/{job_id}")
 def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_user)):
-    job = jobs.get(job_id, user["spotify_id"])
+    job = jobs.get(job_id, user["user_id"])
     if job is None:
         return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user, code="404 · Not found")
     if job["status"] == "done":
@@ -304,34 +311,34 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
 
 @app.get("/playlists/{playlist_id}")
 def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user), ready: int = 0):
-    row = playlists.get(playlist_id, user["spotify_id"])
+    row = playlists.get(playlist_id, user["user_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
                         code="404 · Not found")
-    found = links.parse(row["spotify_url"])
+    found = links.parse(row["url"])
     auto_open = (links.auto_open_link(*found, request.headers.get("user-agent"))
-                 if ready and found and user["open_spotify"] else None)
+                 if ready and found and user["open_app"] else None)
     brief = Brief.model_validate_json(row["brief_json"]) if row["brief_json"] else None
     tracks = playlists.tracks(playlist_id)
     total_ms = sum(t.duration_ms for t in tracks)
     groups = _section_groups(brief, tracks, playlists.track_sections(playlist_id))
     return templates.TemplateResponse(request, "playlist.html", {
         "user": user, "playlist": row, "tracks": tracks, "brief": brief,
-        "liked": likes.liked_uris(user["spotify_id"], [t.uri for t in tracks]),
+        "liked": likes.liked_uris(user["user_id"], [t.uri for t in tracks]),
         "notice": request.session.pop("notice", None),
         "rules": rule_list(brief.hard_rules) if brief else [],
         "total_minutes": round(total_ms / 60_000),
         "section_minutes": playlists.section_minutes(playlist_id),
         "groups": groups,
         "chart": pages.energy_chart(groups, _clock(total_ms), total_ms),
-        "lessons": memory.from_playlist(user["spotify_id"], playlist_id) if row["review"] else [],
+        "lessons": memory.from_playlist(user["user_id"], playlist_id) if row["review"] else [],
         "verdict": VERDICTS.get(row["review_verdict"]),
-        "parent": playlists.get(row["parent_id"], user["spotify_id"]) if row["parent_id"] else None,
+        "parent": playlists.get(row["parent_id"], user["user_id"]) if row["parent_id"] else None,
         "version": playlists.version(playlist_id) if row["parent_id"] else 1,
-        "fixes": playlists.fixes(playlist_id, user["spotify_id"]),
+        "fixes": playlists.fixes(playlist_id, user["user_id"]),
         "auto_open": auto_open, "phone": links.is_phone(request.headers.get("user-agent")),
-        "shows_taste": sharing.get(user["spotify_id"])["taste"],
-        "blend": blend.for_playlist(playlist_id, user["spotify_id"], tracks),
+        "shows_taste": sharing.get(user["user_id"])["taste"],
+        "blend": blend.for_playlist(playlist_id, user["user_id"], tracks),
         "heard_as": listen_as.heard_as(row),
     })
 
@@ -390,7 +397,7 @@ def _feedback_not_found(request: Request, user: sqlite3.Row):
 def like_track(request: Request, playlist_id: int, position: int, action: Literal["like", "unlike"],
                user: sqlite3.Row = Depends(current_user)):
     # position is the track's place in playlist_tracks (0-based); the owner check comes first
-    track = playlists.track_at(playlist_id, position) if playlists.get(playlist_id, user["spotify_id"]) else None
+    track = playlists.track_at(playlist_id, position) if playlists.get(playlist_id, user["user_id"]) else None
     if track is None:
         return _feedback_not_found(request, user)
     if action == "like":
@@ -404,7 +411,7 @@ def like_track(request: Request, playlist_id: int, position: int, action: Litera
 @app.post("/playlists/{playlist_id}/rating")
 def rate_playlist(request: Request, playlist_id: int, rating: int = Form(..., ge=1, le=10),
                   user: sqlite3.Row = Depends(current_user)):
-    if not playlists.set_rating(playlist_id, user["spotify_id"], rating):
+    if not playlists.set_rating(playlist_id, user["user_id"], rating):
         return _feedback_not_found(request, user)
     return _feedback_answer(request, f"/playlists/{playlist_id}#rating", rating=rating)
 
@@ -423,27 +430,27 @@ def review_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depe
                     review: str = Form("", max_length=reflect.MAX_REVIEW_CHARS)):
     # Saved at once; reflection (an LLM call or two) runs in the background, so this answers immediately
     text = prompts.clean_text(review, reflect.MAX_REVIEW_CHARS)
-    outcome = playlists.set_review(playlist_id, user["spotify_id"], text)
+    outcome = playlists.set_review(playlist_id, user["user_id"], text)
     if outcome is None:
         return _feedback_not_found(request, user)
     if outcome == playlists.SAVED:
-        jobs.start(reflect.run, playlist_id, user["spotify_id"], text)
+        jobs.start(reflect.run, playlist_id, user["user_id"], text)
     return _feedback_answer(request, f"/playlists/{playlist_id}#review", REVIEW_NOTICES[outcome], review=outcome)
 
 
 @app.post("/playlists/{playlist_id}/fix")
 def fix_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
     """A new version built from the same prompt with the review as a correction. The old one stays in Spotify."""
-    row = playlists.get(playlist_id, user["spotify_id"])
+    row = playlists.get(playlist_id, user["user_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
     if not row["review"]:
         return _message(request, "Write a review first", "Say what to change in the review box, save it, then fix it.",
                         status_code=400, user=user)
-    job = jobs.running_for(user["spotify_id"])
-    job_id = job["id"] if job else jobs.create(user["spotify_id"], row["prompt"])
+    job = jobs.running_for(user["user_id"])
+    job_id = job["id"] if job else jobs.create(user["user_id"], row["prompt"])
     if job is None:
-        jobs.start(playlist.run, job_id, user["spotify_id"], row["prompt"], playlist_id)
+        jobs.start(playlist.run, job_id, user["user_id"], row["prompt"], playlist_id)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
@@ -452,22 +459,22 @@ def fix_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends
 @app.post("/playlists/{playlist_id}/more")
 def more_like_this(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
     """A new playlist seeded with this one's brief, liked songs and review, with new songs."""
-    row = playlists.get(playlist_id, user["spotify_id"])
+    row = playlists.get(playlist_id, user["user_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
-    job = jobs.running_for(user["spotify_id"])
-    job_id = job["id"] if job else jobs.create(user["spotify_id"], row["prompt"])
+    job = jobs.running_for(user["user_id"])
+    job_id = job["id"] if job else jobs.create(user["user_id"], row["prompt"])
     if job is None:
-        jobs.start(playlist.run, job_id, user["spotify_id"], row["prompt"], None, playlist_id)
+        jobs.start(playlist.run, job_id, user["user_id"], row["prompt"], None, playlist_id)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
 @app.get("/memory")
 def memory_page(request: Request, user: sqlite3.Row = Depends(current_user)):
-    lessons = memory.active(user["spotify_id"])
-    sources = {r["id"]: r for r in playlists.recent(user["spotify_id"], limit=-1)}
+    lessons = memory.active(user["user_id"])
+    sources = {r["id"]: r for r in playlists.recent(user["user_id"], limit=-1)}
     return templates.TemplateResponse(request, "memory.html", {
-        "user": user, "block": memory.memory_block(user["spotify_id"]), "lessons": lessons, "sources": sources,
+        "user": user, "block": memory.memory_block(user["user_id"]), "lessons": lessons, "sources": sources,
         "tags": {r["id"]: memory.tags(r) for r in lessons}, "notice": request.session.pop("notice", None),
         "rows": list(sources.values()),
     })
@@ -475,7 +482,7 @@ def memory_page(request: Request, user: sqlite3.Row = Depends(current_user)):
 
 @app.post("/memory/lessons/{lesson_id}/delete")
 def delete_lesson(request: Request, lesson_id: int, user: sqlite3.Row = Depends(current_user)):
-    if not memory.delete_lesson(user["spotify_id"], lesson_id):
+    if not memory.delete_lesson(user["user_id"], lesson_id):
         return _message(request, "Not found", "That lesson isn't yours or is already gone.", status_code=404, user=user)
     request.session["notice"] = "Lesson deleted."
     return RedirectResponse("/memory#lessons", status_code=303)
@@ -483,7 +490,7 @@ def delete_lesson(request: Request, lesson_id: int, user: sqlite3.Row = Depends(
 
 @app.post("/playlists/{playlist_id}/forget")
 def forget_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user)):
-    if not playlists.forget(playlist_id, user["spotify_id"]):
+    if not playlists.forget(playlist_id, user["user_id"]):
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user)
     request.session["notice"] = "Moodify forgot that playlist. It's still in your Spotify."
     return RedirectResponse("/memory#playlists", status_code=303)
@@ -499,7 +506,7 @@ def _not_shared(request: Request, user: sqlite3.Row):
 @app.get("/sharing")
 def sharing_page(request: Request, user: sqlite3.Row = Depends(current_user)):
     return templates.TemplateResponse(request, "sharing.html", {
-        "user": user, "switches": sharing.get(user["spotify_id"]), "log": sharing.access_log(user["spotify_id"]),
+        "user": user, "switches": sharing.get(user["user_id"]), "log": sharing.access_log(user["user_id"]),
         "notice": request.session.pop("notice", None),
     })
 
@@ -507,7 +514,7 @@ def sharing_page(request: Request, user: sqlite3.Row = Depends(current_user)):
 @app.post("/sharing")
 def sharing_submit(request: Request, user: sqlite3.Row = Depends(current_user), show_taste: Optional[str] = Form(None),
                    allow_blends: Optional[str] = Form(None), allow_listen_as: Optional[str] = Form(None)):
-    sharing.save(user["spotify_id"], show_taste is not None, allow_blends is not None, allow_listen_as is not None)
+    sharing.save(user["user_id"], show_taste is not None, allow_blends is not None, allow_listen_as is not None)
     request.session["notice"] = "Saved. It applies from now on."
     return RedirectResponse("/sharing", status_code=303)
 
@@ -515,14 +522,14 @@ def sharing_submit(request: Request, user: sqlite3.Row = Depends(current_user), 
 @app.get("/friends")
 def friends_page(request: Request, user: sqlite3.Row = Depends(current_user)):
     return templates.TemplateResponse(request, "friends.html", {
-        "user": user, "friends": sharing.friends(user["spotify_id"]), "first_name": sharing.first_name,
-        "mine": sharing.get(user["spotify_id"]),
+        "user": user, "friends": sharing.friends(user["user_id"]), "first_name": sharing.first_name,
+        "mine": sharing.get(user["user_id"]),
     })
 
 
 @app.get("/friends/{friend_id}")
 def friend_page(request: Request, friend_id: str, user: sqlite3.Row = Depends(current_user)):
-    viewer = user["spotify_id"]
+    viewer = user["user_id"]
     if friend_id == viewer:
         return RedirectResponse("/sharing", status_code=303)
     shared = {kind: sharing.allowed(friend_id, viewer, kind) for kind in sharing.SWITCHES}
@@ -544,7 +551,7 @@ def friend_page(request: Request, friend_id: str, user: sqlite3.Row = Depends(cu
 @app.get("/blend")
 def blend_page(request: Request, user: sqlite3.Row = Depends(onboarded_user), with_: list[str] = Query([], alias="with")):
     return templates.TemplateResponse(request, "blend.html", {
-        "user": user, "friends": sharing.friends(user["spotify_id"], "blend"), "picked": set(with_),
+        "user": user, "friends": sharing.friends(user["user_id"], "blend"), "picked": set(with_),
         "max_friends": blend.MAX_FRIENDS,
     })
 
@@ -554,16 +561,16 @@ def make_blend(request: Request, user: sqlite3.Row = Depends(onboarded_user),
                mood: str = Form(..., min_length=1, max_length=2000), friends: list[str] = Form([]),
                lean: str = Form(""), public: Optional[str] = Form(None)):
     try:
-        blend.check(user["spotify_id"], friends)
+        blend.check(user["user_id"], friends)
     except blend.NotShared:
         if not 1 <= len(friends) <= blend.MAX_FRIENDS:
             return _message(request, "Pick 1 to 4 friends", "A Blend is you plus one to four friends who allow it.",
                             status_code=400, user=user)
         return _not_shared(request, user)
-    job = jobs.running_for(user["spotify_id"])
-    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    job = jobs.running_for(user["user_id"])
+    job_id = job["id"] if job else jobs.create(user["user_id"], mood)
     if job is None:
-        jobs.start(blend.run, job_id, user["spotify_id"], mood, friends, lean or None, public is not None)
+        jobs.start(blend.run, job_id, user["user_id"], mood, friends, lean or None, public is not None)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
@@ -572,12 +579,12 @@ def make_blend(request: Request, user: sqlite3.Row = Depends(onboarded_user),
 @app.post("/friends/{friend_id}/listen")
 def listen_like(request: Request, friend_id: str, user: sqlite3.Row = Depends(onboarded_user),
                 mood: str = Form(..., min_length=1, max_length=2000)):
-    if friend_id == user["spotify_id"] or not sharing.allowed(friend_id, user["spotify_id"], "listen_as"):
+    if friend_id == user["user_id"] or not sharing.allowed(friend_id, user["user_id"], "listen_as"):
         return _not_shared(request, user)
-    job = jobs.running_for(user["spotify_id"])
-    job_id = job["id"] if job else jobs.create(user["spotify_id"], mood)
+    job = jobs.running_for(user["user_id"])
+    job_id = job["id"] if job else jobs.create(user["user_id"], mood)
     if job is None:
-        jobs.start(listen_as.run, job_id, user["spotify_id"], mood, friend_id)
+        jobs.start(listen_as.run, job_id, user["user_id"], mood, friend_id)
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
@@ -586,13 +593,13 @@ def listen_like(request: Request, friend_id: str, user: sqlite3.Row = Depends(on
 @app.get("/map")
 def map_page(request: Request, user: sqlite3.Row = Depends(current_user)):
     return templates.TemplateResponse(request, "map.html", {
-        "user": user, "friend_count": len(sharing.friends(user["spotify_id"], "taste")),
+        "user": user, "friend_count": len(sharing.friends(user["user_id"], "taste")),
     })
 
 
 @app.get("/map.json")
 def map_data(user: sqlite3.Row = Depends(current_user)):
-    return JSONResponse(tastemap.data(user["spotify_id"]), headers={"Cache-Control": "no-store"})
+    return JSONResponse(tastemap.data(user["user_id"]), headers={"Cache-Control": "no-store"})
 
 
 # --- activity (Phase 24) -------------------------------------------------------------------------------------
@@ -600,20 +607,20 @@ def map_data(user: sqlite3.Row = Depends(current_user)):
 @app.get("/activity")
 def activity_page(request: Request, user: sqlite3.Row = Depends(current_user)):
     return templates.TemplateResponse(request, "activity.html", {
-        "user": user, "items": activity.feed(user["spotify_id"]),
-        "friend_count": len(sharing.friends(user["spotify_id"], "taste")),
+        "user": user, "items": activity.feed(user["user_id"]),
+        "friend_count": len(sharing.friends(user["user_id"], "taste")),
     })
 
 
 @app.get("/activity.json")
 def activity_data(user: sqlite3.Row = Depends(current_user)):
-    return JSONResponse(activity.timeline(user["spotify_id"]), headers={"Cache-Control": "no-store"})
+    return JSONResponse(activity.timeline(user["user_id"]), headers={"Cache-Control": "no-store"})
 
 
 @app.post("/playlists/{playlist_id}/hide")
 def hide_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(current_user),
                   hidden: int = Form(..., ge=0, le=1)):
-    if not sharing.set_hidden(playlist_id, user["spotify_id"], bool(hidden)):
+    if not sharing.set_hidden(playlist_id, user["user_id"], bool(hidden)):
         return _feedback_not_found(request, user)
     notice = "Hidden from friends." if hidden else "Friends who see your taste can see this playlist's title again."
     return _feedback_answer(request, f"/playlists/{playlist_id}#hide", notice, hidden=bool(hidden))
@@ -622,7 +629,7 @@ def hide_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depend
 @app.get("/history")
 def history(request: Request, user: sqlite3.Row = Depends(current_user), sort: Literal["new", "rating"] = "new"):
     return templates.TemplateResponse(request, "history.html", {
-        "user": user, "rows": playlists.recent(user["spotify_id"], limit=-1, order=sort), "sort": sort,
+        "user": user, "rows": playlists.recent(user["user_id"], limit=-1, order=sort), "sort": sort,
     })
 
 
@@ -635,17 +642,17 @@ def settings_page(request: Request, user: sqlite3.Row = Depends(current_user)):
 
 @app.post("/settings")
 def settings_submit(request: Request, user: sqlite3.Row = Depends(current_user),
-                    likes_to_spotify: Optional[str] = Form(None), open_spotify: Optional[str] = Form(None)) -> RedirectResponse:
+                    likes_to_service: Optional[str] = Form(None), open_app: Optional[str] = Form(None)) -> RedirectResponse:
     # An unticked checkbox sends nothing at all
-    users.set_likes_to_spotify(user["spotify_id"], likes_to_spotify is not None)
-    users.set_open_spotify(user["spotify_id"], open_spotify is not None)
+    users.set_likes_to_service(user["user_id"], likes_to_service is not None)
+    users.set_open_app(user["user_id"], open_app is not None)
     request.session["notice"] = "Saved."
     return RedirectResponse("/settings", status_code=303)
 
 
 @app.post("/queue/{playlist_id}")
 def queue_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depends(onboarded_user)):
-    row = playlists.get(playlist_id, user["spotify_id"])
+    row = playlists.get(playlist_id, user["user_id"])
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
                         code="404 · Not found")
@@ -658,11 +665,11 @@ def queue_playlist(request: Request, playlist_id: int, user: sqlite3.Row = Depen
             return _message(request, "Can't play it from here",
                             "Playing from Moodify needs Spotify Premium and Spotify open on one of your devices."
                             " You can still open the playlist in Spotify.",
-                            user=user, tone="low", spotify_url=row["spotify_url"],
+                            user=user, tone="low", playlist_url=row["url"],
                             back=("Back to the playlist", f"/playlists/{playlist_id}"))
         raise
     return _message(request, "Queued", "The tracks are in your queue. Open Spotify to listen.",
-                    user=user, spotify_url=row["spotify_url"], back=("Back to the playlist", f"/playlists/{playlist_id}"))
+                    user=user, playlist_url=row["url"], back=("Back to the playlist", f"/playlists/{playlist_id}"))
 
 
 ENERGY = ("low", "medium", "high", "mixed")
@@ -711,14 +718,14 @@ async def onboarding_submit(request: Request, user: sqlite3.Row = Depends(curren
             errors[key] = "Keep it under 200 characters."
     if errors:
         return _onboarding_page(request, user, answers, errors, status_code=422)
-    users.set_onboarding(user["spotify_id"], answers)
+    users.set_onboarding(user["user_id"], answers)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/disconnect")
 def disconnect(request: Request, user: sqlite3.Row = Depends(any_user)):
     # Spotify requires deleting a user's data within 5 days of disconnect; we do it now
-    users.delete(user["spotify_id"])
+    users.delete(user["user_id"])
     request.session.clear()
     return _message(request, "Disconnected",
                     "Moodify deleted everything it stored about you and logged you out. Playlists already in your"

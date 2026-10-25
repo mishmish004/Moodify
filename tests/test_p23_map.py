@@ -18,19 +18,19 @@ from .test_p6_playlist import logged_in, user  # noqa: F401
 SECRETS = ("my secret prompt", "my secret review", "SUPPORT ONLY SONG", "lesson about me", "refresh-")
 
 
-def _person(spotify_id, name, genre, energy, show=True, n=6):
-    users.upsert(spotify_id, name, f"refresh-{spotify_id}", auth.SCOPES)
-    tracks = [Track(f"spotify:track:{spotify_id}{i}", f"{genre} {i}", (f"{name} Artist",), 200_000) for i in range(n)]
+def _person(user_id, name, genre, energy, show=True, n=6):
+    users.upsert(user_id, name, f"refresh-{user_id}", auth.SCOPES)
+    tracks = [Track(f"spotify:track:{user_id}{i}", f"{genre} {i}", (f"{name} Artist",), 200_000) for i in range(n)]
     shared = Track("spotify:track:shared", "Shared Song", ("Frank Ocean",), 200_000)
-    library.replace(spotify_id, {"top": tracks[:2] + [shared], "liked": tracks[2:]})
+    library.replace(user_id, {"top": tracks[:2] + [shared], "liked": tracks[2:]})
     with get_conn() as conn:
         for i, t in enumerate(tracks + [shared]):
             conn.execute("INSERT OR IGNORE INTO track_features (uri, energy, mood, texture, groove, vocals, era, genres_json,"
                          " language, model) VALUES (?, ?, 5, 5, 5, 5, ?, ?, 'English', 'test')",
                          (t.uri, energy, 1990 + 10 * (i % 3), json.dumps([genre])))
     if show:
-        sharing.save(spotify_id, True, False, False)
-    return spotify_id
+        sharing.save(user_id, True, False, False)
+    return user_id
 
 
 def _secrets_for(owner):
@@ -41,7 +41,7 @@ def _secrets_for(owner):
     playlists.insert(owner, "hard day", "u", [Track("spotify:track:support", "SUPPORT ONLY SONG", ("A",), 1)],
                      json.dumps(default_brief("x", support_note=True)))
     with get_conn() as conn:
-        conn.execute("INSERT INTO lessons (spotify_id, title, description, content, kind, evidence) VALUES (?, 'lesson about me',"
+        conn.execute("INSERT INTO lessons (user_id, title, description, content, kind, evidence) VALUES (?, 'lesson about me',"
                      " 'd', 'c', 'preference', 'e')", (owner,))
 
 

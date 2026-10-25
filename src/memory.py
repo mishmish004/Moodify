@@ -7,7 +7,7 @@ rests on. Lessons scoped 'this_playlist' are only about their playlist and are u
 'lasting' ones reach later builds. New lasting lessons are merged into the user's memory with one
 LLM call that answers ADD, UPDATE(id), SUPERSEDE(id) or NOOP per lesson. Newer feedback wins, since
 preferences drift (Meta's PAHF); a superseded lesson stays, pointing at the one that replaced it.
-At most MAX_ACTIVE lasting lessons stay active per user. Every query filters by spotify_id.
+At most MAX_ACTIVE lasting lessons stay active per user. Every query filters by user_id.
 """
 import json
 import re
@@ -95,21 +95,21 @@ Answer: {"operations": [{"new": 1, "op": "SUPERSEDE", "target": 12, "title": "Sk
 
 # --- reading ------------------------------------------------------------------------------------------
 
-def active(spotify_id: str) -> list[sqlite3.Row]:
+def active(user_id: str) -> list[sqlite3.Row]:
     """Active lasting lessons, newest first."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM lessons WHERE spotify_id = ? AND status = 'active' AND scope = 'lasting' ORDER BY id DESC",
-            (spotify_id,),
+            "SELECT * FROM lessons WHERE user_id = ? AND status = 'active' AND scope = 'lasting' ORDER BY id DESC",
+            (user_id,),
         ).fetchall()
 
 
-def from_playlist(spotify_id: str, playlist_id: int) -> list[sqlite3.Row]:
+def from_playlist(user_id: str, playlist_id: int) -> list[sqlite3.Row]:
     """Active lessons that came from this playlist's review, either scope, in the order they were made."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM lessons WHERE spotify_id = ? AND source_playlist_id = ? AND status = 'active' ORDER BY id",
-            (spotify_id, playlist_id),
+            "SELECT * FROM lessons WHERE user_id = ? AND source_playlist_id = ? AND status = 'active' ORDER BY id",
+            (user_id, playlist_id),
         ).fetchall()
 
 
@@ -150,43 +150,43 @@ BLOCK_HEADER = "What Moodify knows from the listener's feedback:"
 RECALL_HEADER = "What Moodify learned from the listener's reviews that fits this request:"
 
 
-def memory_block(spotify_id: str) -> str:
+def memory_block(user_id: str) -> str:
     """The user-wide memory text, from the cache when nothing changed since it was rendered."""
     with get_conn() as conn:
-        row = conn.execute("SELECT memory_block FROM users WHERE spotify_id = ?", (spotify_id,)).fetchone()
+        row = conn.execute("SELECT memory_block FROM users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             return ""
         if row["memory_block"] is not None:
             return row["memory_block"]
-        text = _render_block(conn, spotify_id)
-        conn.execute("UPDATE users SET memory_block = ?, memory_version = memory_version + 1 WHERE spotify_id = ?",
-                     (text, spotify_id))
+        text = _render_block(conn, user_id)
+        conn.execute("UPDATE users SET memory_block = ?, memory_version = memory_version + 1 WHERE user_id = ?",
+                     (text, user_id))
         return text
 
 
-def invalidate(conn: sqlite3.Connection, spotify_id: str) -> None:
+def invalidate(conn: sqlite3.Connection, user_id: str) -> None:
     """Lessons, likes or ratings changed: the memory block is rendered again on the next build."""
-    conn.execute("UPDATE users SET memory_block = NULL WHERE spotify_id = ?", (spotify_id,))
+    conn.execute("UPDATE users SET memory_block = NULL WHERE user_id = ?", (user_id,))
 
 
-def _block_preferences(conn: sqlite3.Connection, spotify_id: str) -> list[sqlite3.Row]:
+def _block_preferences(conn: sqlite3.Connection, user_id: str) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT * FROM lessons WHERE spotify_id = ? AND status = 'active' AND scope = 'lasting' AND kind = 'preference'"
+        "SELECT * FROM lessons WHERE user_id = ? AND status = 'active' AND scope = 'lasting' AND kind = 'preference'"
         " ORDER BY id DESC LIMIT ?",
-        (spotify_id, BLOCK_PREFERENCES),
+        (user_id, BLOCK_PREFERENCES),
     ).fetchall()
 
 
-def _render_block(conn: sqlite3.Connection, spotify_id: str) -> str:
+def _render_block(conn: sqlite3.Connection, user_id: str) -> str:
     parts = []
-    preferences = render(_block_preferences(conn, spotify_id), limit=500)
+    preferences = render(_block_preferences(conn, user_id), limit=500)
     if preferences:
         parts.append(f"Preferences from their reviews:\n{preferences}")
     liked = conn.execute(
         "SELECT l.uri, min(t.name) AS name, min(t.artists_json) AS artists_json, max(l.liked_at) AS at"
         " FROM track_likes l JOIN playlist_tracks t ON t.uri = l.uri JOIN playlists p ON p.id = t.playlist_id"
-        " AND p.spotify_id = l.spotify_id WHERE l.spotify_id = ? GROUP BY l.uri ORDER BY at DESC, l.uri",
-        (spotify_id,),
+        " AND p.user_id = l.user_id WHERE l.user_id = ? GROUP BY l.uri ORDER BY at DESC, l.uri",
+        (user_id,),
     ).fetchall()
     if liked:
         counts: dict[str, int] = {}
@@ -198,8 +198,8 @@ def _render_block(conn: sqlite3.Connection, spotify_id: str) -> str:
         songs = [f"{r['name']} by {json.loads(r['artists_json'])[0]}" for r in liked[:LIKED_SONGS]]
         parts.append("Songs they liked: " + "; ".join(songs) + ".")
     rated = conn.execute(
-        "SELECT prompt, rating FROM playlists WHERE spotify_id = ? AND rating >= ? ORDER BY rated_at DESC, id DESC LIMIT ?",
-        (spotify_id, GOOD_RATING, RATED_PLAYLISTS),
+        "SELECT prompt, rating FROM playlists WHERE user_id = ? AND rating >= ? ORDER BY rated_at DESC, id DESC LIMIT ?",
+        (user_id, GOOD_RATING, RATED_PLAYLISTS),
     ).fetchall()
     if rated:
         parts.append("This worked for these moods (playlists they rated 8 or more): " + "; ".join(
@@ -258,16 +258,16 @@ def words(text: str) -> set[str]:
     return expand(out)
 
 
-def recall(spotify_id: str, wanted: set[str], limit: Optional[int] = None) -> list[sqlite3.Row]:
+def recall(user_id: str, wanted: set[str], limit: Optional[int] = None) -> list[sqlite3.Row]:
     """Active lasting lessons sharing a tag with `wanted`, not already in the memory block, most overlap first,
     then newest. At most `limit` (RECALL_LESSONS less the preferences the block holds)."""
     with get_conn() as conn:
-        in_block = {r["id"] for r in _block_preferences(conn, spotify_id)}
+        in_block = {r["id"] for r in _block_preferences(conn, user_id)}
     if limit is None:
         limit = RECALL_LESSONS - len(in_block)
     scored = []
     wanted = expand(wanted)
-    for row in active(spotify_id):
+    for row in active(user_id):
         overlap = len(wanted & expand(tags(row)))
         if overlap and row["id"] not in in_block:
             scored.append((overlap, row["id"], row))
@@ -284,10 +284,10 @@ class Parts:
     ids: tuple[int, ...]  # the recalled lessons, for mark_used()
 
 
-def prompt_parts(spotify_id: str, wanted: set[str]) -> Parts:
-    expire_unused(spotify_id)
-    block = memory_block(spotify_id)
-    rows = recall(spotify_id, wanted)
+def prompt_parts(user_id: str, wanted: set[str]) -> Parts:
+    expire_unused(user_id)
+    block = memory_block(user_id)
+    rows = recall(user_id, wanted)
     room = LESSONS_CHARS - len(block) - len(RECALL_HEADER) - 2
     text = render(rows, limit=room) if room > 0 else ""
     if not text:
@@ -295,13 +295,13 @@ def prompt_parts(spotify_id: str, wanted: set[str]) -> Parts:
     return Parts(block, f"{RECALL_HEADER}\n{text}", tuple(r["id"] for r in rows[: text.count("\n") + 1]))
 
 
-def memory_for(spotify_id: str, brief) -> str:
+def memory_for(user_id: str, brief) -> str:
     """Everything a build recalls for this brief, as one text (the memory page shows it this way)."""
-    parts = prompt_parts(spotify_id, brief_words(brief))
+    parts = prompt_parts(user_id, brief_words(brief))
     return "\n\n".join(p for p in (parts.block, parts.recalled) if p)
 
 
-def mark_used(spotify_id: str, ids) -> None:
+def mark_used(user_id: str, ids) -> None:
     """Lesson upkeep: recalled lessons get last_used_at and use_count, which keep them from expiring."""
     ids = list(dict.fromkeys(ids))
     if not ids:
@@ -309,8 +309,8 @@ def mark_used(spotify_id: str, ids) -> None:
     with get_conn() as conn:
         conn.execute(
             f"UPDATE lessons SET last_used_at = CURRENT_TIMESTAMP, use_count = use_count + 1"
-            f" WHERE spotify_id = ? AND id IN ({','.join('?' * len(ids))})",
-            (spotify_id, *ids),
+            f" WHERE user_id = ? AND id IN ({','.join('?' * len(ids))})",
+            (user_id, *ids),
         )
 
 
@@ -320,31 +320,31 @@ def brief_words(brief) -> set[str]:
     return words(text) | expand(brief.tags)
 
 
-def expire_unused(spotify_id: Optional[str] = None) -> int:
+def expire_unused(user_id: Optional[str] = None) -> int:
     """pitfall and strategy lessons not recalled for EXPIRE_AFTER_DAYS become expired (Memory Bank-style TTL).
     Preferences never expire; they can only be superseded. For one user, or everyone at startup."""
     with get_conn() as conn:
         return conn.execute(
             "UPDATE lessons SET status = 'expired' WHERE status = 'active' AND kind IN ('pitfall', 'strategy')"
-            " AND coalesce(last_used_at, created_at) < datetime('now', ?)" + (" AND spotify_id = ?" if spotify_id else ""),
-            (f"-{EXPIRE_AFTER_DAYS} days", *((spotify_id,) if spotify_id else ())),
+            " AND coalesce(last_used_at, created_at) < datetime('now', ?)" + (" AND user_id = ?" if user_id else ""),
+            (f"-{EXPIRE_AFTER_DAYS} days", *((user_id,) if user_id else ())),
         ).rowcount
 
 
-def delete_lesson(spotify_id: str, lesson_id: int) -> bool:
+def delete_lesson(user_id: str, lesson_id: int) -> bool:
     with get_conn() as conn:
-        gone = conn.execute("DELETE FROM lessons WHERE id = ? AND spotify_id = ?", (lesson_id, spotify_id)).rowcount == 1
+        gone = conn.execute("DELETE FROM lessons WHERE id = ? AND user_id = ?", (lesson_id, user_id)).rowcount == 1
         if gone:
-            invalidate(conn, spotify_id)
+            invalidate(conn, user_id)
         return gone
 
 
 # --- consolidating ------------------------------------------------------------------------------------
 
-def candidates(spotify_id: str, drafts: list[Draft], source_playlist_id: Optional[int]) -> list[sqlite3.Row]:
+def candidates(user_id: str, drafts: list[Draft], source_playlist_id: Optional[int]) -> list[sqlite3.Row]:
     """The existing lessons consolidation looks at: active lasting ones that share a tag with a new lesson or
     came from the same playlist (an edited review). All of them when the new ones would pass MAX_ACTIVE."""
-    existing = active(spotify_id)
+    existing = active(user_id)
     if len(existing) + len(drafts) > MAX_ACTIVE:
         return existing
     wanted = expand({t for d in drafts for t in d.tags})
@@ -352,15 +352,15 @@ def candidates(spotify_id: str, drafts: list[Draft], source_playlist_id: Optiona
             if wanted & expand(tags(row)) or (source_playlist_id is not None and row["source_playlist_id"] == source_playlist_id)]
 
 
-def consolidate(spotify_id: str, drafts: list[Draft], source_playlist_id: Optional[int],
+def consolidate(user_id: str, drafts: list[Draft], source_playlist_id: Optional[int],
                 trace: Trace = NO_TRACE) -> Consolidation:
     """How the new lasting lessons join memory. One LLM call when there's anything to merge with,
     none otherwise (all ADD). A failed call also falls back to ADD, so a grounded lesson is never lost."""
-    existing = candidates(spotify_id, drafts, source_playlist_id)
+    existing = candidates(user_id, drafts, source_playlist_id)
     adds = Consolidation(operations=[_as_op(i, d, "ADD") for i, d in enumerate(drafts, start=1)], merges=[])
     if not drafts or not existing:
         return adds
-    count = len(active(spotify_id))
+    count = len(active(user_id))
     new_lines = "\n".join(
         f"{i}. [{d.kind}] {d.title}: {d.content} Tags: {', '.join(d.tags)}. Evidence: \"{d.evidence}\""
         for i, d in enumerate(drafts, start=1))
@@ -372,10 +372,10 @@ def consolidate(spotify_id: str, drafts: list[Draft], source_playlist_id: Option
                        f"SUPERSEDE keeps one more active. Use merges so the total ends at {MAX_ACTIVE} or fewer.")
     parsed = prompts.ask(
         "consolidate", get_settings().OPENAI_MODEL, prompts.layout(SYSTEM_PROMPT, "", "\n\n".join(request)),
-        Consolidation, trace, cache_key=f"moodify:consolidate:{spotify_id}",
+        Consolidation, trace, cache_key=f"moodify:consolidate:{user_id}",
     )
     if parsed is None:
-        log.warning("consolidation failed for %s; adding %d lesson(s) as they are", spotify_id, len(drafts))
+        log.warning("consolidation failed for %s; adding %d lesson(s) as they are", user_id, len(drafts))
         return adds
     # Every new lesson gets exactly one operation: the model's first for it, else ADD
     chosen: dict[int, Operation] = {}
@@ -391,38 +391,38 @@ def _as_op(number: int, draft: Draft, op: str) -> Operation:
                      content=draft.content, tags=draft.tags)
 
 
-def store(conn: sqlite3.Connection, spotify_id: str, source_playlist_id: Optional[int], drafts: list[Draft],
+def store(conn: sqlite3.Connection, user_id: str, source_playlist_id: Optional[int], drafts: list[Draft],
           plan: Consolidation) -> list[int]:
     """Write the lessons of one review in the caller's transaction. this_playlist drafts are stored as they
     are; lasting ones follow `plan` (from consolidate()). Returns the ids of lessons added or changed.
     An operation naming a lesson that isn't this user's and active is treated as ADD."""
     def owned(lesson_id: Optional[int]) -> bool:
         return lesson_id is not None and conn.execute(
-            "SELECT 1 FROM lessons WHERE id = ? AND spotify_id = ? AND status = 'active' AND scope = 'lasting'",
-            (lesson_id, spotify_id),
+            "SELECT 1 FROM lessons WHERE id = ? AND user_id = ? AND status = 'active' AND scope = 'lasting'",
+            (lesson_id, user_id),
         ).fetchone() is not None
 
     touched = []
     lasting = [d for d in drafts if d.scope == "lasting"]
     for draft in drafts:
         if draft.scope == "this_playlist":
-            touched.append(_insert(conn, spotify_id, source_playlist_id, draft, draft))
+            touched.append(_insert(conn, user_id, source_playlist_id, draft, draft))
     for draft, op in zip(lasting, plan.operations):
         kind = op.op if op.op == "ADD" or owned(op.target) else "ADD"
         if kind == "ADD":
-            touched.append(_insert(conn, spotify_id, source_playlist_id, draft, op))
+            touched.append(_insert(conn, user_id, source_playlist_id, draft, op))
         elif kind == "UPDATE":
             conn.execute(
                 "UPDATE lessons SET title = ?, description = ?, content = ?, tags_json = ?, about = ?,"
-                " evidence = substr(? || ' / ' || evidence, 1, ?), source_playlist_id = ? WHERE id = ? AND spotify_id = ?",
+                " evidence = substr(? || ' / ' || evidence, 1, ?), source_playlist_id = ? WHERE id = ? AND user_id = ?",
                 (op.title, op.description, op.content, json.dumps(_tidy_tags(op.tags)), draft.about, draft.evidence,
-                 EVIDENCE_CHARS, source_playlist_id, op.target, spotify_id),
+                 EVIDENCE_CHARS, source_playlist_id, op.target, user_id),
             )
             touched.append(op.target)
         elif kind == "SUPERSEDE":
-            new_id = _insert(conn, spotify_id, source_playlist_id, draft, op)
-            conn.execute("UPDATE lessons SET status = 'superseded', superseded_by = ? WHERE id = ? AND spotify_id = ?",
-                         (new_id, op.target, spotify_id))
+            new_id = _insert(conn, user_id, source_playlist_id, draft, op)
+            conn.execute("UPDATE lessons SET status = 'superseded', superseded_by = ? WHERE id = ? AND user_id = ?",
+                         (new_id, op.target, user_id))
             touched.append(new_id)
         # NOOP: memory already says this
     for merge in plan.merges:
@@ -430,27 +430,27 @@ def store(conn: sqlite3.Connection, spotify_id: str, source_playlist_id: Optiona
         if len(ids) < 2:
             continue
         merged = conn.execute(
-            "INSERT INTO lessons (spotify_id, source_playlist_id, title, description, content, kind, scope, tags_json,"
+            "INSERT INTO lessons (user_id, source_playlist_id, title, description, content, kind, scope, tags_json,"
             " evidence) VALUES (?, NULL, ?, ?, ?, ?, 'lasting', ?, ?)",
-            (spotify_id, merge.title, merge.description, merge.content, merge.kind, json.dumps(_tidy_tags(merge.tags)),
+            (user_id, merge.title, merge.description, merge.content, merge.kind, json.dumps(_tidy_tags(merge.tags)),
              _merged_evidence(conn, ids)),
         ).lastrowid
         conn.execute(
-            f"UPDATE lessons SET status = 'superseded', superseded_by = ? WHERE spotify_id = ? AND id IN ({','.join('?' * len(ids))})",
-            (merged, spotify_id, *ids),
+            f"UPDATE lessons SET status = 'superseded', superseded_by = ? WHERE user_id = ? AND id IN ({','.join('?' * len(ids))})",
+            (merged, user_id, *ids),
         )
         touched.append(merged)
-    _enforce_cap(conn, spotify_id, keep=set(touched))
-    invalidate(conn, spotify_id)
+    _enforce_cap(conn, user_id, keep=set(touched))
+    invalidate(conn, user_id)
     return touched
 
 
-def _insert(conn: sqlite3.Connection, spotify_id: str, source_playlist_id: Optional[int], draft: Draft, text) -> int:
+def _insert(conn: sqlite3.Connection, user_id: str, source_playlist_id: Optional[int], draft: Draft, text) -> int:
     """`text` (a Draft or an Operation) supplies title, description, content and tags; `draft` the rest."""
     return conn.execute(
-        "INSERT INTO lessons (spotify_id, source_playlist_id, title, description, content, kind, scope, tags_json, about,"
+        "INSERT INTO lessons (user_id, source_playlist_id, title, description, content, kind, scope, tags_json, about,"
         " evidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (spotify_id, source_playlist_id, text.title, text.description, text.content, draft.kind, draft.scope,
+        (user_id, source_playlist_id, text.title, text.description, text.content, draft.kind, draft.scope,
          json.dumps(_tidy_tags(text.tags)), draft.about, draft.evidence[:EVIDENCE_CHARS]),
     ).lastrowid
 
@@ -464,17 +464,17 @@ def _tidy_tags(raw: list[str]) -> list[str]:
     return list(dict.fromkeys(t.strip().lower() for t in raw if t.strip()))[:6]
 
 
-def _enforce_cap(conn: sqlite3.Connection, spotify_id: str, keep: set[int]) -> None:
+def _enforce_cap(conn: sqlite3.Connection, user_id: str, keep: set[int]) -> None:
     """The last resort when the model didn't merge enough: the least recently used lessons past MAX_ACTIVE
     expire, never the ones this review just added or changed."""
     rows = conn.execute(
-        "SELECT id FROM lessons WHERE spotify_id = ? AND status = 'active' AND scope = 'lasting'"
+        "SELECT id FROM lessons WHERE user_id = ? AND status = 'active' AND scope = 'lasting'"
         " ORDER BY coalesce(last_used_at, created_at) DESC, use_count DESC, id DESC",
-        (spotify_id,),
+        (user_id,),
     ).fetchall()
     extra = len(rows) - MAX_ACTIVE
     if extra <= 0:
         return
     for row in [r for r in reversed(rows) if r["id"] not in keep][:extra]:
         conn.execute("UPDATE lessons SET status = 'expired' WHERE id = ?", (row["id"],))
-    log.info("%s: %d lesson(s) expired to stay at %d active", spotify_id, extra, MAX_ACTIVE)
+    log.info("%s: %d lesson(s) expired to stay at %d active", user_id, extra, MAX_ACTIVE)

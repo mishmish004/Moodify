@@ -22,7 +22,7 @@ def _brief(*tags, **changes) -> Brief:
     return Brief.model_validate(default_brief("Test", tags=list(tags), **changes))
 
 
-def _lessons_fixture(spotify_id="friend1"):
+def _lessons_fixture(user_id="friend1"):
     drafts = [
         Draft(**_lesson(title="Workout energy 8+", tags=("workout", "energy"), content="Keep workouts at 8 or more.")),
         Draft(**_lesson(title="No warm-up songs at the gym", tags=("workout", "gym"), content="Start at full energy.")),
@@ -31,7 +31,7 @@ def _lessons_fixture(spotify_id="friend1"):
         Draft(**_lesson(title="Skip long intros", tags=("intros",), kind="preference", content="No long intros.")),
         Draft(**_lesson(title="Less Drake", tags=("artists",), kind="preference", content="At most one Drake song.")),
     ]
-    return _store(spotify_id, drafts)
+    return _store(user_id, drafts)
 
 
 def _playlist(owner="friend1", uris=None, prompt="rainy day", rating=None) -> int:
@@ -55,7 +55,7 @@ def test_recall_gets_matching_lessons_and_preferences_not_others(user):
     for i in range(200):  # a long history must not grow the memory past its limits
         _playlist(uris=[f"spotify:track:h{i}"], prompt=f"playlist number {i} " + "words " * 30, rating=8 + i % 3)
     with get_conn() as conn:
-        conn.executemany("INSERT INTO track_likes (spotify_id, uri) VALUES ('friend1', ?)", [(f"spotify:track:h{i}",) for i in range(200)])
+        conn.executemany("INSERT INTO track_likes (user_id, uri) VALUES ('friend1', ?)", [(f"spotify:track:h{i}",) for i in range(200)])
     text = memory.memory_for("friend1", _brief("workout"))
     assert "Workout energy 8+" in text and "No warm-up songs at the gym" in text
     assert "Skip long intros" in text and "Less Drake" in text
@@ -118,7 +118,7 @@ def test_memory_block_lists_preferences_likes_and_good_ratings(user):
     good = _playlist(uris=["spotify:track:a", "spotify:track:b"], prompt="sunday cooking with friends", rating=9)
     _playlist(uris=["spotify:track:c"], prompt="bad one", rating=3)
     with get_conn() as conn:
-        conn.executemany("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', ?, ?)",
+        conn.executemany("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', ?, ?)",
                          [("spotify:track:a", good), ("spotify:track:b", good)])
     block = memory.memory_block("friend1")
     assert "Preferences from their reviews:\n- Less Drake: At most one Drake song.\n- Skip long intros" in block
@@ -184,7 +184,7 @@ def test_songs_from_the_last_3_playlists_come_back_only_if_liked_and_at_most_2(l
     briefs.answer = default_brief("Run", total_minutes=21)  # six 3.5-minute songs
     earlier = _playlist(uris=[f"spotify:track:t{i}" for i in range(6)])
     with get_conn() as conn:
-        conn.executemany("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', ?, ?)",
+        conn.executemany("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', ?, ?)",
                          [(f"spotify:track:t{i}", earlier) for i in (0, 1, 2)])
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(14)))  # the model ignores the rule
     sp = FakeSpotify(respx_mock, {f"Song {i}": f"t{i}" for i in range(14)})
@@ -245,7 +245,7 @@ def test_more_like_this_seeds_a_new_playlist(logged_in, respx_mock, briefs):
     briefs.answer = default_brief("Cooking", total_minutes=7)
     seed = _playlist(uris=["spotify:track:t0", "spotify:track:t1", "spotify:track:t2"], prompt="sunday cooking")
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:t1', ?)", (seed,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:t1', ?)", (seed,))
     playlists.set_review(seed, "friend1", "loved the jazzy bits")
     for _ in range(3):  # the seed is no longer among the last 3, but its songs still don't repeat unless liked
         _playlist(uris=[f"spotify:track:x{_}"])
@@ -306,8 +306,8 @@ def test_forgetting_a_playlist_removes_its_likes_rating_review_and_lessons(logge
     playlists.set_review(pid, "friend1", "first")
     playlists.set_review(pid, "friend1", "second")
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:a', ?)", (pid,))
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:c', ?)", (keep,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:a', ?)", (pid,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:c', ?)", (keep,))
     _store("friend1", [Draft(**_lesson())], source=pid)
     resp = logged_in.post(f"/playlists/{pid}/forget")
     assert resp.status_code == 303
@@ -327,25 +327,25 @@ def test_disconnect_leaves_no_row_about_the_user_in_any_table(logged_in, respx_m
     playlists.set_review(pid, "friend1", "second")
     _lessons_fixture()
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-x', ?)", (pid,))
-        job = conn.execute("INSERT INTO jobs (spotify_id, prompt) VALUES ('friend1', 'p')").lastrowid
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-x', ?)", (pid,))
+        job = conn.execute("INSERT INTO jobs (user_id, prompt) VALUES ('friend1', 'p')").lastrowid
         conn.execute("INSERT INTO job_events (job_id, kind) VALUES (?, 'step')", (job,))
-        conn.execute("INSERT INTO search_cache (spotify_id, query, tracks_json) VALUES ('friend1', 'q', '[]')")
+        conn.execute("INSERT INTO search_cache (user_id, query, tracks_json) VALUES ('friend1', 'q', '[]')")
     memory.memory_block("friend1")
     logged_in.post("/disconnect")
     assert_no_rows_for("friend1")
     assert len(memory.active("friend2")) == 6
 
 
-def assert_no_rows_for(spotify_id: str):
+def assert_no_rows_for(user_id: str):
     """Every table: no row holds the user's id in any column, and no row hangs off one of their rows."""
     with get_conn() as conn:
         tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
         for table in tables:
             columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
             for column in columns:
-                count = conn.execute(f"SELECT count(*) FROM {table} WHERE CAST({column} AS TEXT) = ?", (spotify_id,)).fetchone()[0]
-                assert count == 0, f"{table}.{column} still mentions {spotify_id}"
+                count = conn.execute(f"SELECT count(*) FROM {table} WHERE CAST({column} AS TEXT) = ?", (user_id,)).fetchone()[0]
+                assert count == 0, f"{table}.{column} still mentions {user_id}"
         orphans = {
             "playlist_tracks": "playlist_id NOT IN (SELECT id FROM playlists)",
             "review_history": "playlist_id NOT IN (SELECT id FROM playlists)",
@@ -395,11 +395,11 @@ def test_live_second_build_within_the_hour_hits_the_prompt_cache():
             events.append({"kind": kind, **detail})
 
     def build(mood):
-        parts = memory.prompt_parts(user["spotify_id"], memory.words(mood))
-        brief = read_prompt(mood, profile.summary, Recorder(), spotify_id=user["spotify_id"], memory=parts.block,
+        parts = memory.prompt_parts(user["user_id"], memory.words(mood))
+        brief = read_prompt(mood, profile.summary, Recorder(), user_id=user["user_id"], memory=parts.block,
                             recalled=parts.recalled)
         suggest_songs(mood, profile.summary, n=12, trace=Recorder(), known=profile.pool, brief=brief,
-                      spotify_id=user["spotify_id"], memory=parts.block)
+                      user_id=user["user_id"], memory=parts.block)
 
     build("rainy afternoon, reading")
     first = len(events)

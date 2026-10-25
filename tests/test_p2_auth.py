@@ -38,12 +38,12 @@ def _start_login(client) -> dict:
     return _query(resp.headers["location"])
 
 
-def _mock_spotify(respx_mock, spotify_id="friend1", display_name="Friend One", me_status=200):
+def _mock_spotify(respx_mock, user_id="friend1", display_name="Friend One", me_status=200):
     token = respx_mock.post(auth.TOKEN_URL).respond(
         200, json={"access_token": "access-1", "refresh_token": "refresh-1", "expires_in": 3600, "token_type": "Bearer",
                    "scope": auth.SCOPES}
     )
-    me = respx_mock.get(auth.ME_URL).respond(me_status, json={"id": spotify_id, "display_name": display_name})
+    me = respx_mock.get(auth.ME_URL).respond(me_status, json={"id": user_id, "display_name": display_name})
     return token, me
 
 
@@ -170,7 +170,7 @@ def test_repeat_login_updates_token_and_keeps_onboarding(client, respx_mock):
     ])
     client.get("/callback", params={"code": "code-1", "state": _start_login(client)["state"]})
     with get_conn() as conn:
-        conn.execute("UPDATE users SET onboarding_json = '{\"energy\": \"low\"}' WHERE spotify_id = 'friend1'")
+        conn.execute("UPDATE users SET onboarding_json = '{\"energy\": \"low\"}' WHERE user_id = 'friend1'")
 
     client.get("/callback", params={"code": "code-2", "state": _start_login(client)["state"]})
 
@@ -243,7 +243,7 @@ def test_disconnect_deletes_user_and_playlists_and_logs_out(client, respx_mock):
     _log_in(client, respx_mock)
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES (?, ?, ?, ?)",
+            "INSERT INTO playlists (user_id, prompt, url, track_uris_json) VALUES (?, ?, ?, ?)",
             ("friend1", "rainy sunday", "https://open.spotify.com/playlist/p1", "[]"),
         )
 

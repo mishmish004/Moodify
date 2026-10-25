@@ -91,11 +91,11 @@ def grounded(evidence: str, review: str) -> bool:
 
 # --- reflecting -----------------------------------------------------------------------------------------
 
-def situation(playlist, spotify_id: str) -> str:
+def situation(playlist, user_id: str) -> str:
     """Everything reflection gets besides the review: request, brief, tracks by section, likes, rating, build log."""
     brief = Brief.model_validate_json(playlist["brief_json"]) if playlist["brief_json"] else None
     rows = playlists.track_rows(playlist["id"])
-    liked = likes.liked_uris(spotify_id, [r["uri"] for r in rows])
+    liked = likes.liked_uris(user_id, [r["uri"] for r in rows])
     parts = [f"Request: {playlist['prompt']}"]
     if brief is not None:
         parts.append(f"How Moodify read it:\n{describe(brief)}")
@@ -118,16 +118,16 @@ def situation(playlist, spotify_id: str) -> str:
             elapsed += row["duration_ms"]
         parts.append("Tracks, in order:\n" + "\n".join(lines))
     parts.append(f"Rating: {playlist['rating']}/10." if playlist["rating"] else "Not rated.")
-    if built := build_log(playlist["id"], spotify_id):
+    if built := build_log(playlist["id"], user_id):
         parts.append(f"What happened while building: {built}")
     return "\n\n".join(parts)
 
 
-def build_log(playlist_id: int, spotify_id: str) -> str:
+def build_log(playlist_id: int, user_id: str) -> str:
     """The build's job_events in a sentence: what was asked vs what came out."""
     with get_conn() as conn:
-        job = conn.execute("SELECT id FROM jobs WHERE playlist_id = ? AND spotify_id = ? ORDER BY id DESC LIMIT 1",
-                           (playlist_id, spotify_id)).fetchone()
+        job = conn.execute("SELECT id FROM jobs WHERE playlist_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+                           (playlist_id, user_id)).fetchone()
     if job is None:
         return ""
     events = jobs.events(job["id"])
@@ -150,12 +150,12 @@ def _clock(ms: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
-def reflect(review: str, context: str, spotify_id: str = "", trace: Trace = NO_TRACE) -> Optional[Reflection]:
+def reflect(review: str, context: str, user_id: str = "", trace: Trace = NO_TRACE) -> Optional[Reflection]:
     """The verdict and grounded lessons for one review, or None if the call failed."""
     review = prompts.clean_text(review, MAX_REVIEW_CHARS)
     parsed = prompts.ask(
         "reflect", get_settings().OPENAI_MODEL, prompts.layout(SYSTEM_PROMPT, "", f"{context}\n\nReview: {review}"),
-        Reflection, trace, cache_key=f"moodify:reflect:{spotify_id}" if spotify_id else "",
+        Reflection, trace, cache_key=f"moodify:reflect:{user_id}" if user_id else "",
     )
     if parsed is None:
         return None
@@ -171,29 +171,29 @@ def reflect(review: str, context: str, spotify_id: str = "", trace: Trace = NO_T
     return parsed.model_copy(update={"lessons": kept[:MAX_LESSONS]})
 
 
-def run(playlist_id: int, spotify_id: str, review: str) -> None:
+def run(playlist_id: int, user_id: str, review: str) -> None:
     """Background entry, queued when a review is saved. Never raises. If the review changed while this ran,
     the result is thrown away: the reflection queued for the newer text wins."""
     try:
-        playlist = playlists.get(playlist_id, spotify_id)
+        playlist = playlists.get(playlist_id, user_id)
         if playlist is None or playlist["review"] != review:
             return
-        result = reflect(review, situation(playlist, spotify_id), spotify_id)
+        result = reflect(review, situation(playlist, user_id), user_id)
         if result is None:
             return
         lasting = [d for d in result.lessons if d.scope == "lasting"]
-        plan = memory.consolidate(spotify_id, lasting, playlist_id)
+        plan = memory.consolidate(user_id, lasting, playlist_id)
         with get_conn() as conn:
-            current = conn.execute("SELECT review FROM playlists WHERE id = ? AND spotify_id = ?",
-                                   (playlist_id, spotify_id)).fetchone()
+            current = conn.execute("SELECT review FROM playlists WHERE id = ? AND user_id = ?",
+                                   (playlist_id, user_id)).fetchone()
             if current is None or current["review"] != review:
                 return
             conn.execute("UPDATE playlists SET review_verdict = ? WHERE id = ?", (result.verdict, playlist_id))
             # An edited review replaces what was learned about this playlist alone
-            conn.execute("DELETE FROM lessons WHERE spotify_id = ? AND source_playlist_id = ? AND scope = 'this_playlist'",
-                         (spotify_id, playlist_id))
-            memory.store(conn, spotify_id, playlist_id, result.lessons, plan)
-        log.info("%s: review of playlist %d read as %s, %d lesson(s)", spotify_id, playlist_id, result.verdict,
+            conn.execute("DELETE FROM lessons WHERE user_id = ? AND source_playlist_id = ? AND scope = 'this_playlist'",
+                         (user_id, playlist_id))
+            memory.store(conn, user_id, playlist_id, result.lessons, plan)
+        log.info("%s: review of playlist %d read as %s, %d lesson(s)", user_id, playlist_id, result.verdict,
                  len(result.lessons))
     except Exception:
         log.exception("reflection on playlist %d failed", playlist_id)

@@ -68,7 +68,7 @@ def clean_mood(mood: str) -> str:
 
 def suggest_songs(
     mood: str, taste_summary: str, n: int = 30, exclude: list[Song] = (), trace: Trace = NO_TRACE,
-    known: list[Track] = (), familiar_percent: int = 30, brief: Optional[Brief] = None, spotify_id: str = "",
+    known: list[Track] = (), familiar_percent: int = 30, brief: Optional[Brief] = None, user_id: str = "",
     counts: Optional[list[int]] = None, memory: str = "", feedback: str = "", recalled: str = "",
     recent: list[str] = (), known_labels: tuple[str, ...] = (),
 ) -> list[Song]:
@@ -82,7 +82,7 @@ def suggest_songs(
                                         memory, feedback, recalled, recent, known_labels)
     parsed = prompts.ask(
         "suggest", get_settings().OPENAI_MODEL, prompts.layout(SYSTEM_PROMPT, per_user, per_request), Suggestions, trace,
-        cache_key=f"moodify:suggest:{spotify_id}" if spotify_id else "",
+        cache_key=f"moodify:suggest:{user_id}" if user_id else "",
         usable=lambda answer: bool(_clean(answer.songs)), label="suggestion",
     )
     return _clean(parsed.songs) if parsed else []

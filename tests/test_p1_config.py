@@ -77,17 +77,17 @@ def _schema(db_path):
         return [tuple(r) for r in conn.execute("SELECT type, name, sql FROM sqlite_master ORDER BY name")]
 
 
-def _add_user(conn, spotify_id="u1"):
+def _add_user(conn, user_id="u1"):
     conn.execute(
-        "INSERT INTO users (spotify_id, display_name, refresh_token) VALUES (?, ?, ?)",
-        (spotify_id, "Test User", "refresh-1"),
+        "INSERT INTO users (user_id, display_name, refresh_token) VALUES (?, ?, ?)",
+        (user_id, "Test User", "refresh-1"),
     )
 
 
-def _add_playlist(conn, spotify_id="u1"):
+def _add_playlist(conn, user_id="u1"):
     return conn.execute(
-        "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES (?, ?, ?, ?)",
-        (spotify_id, "rainy sunday", "https://open.spotify.com/playlist/p1", json.dumps(["spotify:track:a"])),
+        "INSERT INTO playlists (user_id, prompt, url, track_uris_json) VALUES (?, ?, ?, ?)",
+        (user_id, "rainy sunday", "https://open.spotify.com/playlist/p1", json.dumps(["spotify:track:a"])),
     ).lastrowid
 
 
@@ -112,12 +112,12 @@ def test_users_round_trip(db):
     onboarding = {"genres": ["shoegaze"], "energy": "low"}
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO users (spotify_id, display_name, refresh_token, onboarding_json, taste_summary,"
+            "INSERT INTO users (user_id, display_name, refresh_token, onboarding_json, taste_summary,"
             " taste_updated_at) VALUES (?, ?, ?, ?, ?, ?)",
             ("u1", "Test User", "refresh-1", json.dumps(onboarding), "likes slow guitars", "2026-10-23 10:00:00"),
         )
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE spotify_id = ?", ("u1",)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE user_id = ?", ("u1",)).fetchone()
     assert row["display_name"] == "Test User"
     assert row["refresh_token"] == "refresh-1"
     assert json.loads(row["onboarding_json"]) == onboarding
@@ -132,9 +132,9 @@ def test_playlists_round_trip(db):
         playlist_id = _add_playlist(conn)
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
-    assert row["spotify_id"] == "u1"
+    assert row["user_id"] == "u1"
     assert row["prompt"] == "rainy sunday"
-    assert row["spotify_url"] == "https://open.spotify.com/playlist/p1"
+    assert row["url"] == "https://open.spotify.com/playlist/p1"
     assert json.loads(row["track_uris_json"]) == ["spotify:track:a"]
     assert row["created_at"]
 
@@ -142,7 +142,7 @@ def test_playlists_round_trip(db):
 def test_playlist_needs_an_existing_user(db):
     with pytest.raises(sqlite3.IntegrityError):
         with get_conn() as conn:
-            _add_playlist(conn, spotify_id="nobody")
+            _add_playlist(conn, user_id="nobody")
 
 
 def test_deleting_user_cascades_to_playlists(db):
@@ -153,9 +153,9 @@ def test_deleting_user_cascades_to_playlists(db):
         _add_playlist(conn, "u1")
         _add_playlist(conn, "u2")
     with get_conn() as conn:
-        conn.execute("DELETE FROM users WHERE spotify_id = ?", ("u1",))
+        conn.execute("DELETE FROM users WHERE user_id = ?", ("u1",))
     with get_conn() as conn:
-        owners = [r["spotify_id"] for r in conn.execute("SELECT spotify_id FROM playlists")]
+        owners = [r["user_id"] for r in conn.execute("SELECT user_id FROM playlists")]
     assert owners == ["u2"]
 
 

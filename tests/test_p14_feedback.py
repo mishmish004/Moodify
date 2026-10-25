@@ -48,7 +48,7 @@ class Library:
 
 def _like_rows():
     with get_conn() as conn:
-        return [dict(r) for r in conn.execute("SELECT spotify_id, uri, playlist_id, added_to_spotify FROM track_likes")]
+        return [dict(r) for r in conn.execute("SELECT user_id, uri, playlist_id, added_to_service FROM track_likes")]
 
 
 def _rating(playlist_id):
@@ -66,7 +66,7 @@ def test_like_saves_to_liked_songs(logged_in, respx_mock):
     library = Library(respx_mock)
     resp = logged_in.post(f"/playlists/{pid}/tracks/1/like")
     assert resp.status_code == 303 and resp.headers["location"] == f"/playlists/{pid}#t1"
-    assert _like_rows() == [{"spotify_id": "friend1", "uri": "spotify:track:friend1-1", "playlist_id": pid, "added_to_spotify": 1}]
+    assert _like_rows() == [{"user_id": "friend1", "uri": "spotify:track:friend1-1", "playlist_id": pid, "added_to_service": 1}]
     assert library.put.calls.last.request.url.params["uris"] == "spotify:track:friend1-1"
     assert library.saved == {"spotify:track:friend1-1"}
 
@@ -87,7 +87,7 @@ def test_liking_twice_stores_one_like_and_calls_spotify_once(logged_in, respx_mo
 def test_setting_off_keeps_likes_in_moodify(logged_in, respx_mock):
     pid = _playlist()
     assert logged_in.post("/settings", data={}).status_code == 303  # an unticked checkbox sends nothing
-    assert users.get("friend1")["likes_to_spotify"] == 0
+    assert users.get("friend1")["likes_to_service"] == 0
     library = Library(respx_mock, saved={"spotify:track:friend1-0"})
     logged_in.post(f"/playlists/{pid}/tracks/0/like")
     logged_in.post(f"/playlists/{pid}/tracks/1/like")
@@ -104,7 +104,7 @@ def test_unlike_removes_from_liked_songs_only_what_moodify_added(logged_in, resp
     logged_in.post(f"/playlists/{pid}/tracks/0/like")
     logged_in.post(f"/playlists/{pid}/tracks/1/like")
     assert library.put.call_count == 1  # only song 1 needed saving
-    assert {r["uri"]: r["added_to_spotify"] for r in _like_rows()} == {"spotify:track:friend1-0": 0, "spotify:track:friend1-1": 1}
+    assert {r["uri"]: r["added_to_service"] for r in _like_rows()} == {"spotify:track:friend1-0": 0, "spotify:track:friend1-1": 1}
 
     logged_in.post(f"/playlists/{pid}/tracks/0/unlike")
     assert library.delete.call_count == 0                     # not Moodify's to remove
@@ -135,7 +135,7 @@ def test_spotify_refusing_keeps_the_like_and_says_so(logged_in, respx_mock, stat
     Library(respx_mock, status=status)
     resp = logged_in.post(f"/playlists/{pid}/tracks/0/like")
     assert resp.status_code == 303
-    assert _like_rows()[0]["added_to_spotify"] == 0
+    assert _like_rows()[0]["added_to_service"] == 0
     page = logged_in.get(resp.headers["location"].split("#")[0]).text
     assert "Liked in Moodify, but your Spotify Liked Songs couldn&#39;t be updated." in page
     assert "couldn&#39;t be updated" not in logged_in.get(f"/playlists/{pid}").text  # shown once
@@ -215,13 +215,13 @@ def test_another_users_playlist_is_404_and_stores_nothing(logged_in, respx_mock,
     users.upsert("friend2", "Friend Two", "refresh-2", auth.SCOPES)
     theirs = _playlist(owner="friend2")
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend2', 'spotify:track:friend2-0', ?)",
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend2', 'spotify:track:friend2-0', ?)",
                      (theirs,))
     library = Library(respx_mock)
     resp = logged_in.post(f"/playlists/{theirs}{path}", data=data)
     assert resp.status_code == 404
     assert _rating(theirs) is None and library.calls() == 0
-    assert _like_rows() == [{"spotify_id": "friend2", "uri": "spotify:track:friend2-0", "playlist_id": theirs, "added_to_spotify": 0}]
+    assert _like_rows() == [{"user_id": "friend2", "uri": "spotify:track:friend2-0", "playlist_id": theirs, "added_to_service": 0}]
 
 
 @pytest.mark.parametrize("path", ["/playlists/999/tracks/0/like", "/playlists/{pid}/tracks/3/like", "/playlists/{pid}/tracks/-1/like",
@@ -283,13 +283,13 @@ def test_history_shows_ratings_and_likes_and_sorts_by_rating(logged_in, respx_mo
 
 def test_settings_page(logged_in, respx_mock):
     page = logged_in.get("/settings").text
-    assert 'name="likes_to_spotify" value="on" checked' in page
+    assert 'name="likes_to_service" value="on" checked' in page
     resp = logged_in.post("/settings", data={})
     assert resp.headers["location"] == "/settings"
     page = logged_in.get("/settings").text
     assert 'value="on" >' in page and "checked" not in page and '<p id="toast" class="mf-toast" role="status">Saved.</p>' in page
-    logged_in.post("/settings", data={"likes_to_spotify": "on"})
-    assert users.get("friend1")["likes_to_spotify"] == 1
+    logged_in.post("/settings", data={"likes_to_service": "on"})
+    assert users.get("friend1")["likes_to_service"] == 1
     FakeSpotify(respx_mock, {})  # the home page shows the taste summary, built from Spotify
     assert 'href="/settings"' in logged_in.get("/").text
 
@@ -320,19 +320,19 @@ def test_disconnect_deletes_likes_and_ratings(logged_in, respx_mock):
 def test_deleting_a_playlist_deletes_the_likes_made_there(user):
     pid = _playlist()
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-0', ?)", (pid,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-0', ?)", (pid,))
         conn.execute("DELETE FROM playlists WHERE id = ?", (pid,))
         assert conn.execute("SELECT count(*) FROM track_likes").fetchone()[0] == 0
 
 
-def test_existing_users_get_likes_to_spotify_on_after_migrating(test_settings):
+def test_existing_users_get_likes_to_service_on_after_migrating(test_settings):
     conn = sqlite3.connect(test_settings.DB_PATH)
     conn.executescript(V0_SCHEMA)
     conn.execute("INSERT INTO users (spotify_id, refresh_token) VALUES ('old', 'r')")
     conn.commit()
     conn.close()
     init_db()
-    assert users.get("old")["likes_to_spotify"] == 1
+    assert users.get("old")["likes_to_service"] == 1
 
 
 def test_library_calls_send_comma_separated_uris(user, respx_mock):
@@ -356,9 +356,9 @@ def test_live_like_reaches_liked_songs_and_unlike_takes_it_back():
             pytest.skip("needs an onboarded user who logged in after Phase 10")
         rows = conn.execute(
             "SELECT t.playlist_id, t.uri, t.name FROM playlist_tracks t JOIN playlists p ON p.id = t.playlist_id"
-            " WHERE p.spotify_id = ? AND t.uri NOT IN (SELECT uri FROM track_likes WHERE spotify_id = ?)"
+            " WHERE p.user_id = ? AND t.uri NOT IN (SELECT uri FROM track_likes WHERE user_id = ?)"
             " ORDER BY p.id DESC, t.position LIMIT 40",
-            (user["spotify_id"], user["spotify_id"]),
+            (user["user_id"], user["user_id"]),
         ).fetchall()
     if not rows:
         pytest.skip("needs a playlist made after Phase 9")
@@ -367,12 +367,12 @@ def test_live_like_reaches_liked_songs_and_unlike_takes_it_back():
     pick = next((r for r, s in zip(rows, saved) if not s), None)
     if pick is None:
         pytest.skip("every song of the newest playlist is already in Liked Songs")
-    user = users.get(user["spotify_id"])  # the refresh above may have rotated the token
+    user = users.get(user["user_id"])  # the refresh above may have rotated the token
     print(f"liking {pick['name']} ({pick['uri']})")
 
     assert likes.like(user, pick["uri"], pick["playlist_id"]) == likes.SAVED
-    with SpotifyClient.for_user(users.get(user["spotify_id"])) as sp:
+    with SpotifyClient.for_user(users.get(user["user_id"])) as sp:
         assert sp.library_contains([pick["uri"]]) == [True]
-    assert likes.unlike(users.get(user["spotify_id"]), pick["uri"]) == likes.REMOVED
-    with SpotifyClient.for_user(users.get(user["spotify_id"])) as sp:
+    assert likes.unlike(users.get(user["user_id"]), pick["uri"]) == likes.REMOVED
+    with SpotifyClient.for_user(users.get(user["user_id"])) as sp:
         assert sp.library_contains([pick["uri"]]) == [False]

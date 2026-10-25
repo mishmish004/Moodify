@@ -81,7 +81,7 @@ def test_login_stores_granted_scopes(logged_in):
 
 def test_user_without_the_new_scopes_is_asked_to_log_in_again(logged_in):
     with get_conn() as conn:  # as if they logged in before Phase 10
-        conn.execute("UPDATE users SET granted_scopes = ? WHERE spotify_id = 'friend1'",
+        conn.execute("UPDATE users SET granted_scopes = ? WHERE user_id = 'friend1'",
                      ("user-top-read user-read-private playlist-modify-public playlist-modify-private user-modify-playback-state",))
     resp = logged_in.get("/")
     assert resp.status_code == 303 and resp.headers["location"] == "/login?reason=scopes"
@@ -93,7 +93,7 @@ def test_user_without_the_new_scopes_is_asked_to_log_in_again(logged_in):
 
 def test_disconnect_works_without_the_new_scopes(logged_in):
     with get_conn() as conn:
-        conn.execute("UPDATE users SET granted_scopes = NULL WHERE spotify_id = 'friend1'")
+        conn.execute("UPDATE users SET granted_scopes = NULL WHERE user_id = 'friend1'")
     assert logged_in.post("/disconnect").status_code == 200
     assert users.get("friend1") is None
 
@@ -321,10 +321,10 @@ def test_live_playlist_has_about_a_third_known_songs():
     """Phase 10 gate. Creates a real playlist."""
     user = _live_user()
     from src.playlist import run
-    job_id = jobs.create(user["spotify_id"], "chill evening, winding down after a long day")
-    run(job_id, user["spotify_id"], "chill evening, winding down after a long day")
-    job = jobs.get(job_id, user["spotify_id"])
+    job_id = jobs.create(user["user_id"], "chill evening, winding down after a long day")
+    run(job_id, user["user_id"], "chill evening, winding down after a long day")
+    job = jobs.get(job_id, user["user_id"])
     assert job["status"] == "done", job["error"]
     built = [e for e in jobs.events(job_id) if e["kind"] == "built"][0]
-    print(f"\n{built}\n{playlists.get(job['playlist_id'], user['spotify_id'])['spotify_url']}")
+    print(f"\n{built}\n{playlists.get(job['playlist_id'], user['user_id'])['url']}")
     assert 0.15 <= built["known"] / built["tracks"] <= 0.5

@@ -38,7 +38,7 @@ def _track(row) -> Track:
     return Track(row["uri"], row["name"], tuple(json.loads(row["artists_json"])), row["duration_ms"], bool(row["explicit"]))
 
 
-def replace(spotify_id: str, sources: dict[str, Iterable[Track]]) -> dict[str, int]:
+def replace(user_id: str, sources: dict[str, Iterable[Track]]) -> dict[str, int]:
     """Replace the user's library with these tracks by source (keys of WEIGHTS, each in its own order), plus
     their Moodify playlists. Keeps the MAX_ROWS heaviest rows. Returns how many rows each source kept."""
     rows, seen = [], set()
@@ -46,9 +46,9 @@ def replace(spotify_id: str, sources: dict[str, Iterable[Track]]) -> dict[str, i
         # Friends see the library (Phases 20-23): hidden and support-note playlists stay out of it
         moodify = [_track(r) for r in conn.execute(
             "SELECT t.uri, t.name, t.artists_json, t.duration_ms, 0 AS explicit FROM playlist_tracks t"
-            " JOIN playlists p ON p.id = t.playlist_id WHERE p.spotify_id = ? AND p.hidden = 0"
+            " JOIN playlists p ON p.id = t.playlist_id WHERE p.user_id = ? AND p.hidden = 0"
             " AND coalesce(json_extract(p.brief_json, '$.support_note'), 0) = 0 ORDER BY p.id DESC, t.position",
-            (spotify_id,))]
+            (user_id,))]
         everything = {**{s: list(tracks) for s, tracks in sources.items()}, "moodify": moodify}
         for source in SOURCES:
             for position, track in enumerate(everything.get(source, [])):
@@ -68,10 +68,10 @@ def replace(spotify_id: str, sources: dict[str, Iterable[Track]]) -> dict[str, i
                              " ON CONFLICT (uri) DO UPDATE SET name = excluded.name, artists_json = excluded.artists_json,"
                              " duration_ms = excluded.duration_ms, explicit = excluded.explicit, last_seen = CURRENT_TIMESTAMP",
                              (track.uri, track.name, json.dumps(list(track.artists)), track.duration_ms, int(track.explicit)))
-        conn.execute("DELETE FROM library WHERE spotify_id = ?", (spotify_id,))
+        conn.execute("DELETE FROM library WHERE user_id = ?", (user_id,))
         conn.executemany(
-            "INSERT INTO library (spotify_id, uri, source, weight, position) VALUES (?, ?, ?, ?, ?)",
-            [(spotify_id, track.uri, source, WEIGHTS[source], position) for source, position, track in rows],
+            "INSERT INTO library (user_id, uri, source, weight, position) VALUES (?, ?, ?, ?, ?)",
+            [(user_id, track.uri, source, WEIGHTS[source], position) for source, position, track in rows],
         )
         _delete_orphans(conn)
     counts = {source: 0 for source in SOURCES}
@@ -98,35 +98,35 @@ def prune() -> int:
     return gone
 
 
-def counts(spotify_id: str) -> dict[str, int]:
+def counts(user_id: str) -> dict[str, int]:
     with get_conn() as conn:
-        rows = conn.execute("SELECT source, count(*) FROM library WHERE spotify_id = ? GROUP BY source", (spotify_id,))
+        rows = conn.execute("SELECT source, count(*) FROM library WHERE user_id = ? GROUP BY source", (user_id,))
         found = dict(rows.fetchall())
     return {source: found.get(source, 0) for source in SOURCES}
 
 
-def for_user(spotify_id: str) -> list[tuple[Track, int]]:
+def for_user(user_id: str) -> list[tuple[Track, int]]:
     """Every track the user has, with the weights of all its sources added up, heaviest first."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT t.*, sum(l.weight) AS weight FROM library l JOIN tracks t ON t.uri = l.uri WHERE l.spotify_id = ?"
+            "SELECT t.*, sum(l.weight) AS weight FROM library l JOIN tracks t ON t.uri = l.uri WHERE l.user_id = ?"
             " GROUP BY l.uri ORDER BY weight DESC, min(l.position), l.uri",
-            (spotify_id,),
+            (user_id,),
         ).fetchall()
     return [(_track(r), r["weight"]) for r in rows]
 
 
-def _artist_weights(spotify_id: str) -> dict[str, int]:
+def _artist_weights(user_id: str) -> dict[str, int]:
     weights: dict[str, int] = {}
-    for track, weight in for_user(spotify_id):
+    for track, weight in for_user(user_id):
         for artist in track.artists[:1]:  # the main artist; features would count everyone twice
             weights[artist] = weights.get(artist, 0) + weight
     return weights
 
 
-def top_artists(spotify_id: str, n: int = 10) -> list[tuple[str, int]]:
+def top_artists(user_id: str, n: int = 10) -> list[tuple[str, int]]:
     """Main artists by summed track weight."""
-    return sorted(_artist_weights(spotify_id).items(), key=lambda item: (-item[1], item[0].casefold()))[:n]
+    return sorted(_artist_weights(user_id).items(), key=lambda item: (-item[1], item[0].casefold()))[:n]
 
 
 def common(a: str, b: str, n: int = 20) -> Common:
@@ -140,15 +140,15 @@ def common(a: str, b: str, n: int = 20) -> Common:
     return Common(tracks[:n], artists[:n])
 
 
-def pool(spotify_id: str, size: int = POOL_SIZE) -> list[Track]:
+def pool(user_id: str, size: int = POOL_SIZE) -> list[Track]:
     """The known-songs pool (Phase 10) from the library: top, recent, liked, then own-playlist tracks, each in
     Spotify's order, every song once at its first place. The same list Phase 10 built from the same reads."""
     ranks = " ".join(f"WHEN '{s}' THEN {i}" for i, s in enumerate(POOL_SOURCES))
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT t.*, min((CASE l.source {ranks} END) * 100000 + l.position) AS place FROM library l"
-            f" JOIN tracks t ON t.uri = l.uri WHERE l.spotify_id = ? AND l.source IN ({','.join('?' * len(POOL_SOURCES))})"
+            f" JOIN tracks t ON t.uri = l.uri WHERE l.user_id = ? AND l.source IN ({','.join('?' * len(POOL_SOURCES))})"
             " GROUP BY l.uri ORDER BY place LIMIT ?",
-            (spotify_id, *POOL_SOURCES, size),
+            (user_id, *POOL_SOURCES, size),
         ).fetchall()
     return [_track(r) for r in rows]

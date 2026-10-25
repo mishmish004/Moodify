@@ -10,7 +10,7 @@
   {% if friends %}
   <ul class="mf-list">
     {% for f in friends %}
-    <li class="mf-prow"><a class="mf-link-row" href="/friends/{{ f.spotify_id }}"><span class="mf-link-row__title">{{ f.display_name or f.spotify_id }}</span><span class="mf-link-row__meta">Shares: {% set parts = [] %}{% if f.show_taste %}{% set parts = parts + ["their taste"] %}{% endif %}{% if f.allow_blends %}{% set parts = parts + ["Blends"] %}{% endif %}{% if f.allow_listen_as %}{% set parts = parts + ["hear it like " ~ first_name(f)] %}{% endif %}{{ parts | join(", ") }}</span></a></li>
+    <li class="mf-prow"><a class="mf-link-row" href="/friends/{{ f.user_id }}"><span class="mf-link-row__title">{{ f.display_name or f.user_id }}</span><span class="mf-link-row__meta">Shares: {% set parts = [] %}{% if f.show_taste %}{% set parts = parts + ["their taste"] %}{% endif %}{% if f.allow_blends %}{% set parts = parts + ["Blends"] %}{% endif %}{% if f.allow_listen_as %}{% set parts = parts + ["hear it like " ~ first_name(f)] %}{% endif %}{{ parts | join(", ") }}</span></a></li>
     {% endfor %}
   </ul>
   {% else %}

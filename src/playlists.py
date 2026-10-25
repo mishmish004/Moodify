@@ -9,7 +9,7 @@ from src.spotify.client import Track
 
 
 def insert(
-    spotify_id: str, prompt: str, spotify_url: str, tracks: list[Track], brief_json: Optional[str] = None,
+    user_id: str, prompt: str, url: str, tracks: list[Track], brief_json: Optional[str] = None,
     sections: Optional[list[int]] = None, energies: Optional[list[Optional[int]]] = None,
     roles: Optional[list[Optional[str]]] = None, parent_id: Optional[int] = None,
 ) -> int:
@@ -20,9 +20,9 @@ def insert(
     roles = roles or [None] * len(tracks)
     with get_conn() as conn:
         playlist_id = conn.execute(
-            "INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json, brief_json, parent_id)"
+            "INSERT INTO playlists (user_id, prompt, url, track_uris_json, brief_json, parent_id)"
             " VALUES (?, ?, ?, ?, ?, ?)",
-            (spotify_id, prompt, spotify_url, json.dumps([t.uri for t in tracks]), brief_json, parent_id),
+            (user_id, prompt, url, json.dumps([t.uri for t in tracks]), brief_json, parent_id),
         ).lastrowid
         conn.executemany(
             "INSERT INTO playlist_tracks (playlist_id, position, uri, name, artists_json, duration_ms, section, energy, role)"
@@ -33,11 +33,11 @@ def insert(
         return playlist_id
 
 
-def get(playlist_id: int, spotify_id: str) -> Optional[sqlite3.Row]:
+def get(playlist_id: int, user_id: str) -> Optional[sqlite3.Row]:
     """Only the owner's playlists: the id alone is not enough."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM playlists WHERE id = ? AND spotify_id = ?", (playlist_id, spotify_id)
+            "SELECT * FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, user_id)
         ).fetchone()
 
 
@@ -83,15 +83,15 @@ def track_at(playlist_id: int, position: int) -> Optional[sqlite3.Row]:
         ).fetchone()
 
 
-def set_rating(playlist_id: int, spotify_id: str, rating: int) -> bool:
+def set_rating(playlist_id: int, user_id: str, rating: int) -> bool:
     """1-10, replacing any earlier rating. False if the playlist isn't this user's."""
     with get_conn() as conn:
         changed = conn.execute(
-            "UPDATE playlists SET rating = ?, rated_at = CURRENT_TIMESTAMP WHERE id = ? AND spotify_id = ?",
-            (rating, playlist_id, spotify_id),
+            "UPDATE playlists SET rating = ?, rated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+            (rating, playlist_id, user_id),
         ).rowcount == 1
         if changed:
-            invalidate(conn, spotify_id)
+            invalidate(conn, user_id)
         return changed
 
 
@@ -99,12 +99,12 @@ def set_rating(playlist_id: int, spotify_id: str, rating: int) -> bool:
 SAVED, CLEARED, UNCHANGED = "saved", "cleared", "unchanged"
 
 
-def set_review(playlist_id: int, spotify_id: str, text: str) -> Optional[str]:
+def set_review(playlist_id: int, user_id: str, text: str) -> Optional[str]:
     """Save the listener's review (already cleaned and capped), keeping the one it replaces in review_history.
     Empty text clears the review and withdraws the lessons learned from it. None if the playlist isn't theirs."""
     with get_conn() as conn:
-        row = conn.execute("SELECT review, reviewed_at FROM playlists WHERE id = ? AND spotify_id = ?",
-                           (playlist_id, spotify_id)).fetchone()
+        row = conn.execute("SELECT review, reviewed_at FROM playlists WHERE id = ? AND user_id = ?",
+                           (playlist_id, user_id)).fetchone()
         if row is None:
             return None
         if (row["review"] or "") == text:
@@ -117,8 +117,8 @@ def set_review(playlist_id: int, spotify_id: str, text: str) -> Optional[str]:
                          (text, playlist_id))
             return SAVED
         conn.execute("UPDATE playlists SET review = NULL, reviewed_at = NULL, review_verdict = NULL WHERE id = ?", (playlist_id,))
-        conn.execute("DELETE FROM lessons WHERE spotify_id = ? AND source_playlist_id = ?", (spotify_id, playlist_id))
-        invalidate(conn, spotify_id)
+        conn.execute("DELETE FROM lessons WHERE user_id = ? AND source_playlist_id = ?", (user_id, playlist_id))
+        invalidate(conn, user_id)
         return CLEARED
 
 
@@ -140,30 +140,30 @@ def version(playlist_id: int) -> int:
         ).fetchone()[0] or 1
 
 
-def fixes(playlist_id: int, spotify_id: str) -> list[sqlite3.Row]:
+def fixes(playlist_id: int, user_id: str) -> list[sqlite3.Row]:
     """Playlists made by fixing this one, oldest first."""
     with get_conn() as conn:
-        return conn.execute("SELECT id, created_at FROM playlists WHERE parent_id = ? AND spotify_id = ? ORDER BY id",
-                            (playlist_id, spotify_id)).fetchall()
+        return conn.execute("SELECT id, created_at FROM playlists WHERE parent_id = ? AND user_id = ? ORDER BY id",
+                            (playlist_id, user_id)).fetchall()
 
 
-def forget(playlist_id: int, spotify_id: str) -> bool:
+def forget(playlist_id: int, user_id: str) -> bool:
     """Delete a playlist from Moodify's memory: its row, tracks, rating, review and, by cascade, the likes made
     there and the lessons learned from it. The playlist stays in Spotify. False if it isn't this user's."""
     with get_conn() as conn:
-        gone = conn.execute("DELETE FROM playlists WHERE id = ? AND spotify_id = ?", (playlist_id, spotify_id)).rowcount == 1
+        gone = conn.execute("DELETE FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, user_id)).rowcount == 1
         if gone:
-            invalidate(conn, spotify_id)
+            invalidate(conn, user_id)
         return gone
 
 
-def recent_tracks(spotify_id: str, last: int = 3, skip: Optional[int] = None) -> list[sqlite3.Row]:
+def recent_tracks(user_id: str, last: int = 3, skip: Optional[int] = None) -> list[sqlite3.Row]:
     """Every playlist_tracks row of the user's `last` newest playlists, leaving out playlist `skip`; newest first."""
     with get_conn() as conn:
         return conn.execute(
-            "SELECT t.* FROM playlist_tracks t WHERE t.playlist_id IN (SELECT id FROM playlists WHERE spotify_id = ?"
+            "SELECT t.* FROM playlist_tracks t WHERE t.playlist_id IN (SELECT id FROM playlists WHERE user_id = ?"
             " AND id IS NOT ? ORDER BY id DESC LIMIT ?) ORDER BY t.playlist_id DESC, t.position",
-            (spotify_id, skip, last),
+            (user_id, skip, last),
         ).fetchall()
 
 
@@ -173,16 +173,16 @@ ORDERS = {
 }
 
 
-def recent(spotify_id: str, limit: int = 5, order: str = "new") -> list[sqlite3.Row]:
+def recent(user_id: str, limit: int = 5, order: str = "new") -> list[sqlite3.Row]:
     """With track_count, like_count (its songs the user liked, wherever they liked them) and minutes
     (NULL for playlists from before track lists were kept). Newest first, or by `order` (a key of ORDERS).
     limit=-1 means all of them (SQLite's "no limit")."""
     with get_conn() as conn:
         return conn.execute(
             "SELECT *, json_array_length(track_uris_json) AS track_count, json_extract(brief_json, '$.title') AS title,"
-            " (SELECT count(*) FROM playlist_tracks t JOIN track_likes l ON l.spotify_id = playlists.spotify_id"
+            " (SELECT count(*) FROM playlist_tracks t JOIN track_likes l ON l.user_id = playlists.user_id"
             "  AND l.uri = t.uri WHERE t.playlist_id = playlists.id) AS like_count,"
             " (SELECT sum(duration_ms) / 60000.0 FROM playlist_tracks WHERE playlist_id = playlists.id) AS minutes"
-            f" FROM playlists WHERE spotify_id = ? ORDER BY {ORDERS[order]} LIMIT ?",
-            (spotify_id, limit),
+            f" FROM playlists WHERE user_id = ? ORDER BY {ORDERS[order]} LIMIT ?",
+            (user_id, limit),
         ).fetchall()

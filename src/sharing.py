@@ -22,20 +22,20 @@ LOG_KINDS = ("view", "blend", "listen_as")
 FRIEND_VISIBLE = "hidden = 0 AND coalesce(json_extract(brief_json, '$.support_note'), 0) = 0"
 
 
-def get(spotify_id: str) -> dict[str, bool]:
+def get(user_id: str) -> dict[str, bool]:
     """The user's switches by kind. A user without a row has all of them off."""
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM sharing WHERE spotify_id = ?", (spotify_id,)).fetchone()
+        row = conn.execute("SELECT * FROM sharing WHERE user_id = ?", (user_id,)).fetchone()
     return {kind: bool(row and row[column]) for kind, column in SWITCHES.items()}
 
 
-def save(spotify_id: str, taste: bool, blend: bool, listen_as: bool) -> None:
+def save(user_id: str, taste: bool, blend: bool, listen_as: bool) -> None:
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO sharing (spotify_id, show_taste, allow_blends, allow_listen_as) VALUES (?, ?, ?, ?)"
-            " ON CONFLICT (spotify_id) DO UPDATE SET show_taste = excluded.show_taste, allow_blends = excluded.allow_blends,"
+            "INSERT INTO sharing (user_id, show_taste, allow_blends, allow_listen_as) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (user_id) DO UPDATE SET show_taste = excluded.show_taste, allow_blends = excluded.allow_blends,"
             " allow_listen_as = excluded.allow_listen_as, updated_at = CURRENT_TIMESTAMP",
-            (spotify_id, int(taste), int(blend), int(listen_as)),
+            (user_id, int(taste), int(blend), int(listen_as)),
         )
 
 
@@ -48,8 +48,8 @@ def allowed(owner: str, viewer: str, kind: str) -> bool:
         return True
     with get_conn() as conn:
         row = conn.execute(
-            f"SELECT s.{SWITCHES[kind]} FROM sharing s JOIN users u ON u.spotify_id = s.spotify_id"
-            " WHERE s.spotify_id = ? AND EXISTS (SELECT 1 FROM users WHERE spotify_id = ?)",
+            f"SELECT s.{SWITCHES[kind]} FROM sharing s JOIN users u ON u.user_id = s.user_id"
+            " WHERE s.user_id = ? AND EXISTS (SELECT 1 FROM users WHERE user_id = ?)",
             (owner, viewer),
         ).fetchone()
     return bool(row and row[0])
@@ -63,9 +63,9 @@ def friends(viewer: str, kind: Optional[str] = None) -> list[sqlite3.Row]:
     wanted = f"s.{SWITCHES[kind]} = 1" if kind else " OR ".join(f"s.{c} = 1" for c in SWITCHES.values())
     with get_conn() as conn:
         return conn.execute(
-            "SELECT u.spotify_id, u.display_name, s.show_taste, s.allow_blends, s.allow_listen_as"
-            f" FROM users u JOIN sharing s ON s.spotify_id = u.spotify_id WHERE u.spotify_id != ? AND ({wanted})"
-            " ORDER BY lower(coalesce(u.display_name, u.spotify_id))",
+            "SELECT u.user_id, u.display_name, s.show_taste, s.allow_blends, s.allow_listen_as"
+            f" FROM users u JOIN sharing s ON s.user_id = u.user_id WHERE u.user_id != ? AND ({wanted})"
+            " ORDER BY lower(coalesce(u.display_name, u.user_id))",
             (viewer,),
         ).fetchall()
 
@@ -73,7 +73,7 @@ def friends(viewer: str, kind: Optional[str] = None) -> list[sqlite3.Row]:
 def first_name(row) -> str:
     """How a person is labelled to friends: the first word of their Spotify display name."""
     name = (row["display_name"] or "").strip()
-    return name.split()[0] if name else row["spotify_id"]
+    return name.split()[0] if name else row["user_id"]
 
 
 def log(owner: str, viewer: str, kind: str, playlist_id: Optional[int] = None) -> None:
@@ -92,7 +92,7 @@ def access_log(owner: str) -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute(
             "SELECT a.viewer, u.display_name, a.kind, count(*) AS uses, max(a.at) AS last"
-            " FROM taste_access a JOIN users u ON u.spotify_id = a.viewer WHERE a.owner = ?"
+            " FROM taste_access a JOIN users u ON u.user_id = a.viewer WHERE a.owner = ?"
             " GROUP BY a.viewer, a.kind ORDER BY last DESC",
             (owner,),
         ).fetchall()
@@ -104,13 +104,13 @@ def visible_playlists(owner: str, limit: int = 10) -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute(
             "SELECT id, json_extract(brief_json, '$.title') AS title, created_at, json_array_length(track_uris_json) AS"
-            f" track_count FROM playlists WHERE spotify_id = ? AND {FRIEND_VISIBLE} ORDER BY id DESC LIMIT ?",
+            f" track_count FROM playlists WHERE user_id = ? AND {FRIEND_VISIBLE} ORDER BY id DESC LIMIT ?",
             (owner, limit),
         ).fetchall()
 
 
-def set_hidden(playlist_id: int, spotify_id: str, hidden: bool) -> bool:
+def set_hidden(playlist_id: int, user_id: str, hidden: bool) -> bool:
     """Hide one of your playlists from friends, or show it again. False if it isn't yours."""
     with get_conn() as conn:
-        return conn.execute("UPDATE playlists SET hidden = ? WHERE id = ? AND spotify_id = ?",
-                            (int(hidden), playlist_id, spotify_id)).rowcount == 1
+        return conn.execute("UPDATE playlists SET hidden = ? WHERE id = ? AND user_id = ?",
+                            (int(hidden), playlist_id, user_id)).rowcount == 1

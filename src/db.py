@@ -213,6 +213,25 @@ MIGRATIONS = [
         judged_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     """,
+    # 15 (Phase 25): a user is a Moodify account on some music service, not a Spotify account. RENAME COLUMN
+    # also rewrites the foreign keys and indexes that name the column. Ids keep their values
+    """
+    ALTER TABLE users RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE playlists RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE jobs RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE search_cache RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE track_likes RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE lessons RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE sharing RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE library RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE blend_members RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE blend_credits RENAME COLUMN spotify_id TO user_id;
+    ALTER TABLE users RENAME COLUMN likes_to_spotify TO likes_to_service;
+    ALTER TABLE users RENAME COLUMN open_spotify TO open_app;
+    ALTER TABLE playlists RENAME COLUMN spotify_url TO url;
+    ALTER TABLE track_likes RENAME COLUMN added_to_spotify TO added_to_service;
+    ALTER TABLE users ADD COLUMN service TEXT NOT NULL DEFAULT 'spotify' CHECK (service IN ('spotify', 'youtube', 'apple'));
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

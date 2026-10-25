@@ -144,7 +144,7 @@ def test_end_to_end_24_of_30_match(logged_in, respx_mock, briefs):
     rows = _playlist_rows()
     assert len(rows) == 1
     assert rows[0]["prompt"] == "rainy sunday"
-    assert rows[0]["spotify_url"] == "https://open.spotify.com/playlist/pl1"
+    assert rows[0]["url"] == "https://open.spotify.com/playlist/pl1"
     assert json.loads(rows[0]["track_uris_json"]) == uris
 
 
@@ -302,5 +302,5 @@ def test_live_full_run_creates_a_real_playlist():
         pytest.skip("no onboarded user in data/moodify.db: log in and complete /onboarding first")
     row_id = pl.build(user, "rainy sunday, nostalgic")
     made = playlists.tracks(row_id)
-    print(f"\ncreated {playlists.get(row_id, user['spotify_id'])['spotify_url']} with {len(made)} tracks (delete it by hand afterwards)")
+    print(f"\ncreated {playlists.get(row_id, user['user_id'])['url']} with {len(made)} tracks (delete it by hand afterwards)")
     assert len(made) >= 15, [(t.name, t.artists) for t in made]

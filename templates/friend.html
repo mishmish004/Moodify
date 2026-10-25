@@ -5,7 +5,7 @@
 <div class="mf-stack-6" style="max-width: 760px; margin: 0 auto">
   <div class="mf-stack-2">
     <a class="mf-back" href="/friends"><span aria-hidden="true">←</span> Friends</a>
-    <h1 class="mf-h1">{{ friend.display_name or friend.spotify_id }}</h1>
+    <h1 class="mf-h1">{{ friend.display_name or friend.user_id }}</h1>
   </div>
   {% if shared.taste %}
   <section class="mf-stack-3" aria-labelledby="taste-h">
@@ -29,7 +29,7 @@
   <p class="mf-well mf-muted">{{ name }} doesn't show their taste to friends.</p>
   {% endif %}
   {% if shared.listen_as %}
-  <form method="post" action="/friends/{{ friend.spotify_id }}/listen" class="mf-card mf-stack-3" data-busy="Making it…">
+  <form method="post" action="/friends/{{ friend.user_id }}/listen" class="mf-card mf-stack-3" data-busy="Making it…">
     <label class="mf-h3" for="mood">Make a playlist the way {{ name }} would hear it</label>
     <textarea id="mood" class="mf-textarea mf-textarea--short" name="mood" required maxlength="2000" rows="3" aria-describedby="listen-hint" placeholder="e.g. gym, 40 minutes · sunday cooking · late night drive"></textarea>
     <p id="listen-hint" class="mf-hint">Built from {{ name }}'s taste and the songs they know, not yours, and saved in your Spotify. Nothing goes into {{ name }}'s account; {{ name }} can see you made it.</p>
@@ -37,7 +37,7 @@
   </form>
   {% endif %}
   {% if shared.blend %}
-  <a class="mf-btn mf-btn--quiet" href="/blend?with={{ friend.spotify_id }}" style="align-self: flex-start">Make a Blend with {{ name }}</a>
+  <a class="mf-btn mf-btn--quiet" href="/blend?with={{ friend.user_id }}" style="align-self: flex-start">Make a Blend with {{ name }}</a>
   {% endif %}
 </div>
 {% endblock %}

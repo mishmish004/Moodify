@@ -14,7 +14,7 @@
    "with context" so the filter can see the request's user agent. #}
 
 {# The required "OPEN SPOTIFY" button, with the full logo #}
-{% macro open_spotify(url) -%}
+{% macro open_app(url) -%}
 <a class="mf-btn mf-btn--spotify mf-btn--xl mf-btn--block" href="{{ url | app_link }}">{{ logo(alt="") }}<span>OPEN SPOTIFY</span></a>
 {%- endmacro %}
 
@@ -32,7 +32,7 @@
   {% for p in rows %}
   <li class="mf-prow">
     <a class="mf-link-row" href="/playlists/{{ p.id }}"><span class="mf-link-row__title">{{ title_of(p) }}</span><span class="mf-link-row__meta">{{ p.created_at | day }}{% if p.minutes %} · {{ p.minutes | duration }}{% endif %} · {{ p.track_count }} track{{ "" if p.track_count == 1 else "s" }}{% if p.like_count %} · {{ p.like_count }} liked{% endif %}{% if p.rating %} · rated {{ p.rating }}/10{% endif %}</span></a>
-    <a class="mf-sp-link" href="{{ p.spotify_url | app_link }}" aria-label="Open {{ title_of(p) }} in Spotify">{{ icon() }}</a>
+    <a class="mf-sp-link" href="{{ p.url | app_link }}" aria-label="Open {{ title_of(p) }} in Spotify">{{ icon() }}</a>
   </li>
   {% endfor %}
 </ul>

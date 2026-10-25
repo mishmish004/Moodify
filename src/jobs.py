@@ -27,9 +27,9 @@ ERROR = "error"
 INTERRUPTED = "interrupted"
 
 
-def create(spotify_id: str, prompt: str) -> int:
+def create(user_id: str, prompt: str) -> int:
     with get_conn() as conn:
-        return conn.execute("INSERT INTO jobs (spotify_id, prompt) VALUES (?, ?)", (spotify_id, prompt)).lastrowid
+        return conn.execute("INSERT INTO jobs (user_id, prompt) VALUES (?, ?)", (user_id, prompt)).lastrowid
 
 
 def start(fn: Callable, *args) -> Future:
@@ -53,16 +53,16 @@ def wait_idle(timeout: float) -> bool:
     return not wait(pending, timeout=timeout).not_done
 
 
-def get(job_id: int, spotify_id: str) -> Optional[sqlite3.Row]:
+def get(job_id: int, user_id: str) -> Optional[sqlite3.Row]:
     """Only the owner's jobs: the id alone is not enough."""
     with get_conn() as conn:
-        return conn.execute("SELECT * FROM jobs WHERE id = ? AND spotify_id = ?", (job_id, spotify_id)).fetchone()
+        return conn.execute("SELECT * FROM jobs WHERE id = ? AND user_id = ?", (job_id, user_id)).fetchone()
 
 
-def running_for(spotify_id: str) -> Optional[sqlite3.Row]:
+def running_for(user_id: str) -> Optional[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM jobs WHERE spotify_id = ? AND status = 'running' ORDER BY id DESC LIMIT 1", (spotify_id,)
+            "SELECT * FROM jobs WHERE user_id = ? AND status = 'running' ORDER BY id DESC LIMIT 1", (user_id,)
         ).fetchone()
 
 

@@ -155,8 +155,8 @@ def test_static_prompt_is_long_enough_to_cache_and_its_examples_are_valid_briefs
 
 
 def test_every_call_puts_static_then_per_user_then_per_request(test_settings, respx_mock, briefs):
-    read_prompt("first prompt", "taste A", spotify_id="a")
-    read_prompt("second, different prompt", "taste B", spotify_id="b")
+    read_prompt("first prompt", "taste A", user_id="a")
+    read_prompt("second, different prompt", "taste B", user_id="b")
     first, second = (json.loads(c.content)["messages"] for c in briefs.calls)
     # The static rules come first and are byte-identical; the per-user part follows them in the system message
     # (where gpt-6.1-sol's cache reaches, see src/prompts.py); the request alone is the user message
@@ -289,7 +289,7 @@ def test_adjust_and_redo_prefills_the_prompt(logged_in, respx_mock):
     assert ">rainy sunday, nostalgic</textarea>" in logged_in.get(f"/?redo={row_id}").text
     users.upsert("friend2", "Two", "r")
     with get_conn() as conn:
-        other = conn.execute("INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES "
+        other = conn.execute("INSERT INTO playlists (user_id, prompt, url, track_uris_json) VALUES "
                              "('friend2', 'secret', 'u', '[]')").lastrowid
     assert "secret" not in logged_in.get(f"/?redo={other}").text
 
@@ -330,7 +330,7 @@ def test_prompts_up_to_2000_characters_are_accepted(logged_in, respx_mock, lengt
 
 def test_old_playlists_without_a_brief_still_render(logged_in):
     with get_conn() as conn:
-        row_id = conn.execute("INSERT INTO playlists (spotify_id, prompt, spotify_url, track_uris_json) VALUES "
+        row_id = conn.execute("INSERT INTO playlists (user_id, prompt, url, track_uris_json) VALUES "
                               "('friend1', 'phase 9 prompt', 'u', '[]')").lastrowid
     page = logged_in.get(f"/playlists/{row_id}")
     assert page.status_code == 200 and "Moodify: phase 9 prompt" in page.text and "How Moodify read this" not in page.text

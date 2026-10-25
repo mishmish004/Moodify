@@ -70,18 +70,18 @@ def _row(playlist_id):
         return conn.execute("SELECT * FROM playlists WHERE id = ?", (playlist_id,)).fetchone()
 
 
-def _lessons(spotify_id="friend1", **where):
+def _lessons(user_id="friend1", **where):
     clause = "".join(f" AND {k} = ?" for k in where)
     with get_conn() as conn:
-        return conn.execute(f"SELECT * FROM lessons WHERE spotify_id = ?{clause} ORDER BY id",
-                            (spotify_id, *where.values())).fetchall()
+        return conn.execute(f"SELECT * FROM lessons WHERE user_id = ?{clause} ORDER BY id",
+                            (user_id, *where.values())).fetchall()
 
 
-def _store(spotify_id, drafts, plan=None, source=None):
+def _store(user_id, drafts, plan=None, source=None):
     plan = plan or Consolidation(operations=[memory._as_op(i, d, "ADD") for i, d in enumerate(
         [d for d in drafts if d.scope == "lasting"], start=1)], merges=[])
     with get_conn() as conn:
-        return memory.store(conn, spotify_id, source, drafts, plan)
+        return memory.store(conn, user_id, source, drafts, plan)
 
 
 # --- saving a review --------------------------------------------------------------------------------------
@@ -162,9 +162,9 @@ def test_reviews_get_the_same_tolerance_as_prompts(logged_in, respx_mock):
 def test_reflection_gets_the_whole_situation_and_stores_a_grounded_lesson(logged_in, respx_mock):
     pid = _playlist()
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-4', ?)", (pid,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-4', ?)", (pid,))
         conn.execute("UPDATE playlists SET rating = 6 WHERE id = ?", (pid,))
-        job = conn.execute("INSERT INTO jobs (spotify_id, prompt, status, playlist_id) VALUES ('friend1', 'p', 'done', ?)",
+        job = conn.execute("INSERT INTO jobs (user_id, prompt, status, playlist_id) VALUES ('friend1', 'p', 'done', ?)",
                            (pid,)).lastrowid
         conn.execute("INSERT INTO job_events (job_id, kind, detail_json) VALUES (?, 'built', ?)", (job, json.dumps(
             {"suggested": 20, "tracks": 6, "known": 2, "targets": [15.0, 30.0, 15.0], "section_minutes": [7.0, 7.0, 7.0]})))
@@ -342,7 +342,7 @@ def test_fix_it_builds_a_linked_new_version_with_the_review_as_a_correction(logg
         title="Morning part too short", scope="this_playlist", tags=("morning",), evidence="rest was great",
         content="Give the morning part its full length.")]})
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-5', ?)", (pid,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1-5', ?)", (pid,))
     logged_in.post(f"/playlists/{pid}/review", data={"review": WORKOUT_REVIEW})
     _wait_for(lambda: len(_lessons()) == 2)
     chat = respx_mock.post(CHAT_URL).respond(200, json=_completion(_songs(30)))

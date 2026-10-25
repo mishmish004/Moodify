@@ -114,7 +114,7 @@ def test_only_your_token_is_used_and_the_playlist_is_yours(logged_in, respx_mock
     assert json.loads(sp.create.calls.last.request.content)["description"].startswith("The way Sam would hear it.")
     with get_conn() as conn:
         log = [tuple(r) for r in conn.execute("SELECT owner, viewer, kind, playlist_id IS NOT NULL FROM taste_access")]
-        owner = conn.execute("SELECT spotify_id, heard_as FROM playlists").fetchone()
+        owner = conn.execute("SELECT user_id, heard_as FROM playlists").fetchone()
     assert log == [("friend2", "friend1", "listen_as", 1)]
     assert tuple(owner) == ("friend1", "friend2")
     assert "Made the way Sam would hear it" in page.text
@@ -126,7 +126,7 @@ def test_the_build_takes_only_a_profile():
     assert list(params) == ["user", "mood", "profile", "trace"]
     assert params["profile"].annotation is taste.Profile
     with pytest.raises(TypeError):
-        listen_as.build_as({"spotify_id": "x"}, "gym", {"spotify_id": "friend2", "taste_summary": "x"})
+        listen_as.build_as({"user_id": "x"}, "gym", {"user_id": "friend2", "taste_summary": "x"})
 
 
 def test_a_friend_profile_holds_only_taste(user):
@@ -184,11 +184,11 @@ def test_live_gym_the_way_a_jazz_friend_hears_it(monkeypatch):
         library.replace(friend, {"top": [t for t in found if t]})
         profile = listen_as.friend_profile(users.get(friend))
         assert profile.summary == summary
-        pid = listen_as.build_as(users.get(me["spotify_id"]), "gym", profile, Trace())
+        pid = listen_as.build_as(users.get(me["user_id"]), "gym", profile, Trace())
         for t in playlists.tracks(pid):
             print(f"{t.name} by {', '.join(t.artists)}")
-        print(playlists.get(pid, me["spotify_id"])["spotify_url"])
-        mine = taste.stored_summary(users.get(me["spotify_id"]))
+        print(playlists.get(pid, me["user_id"])["url"])
+        mine = taste.stored_summary(users.get(me["user_id"]))
         for call in ("brief", "suggest"):
             assert all(summary in text and mine not in text for text in sent[call]), call
     finally:

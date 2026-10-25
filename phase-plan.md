@@ -738,23 +738,25 @@ Checked on 2026-10-25.
 Goal: the database and the code stop assuming a user is a Spotify account. Nothing visible changes.
 
 Build
-- [ ] Migration 15:
+- [x] Migration 15:
   - Rename `spotify_id` to `user_id` in every table. `ALTER TABLE … RENAME COLUMN` also rewrites the foreign keys and indexes that point at it.
   - Add `users.service TEXT NOT NULL DEFAULT 'spotify'`, checked to be `spotify`, `youtube` or `apple`.
   - Rename the Spotify-named columns: `users.likes_to_spotify` → `likes_to_service`, `users.open_spotify` → `open_app`, `playlists.spotify_url` → `url`, `track_likes.added_to_spotify` → `added_to_service`.
   - `schema.sql` gets the same names. The live database is backed up before the migration runs.
-- [ ] Existing users keep their id values, so their sessions, friend links and history keep working
-- [ ] In the code, `spotify_id` becomes `user_id` wherever it means the Moodify user. It stays `spotify_id` only where it really is a Spotify id (links, the Spotify client). The session key becomes `user_id`; a cookie that still holds `spotify_id` is read once and rewritten
-- [ ] `users.refresh_token` keeps its name and holds whatever credential the service's client acts with (for Apple, the Music User Token)
+- [x] Existing users keep their id values, so their sessions, friend links and history keep working
+- [x] In the code, `spotify_id` becomes `user_id` wherever it means the Moodify user. It stays `spotify_id` only where it really is a Spotify id (links, the Spotify client). The session key becomes `user_id`; a cookie that still holds `spotify_id` is read once and rewritten
+- [x] `users.refresh_token` keeps its name and holds whatever credential the service's client acts with (for Apple, the Music User Token)
 
 Tests (`tests/test_p25_accounts.py`)
-- [ ] a version-14 database with users, playlists, likes, lessons, sharing, library, Blends and features upgrades with every row kept and `PRAGMA foreign_key_check` empty. A fresh database from `schema.sql` has the same tables and columns
-- [ ] after the upgrade, no table has a `spotify_id` column
-- [ ] a session cookie from before the upgrade still logs the user in
-- [ ] disconnect still deletes every row about the user, in every table
-- [ ] the fast suite passes, with assertions changed only for the renamed columns
+- [x] a version-14 database with users, playlists, likes, lessons, sharing, library, Blends and features upgrades with every row kept and `PRAGMA foreign_key_check` empty. A fresh database from `schema.sql` has the same tables and columns
+- [x] after the upgrade, no table has a `spotify_id` column
+- [x] a session cookie from before the upgrade still logs the user in
+- [x] disconnect still deletes every row about the user, in every table
+- [x] the fast suite passes, with assertions changed only for the renamed columns
 
 Gate: fast suite green, and an upgraded copy of the live database shows your history, memory and map as before.
+
+Done 2026-10-25. Migration 15 is fourteen `RENAME COLUMN` steps plus `users.service`. SQLite (3.53 here, 3.46.1 in the image) rewrote every foreign key and index that named the old columns, so nothing was rebuilt by hand. Checked on a read-only copy of the live database (4 users, 16 playlists, 449 library rows): every row kept, `foreign_key_check` empty, and history, memory, a playlist, a Blend, the map, activity, friends, sharing and settings all open from it with the network blocked. That check found an older bug, fixed separately in 5ee761e: `/activity` answered 500 for a Blend whose only friend had disconnected (the Phase 20 live test's synthetic friend). Old migrations and `tests/fixtures/schema_v0.sql` keep `spotify_id`, since they describe older databases. `SpotifyClient.for_user` passes `user_id` as the Spotify id: for a Spotify user they're the same value. The live database still has to be backed up when this is deployed. 7 tests.
 
 ---
 

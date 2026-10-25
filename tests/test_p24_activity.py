@@ -16,11 +16,11 @@ from .test_p6_playlist import logged_in, user  # noqa: F401
 PROMPT = "my private words about tonight"
 
 
-def _friend(spotify_id="friend2", name="Sam Rivera", show=True):
-    users.upsert(spotify_id, name, f"refresh-{spotify_id}", auth.SCOPES)
+def _friend(user_id="friend2", name="Sam Rivera", show=True):
+    users.upsert(user_id, name, f"refresh-{user_id}", auth.SCOPES)
     if show:
-        sharing.save(spotify_id, True, False, False)
-    return spotify_id
+        sharing.save(user_id, True, False, False)
+    return user_id
 
 
 def _playlist(owner, title, days_ago=0, energy=6, minutes=42, sections=1, support=False, hidden=False, heard_as=None):
@@ -121,8 +121,8 @@ def test_likes_and_ratings_are_yours_only(user):
     playlists.set_rating(mine, "friend1", 8)
     playlists.set_rating(theirs, "friend2", 3)
     with get_conn() as conn:
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1Mine0', ?)", (mine,))
-        conn.execute("INSERT INTO track_likes (spotify_id, uri, playlist_id) VALUES ('friend2', 'spotify:track:friend2Theirs0', ?)", (theirs,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend1', 'spotify:track:friend1Mine0', ?)", (mine,))
+        conn.execute("INSERT INTO track_likes (user_id, uri, playlist_id) VALUES ('friend2', 'spotify:track:friend2Theirs0', ?)", (theirs,))
     mine_lines = _lines("friend1")
     assert "You rated Mine 8/10" in mine_lines and "You liked Mine song 0" in mine_lines
     assert not any("3/10" in line or "Theirs song" in line for line in mine_lines)

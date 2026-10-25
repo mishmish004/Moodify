@@ -41,7 +41,7 @@ log = MoodifyLogger.get_logger("blend")
 
 @dataclass(frozen=True)
 class Member:
-    spotify_id: str
+    user_id: str
     name: str                     # first name, unique within the blend
     summary: str                  # their stored taste, condensed to SUMMARY_CHARS
     avoid: tuple[str, ...]        # from their onboarding answers
@@ -63,10 +63,10 @@ def member(row) -> Member:
     onboarding = json.loads(row["onboarding_json"] or "{}")
     avoid = avoid_phrases(onboarding)
     return Member(
-        spotify_id=row["spotify_id"], name=sharing.first_name(row),
+        user_id=row["user_id"], name=sharing.first_name(row),
         summary=taste.condense(taste.stored_summary(row), SUMMARY_CHARS), avoid=avoid,
         no_explicit=any(EXPLICIT_WORDS.search(a) for a in avoid),
-        weights={t.uri: w for t, w in library.for_user(row["spotify_id"])},
+        weights={t.uri: w for t, w in library.for_user(row["user_id"])},
     )
 
 
@@ -77,7 +77,7 @@ def members_for(requester, friend_ids: list[str]) -> list[Member]:
     out = []
     for m in found:
         seen[m.name.casefold()] = seen.get(m.name.casefold(), 0) + 1
-        out.append(m if seen[m.name.casefold()] == 1 else Member(m.spotify_id, f"{m.name} {seen[m.name.casefold()]}",
+        out.append(m if seen[m.name.casefold()] == 1 else Member(m.user_id, f"{m.name} {seen[m.name.casefold()]}",
                                                                    m.summary, m.avoid, m.no_explicit, m.weights))
     return out
 
@@ -91,7 +91,7 @@ def profile(members: list[Member]) -> taste.Profile:
                + "\n".join(f"{m.name}: {m.summary}" for m in members))
     tracks: dict[str, Track] = {}
     for m in members:
-        for track, _ in library.for_user(m.spotify_id):
+        for track, _ in library.for_user(m.user_id):
             tracks.setdefault(track.uri, track)
     owners = {uri: [m for m in members if uri in m.weights] for uri in tracks}
     common = sorted((uri for uri, who in owners.items() if len(who) > 1),
@@ -130,22 +130,22 @@ class Balance:
 
     def __init__(self, members: list[Member], lean: Optional[str] = None):
         self.members = members
-        weights = {m.spotify_id: LEAN_WEIGHT if m.spotify_id == lean else 1 for m in members}
+        weights = {m.user_id: LEAN_WEIGHT if m.user_id == lean else 1 for m in members}
         self.share = {sid: w / sum(weights.values()) for sid, w in weights.items()}
-        self.by_name = {m.name.casefold(): m.spotify_id for m in members}
+        self.by_name = {m.name.casefold(): m.user_id for m in members}
         self.top_ups: dict[str, int] = {}  # member -> how many songs their top-up asked for
 
     def credit(self, uri: str, song: Optional[Song]) -> set[str]:
-        owners = {m.spotify_id for m in self.members if uri in m.weights}
+        owners = {m.user_id for m in self.members if uri in m.weights}
         if owners:
             return owners
         named = self.by_name.get((song.for_whom or "").strip().casefold()) if song else None
-        return {named} if named else {m.spotify_id for m in self.members}
+        return {named} if named else {m.user_id for m in self.members}
 
     def order(self, songs: list[Song]) -> list[Song]:
         """Songs for everyone first, then one for each person in turn, so placing them in order can't use up
         a section on one person's songs."""
-        everyone, per = [], {m.spotify_id: [] for m in self.members}
+        everyone, per = [], {m.user_id: [] for m in self.members}
         for song in songs:
             named = self.by_name.get((song.for_whom or "").strip().casefold())
             (per[named] if named else everyone).append(song)
@@ -157,7 +157,7 @@ class Balance:
         return out
 
     def minutes(self, fills: list[SectionFill], finder) -> dict[str, float]:
-        out = {m.spotify_id: 0.0 for m in self.members}
+        out = {m.user_id: 0.0 for m in self.members}
         for fill in fills:
             for track in fill.tracks:
                 for sid in self.credit(track.uri, finder.songs.get(track.uri)):
@@ -179,13 +179,13 @@ class Balance:
         asked: list[Song] = []
         for m in self.members:
             have = self.minutes(fills, finder)
-            if have[m.spotify_id] >= floors[m.spotify_id]:
+            if have[m.user_id] >= floors[m.user_id]:
                 continue
-            missing = floors[m.spotify_id] - have[m.spotify_id]
+            missing = floors[m.user_id] - have[m.user_id]
             wanted = songs_to_ask_for(missing)
             targets = [f.target for f in fills]
             counts = [max(1, math.ceil(wanted * t / sum(targets))) for t in targets]
-            self.top_ups[m.spotify_id] = sum(counts)
+            self.top_ups[m.user_id] = sum(counts)
             trace.step(f"Finding more for {m.name}")
             note = (f"This call is a top-up for {m.name}, who has too few songs in the Blend so far. Suggest songs "
                     f"mainly for {m.name}, from their taste and the songs labelled ({m.name}), with \"for_whom\" set "
@@ -193,9 +193,9 @@ class Balance:
             more = ask_more(counts, note)
             asked += more
             for song in more:
-                if self.minutes(fills, finder)[m.spotify_id] >= floors[m.spotify_id]:
+                if self.minutes(fills, finder)[m.user_id] >= floors[m.user_id]:
                     break
-                self._swap_in(sp, finder, fills, song, m.spotify_id, floors)
+                self._swap_in(sp, finder, fills, song, m.user_id, floors)
         after = self.minutes(fills, finder)
         trace.event("share", minutes={sid: round(v, 1) for sid, v in after.items()}, top_ups=self.top_ups)
         return asked
@@ -253,21 +253,21 @@ def build_blend(user, mood: str, friend_ids: list[str], trace: Trace = NO_TRACE,
     allows it; consent is checked here, once, before anything of theirs is read."""
     from src import playlist  # playlist imports nothing from here; importing at call time keeps it that way
     try:
-        check(user["spotify_id"], friend_ids)
+        check(user["user_id"], friend_ids)
     except NotShared:
         raise playlist.BuildFailed(NOT_SHARED)
     trace.step("Reading everyone's taste")
     members = members_for(user, friend_ids)
-    balance = Balance(members, lean if lean in {m.spotify_id for m in members} else None)
+    balance = Balance(members, lean if lean in {m.user_id for m in members} else None)
     names = [m.name for m in members]
     recipe = playlist.Recipe(
         profile=profile(members), familiar_percent=taste.familiar_percent(json.loads(user["onboarding_json"] or "{}")),
-        repeats=playlist._Repeats(user["spotify_id"]), name=lambda brief: title(members, brief.title),
+        repeats=playlist._Repeats(user["user_id"]), name=lambda brief: title(members, brief.title),
         note=f"A Moodify Blend for {', '.join(names[:-1])} and {names[-1]}.", public=public,
         tidy=union_rules(members), balance=balance,
     )
     built = playlist.make(user, mood, recipe, trace)
-    save(built.playlist_id, user["spotify_id"], members, balance.credits(built.tracks, built.finder), lean)
+    save(built.playlist_id, user["user_id"], members, balance.credits(built.tracks, built.finder), lean)
     return built.playlist_id
 
 
@@ -275,21 +275,21 @@ def save(playlist_id: int, owner: str, members: list[Member], credits: list[set[
     with get_conn() as conn:
         blend_id = conn.execute("INSERT INTO blends (playlist_id, owner, lean) VALUES (?, ?, ?)",
                                 (playlist_id, owner, lean)).lastrowid
-        conn.executemany("INSERT INTO blend_members (blend_id, spotify_id, position) VALUES (?, ?, ?)",
-                         [(blend_id, m.spotify_id, i) for i, m in enumerate(members)])
-        conn.executemany("INSERT INTO blend_credits (blend_id, position, spotify_id) VALUES (?, ?, ?)",
+        conn.executemany("INSERT INTO blend_members (blend_id, user_id, position) VALUES (?, ?, ?)",
+                         [(blend_id, m.user_id, i) for i, m in enumerate(members)])
+        conn.executemany("INSERT INTO blend_credits (blend_id, position, user_id) VALUES (?, ?, ?)",
                          [(blend_id, position, sid) for position, who in enumerate(credits) for sid in sorted(who)])
     for m in members[1:]:
-        sharing.log(m.spotify_id, owner, "blend", playlist_id)
+        sharing.log(m.user_id, owner, "blend", playlist_id)
     return blend_id
 
 
-def run(job_id: int, spotify_id: str, mood: str, friend_ids: list[str], lean: Optional[str] = None,
+def run(job_id: int, user_id: str, mood: str, friend_ids: list[str], lean: Optional[str] = None,
         public: bool = False) -> None:
     """Background entry, like playlist.run. Never raises."""
     from src import playlist
     try:
-        user = users.get(spotify_id)
+        user = users.get(user_id)
         if user is None:
             return
         playlist_id = build_blend(user, mood, friend_ids, Trace(job_id), lean, public)
@@ -323,16 +323,16 @@ def for_playlist(playlist_id: int, owner: str, tracks: list[Track]) -> Optional[
         if blend is None:
             return None
         rows = conn.execute(
-            "SELECT m.spotify_id, m.position, u.display_name FROM blend_members m JOIN users u USING (spotify_id)"
+            "SELECT m.user_id, m.position, u.display_name FROM blend_members m JOIN users u USING (user_id)"
             " WHERE m.blend_id = ? ORDER BY m.position", (blend["id"],)).fetchall()
-        credit_rows = conn.execute("SELECT position, spotify_id FROM blend_credits WHERE blend_id = ?", (blend["id"],)).fetchall()
-    members = [{"id": r["spotify_id"], "name": sharing.first_name(r), "slot": i + 1,
-                "initials": _initials(r["display_name"] or r["spotify_id"])} for i, r in enumerate(rows)]
+        credit_rows = conn.execute("SELECT position, user_id FROM blend_credits WHERE blend_id = ?", (blend["id"],)).fetchall()
+    members = [{"id": r["user_id"], "name": sharing.first_name(r), "slot": i + 1,
+                "initials": _initials(r["display_name"] or r["user_id"])} for i, r in enumerate(rows)]
     present = {m["id"] for m in members}
     credits = [[] for _ in tracks]
     for r in credit_rows:
-        if r["position"] < len(credits) and r["spotify_id"] in present:
-            credits[r["position"]].append(r["spotify_id"])
+        if r["position"] < len(credits) and r["user_id"] in present:
+            credits[r["position"]].append(r["user_id"])
     total = sum(minutes(t) for t in tracks) or 1.0
     weights = {m["id"]: LEAN_WEIGHT if m["id"] == blend["lean"] else 1 for m in members}
     shares = []

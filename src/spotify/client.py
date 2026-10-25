@@ -69,7 +69,8 @@ class SpotifyClient:
 
     @classmethod
     def for_user(cls, user) -> "SpotifyClient":
-        return cls(user["spotify_id"], user["refresh_token"])
+        # A Spotify user's Moodify id is their Spotify id (src/schema.sql)
+        return cls(user["user_id"], user["refresh_token"])
 
     def __enter__(self) -> "SpotifyClient":
         return self

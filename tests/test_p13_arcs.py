@@ -163,18 +163,18 @@ def test_live_first_real_prompt_plays_in_three_parts():
         pytest.skip("needs an onboarded user who logged in after Phase 10")
     prompt = ("I want to remember the chill summer morning and a hella stuff to do, workout for 1/2 an hour and then i want"
               " to instantly lock in for a programming task.")
-    job_id = jobs.create(user["spotify_id"], prompt)
-    run(job_id, user["spotify_id"], prompt)
-    job = jobs.get(job_id, user["spotify_id"])
+    job_id = jobs.create(user["user_id"], prompt)
+    run(job_id, user["user_id"], prompt)
+    job = jobs.get(job_id, user["user_id"])
     assert job["status"] == "done", job["error"]
     with get_conn() as conn:
         rows = conn.execute("SELECT section, name, artists_json, duration_ms, energy, role FROM playlist_tracks"
                             " WHERE playlist_id = ? ORDER BY position", (job["playlist_id"],)).fetchall()
-    brief = Brief.model_validate_json(playlists.get(job["playlist_id"], user["spotify_id"])["brief_json"])
+    brief = Brief.model_validate_json(playlists.get(job["playlist_id"], user["user_id"])["brief_json"])
     for r in rows:
         print(f"  [{brief.sections[int(r['section'])].label}] e={r['energy']} {r['role']}: {r['name']} - "
               f"{', '.join(json.loads(r['artists_json']))} ({r['duration_ms'] / 60000:.1f} min)")
-    print(playlists.get(job["playlist_id"], user["spotify_id"])["spotify_url"])
+    print(playlists.get(job["playlist_id"], user["user_id"])["url"])
     sections = [int(r["section"]) for r in rows]
     assert sections == sorted(sections) and set(sections) == {0, 1, 2}  # three parts, in order
     workout = sum(r["duration_ms"] for r in rows if int(r["section"]) == 1) / 60_000

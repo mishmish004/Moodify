@@ -85,7 +85,7 @@ def unjudged(limit: Optional[int] = None) -> list[Track]:
     """Library tracks without features, most widely held first."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT t.*, count(DISTINCT l.spotify_id) AS people FROM tracks t JOIN library l ON l.uri = t.uri"
+            "SELECT t.*, count(DISTINCT l.user_id) AS people FROM tracks t JOIN library l ON l.uri = t.uri"
             " WHERE t.uri NOT IN (SELECT uri FROM track_features) GROUP BY t.uri ORDER BY people DESC, t.uri"
             + (" LIMIT ?" if limit else ""),
             (limit,) if limit else (),
@@ -183,9 +183,9 @@ class Feature:
     language: str
 
 
-def for_person(spotify_id: str) -> list[Feature]:
+def for_person(user_id: str) -> list[Feature]:
     """The person's judged library tracks with their summed library weight."""
-    weights = {t.uri: w for t, w in library.for_user(spotify_id)}
+    weights = {t.uri: w for t, w in library.for_user(user_id)}
     if not weights:
         return []
     with get_conn() as conn:

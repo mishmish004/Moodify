@@ -41,7 +41,7 @@ def _since() -> str:
 
 def people(viewer: str) -> list:
     me = users.get(viewer)
-    return ([me] if me else []) + [users.get(f["spotify_id"]) for f in sharing.friends(viewer, "taste")]
+    return ([me] if me else []) + [users.get(f["user_id"]) for f in sharing.friends(viewer, "taste")]
 
 
 def _playlists(conn, owner: str, viewer: str) -> list:
@@ -54,14 +54,14 @@ def _playlists(conn, owner: str, viewer: str) -> list:
         " (SELECT avg(energy) FROM playlist_tracks t WHERE t.playlist_id = p.id) AS energy,"
         " (SELECT avg(value ->> '$.energy') FROM json_each(p.brief_json, '$.sections')) AS brief_energy,"
         " b.id AS blend_id"
-        f" FROM playlists p LEFT JOIN blends b ON b.playlist_id = p.id WHERE p.spotify_id = ? AND {NOT_SUPPORT}"
+        f" FROM playlists p LEFT JOIN blends b ON b.playlist_id = p.id WHERE p.user_id = ? AND {NOT_SUPPORT}"
         " AND p.created_at >= ?" + ("" if mine else " AND p.hidden = 0") + " ORDER BY p.id DESC",
         (owner, _since()),
     ).fetchall()
     out = []
     for r in rows:
         if r["blend_id"] is not None and not mine:
-            member = conn.execute("SELECT 1 FROM blend_members WHERE blend_id = ? AND spotify_id = ?",
+            member = conn.execute("SELECT 1 FROM blend_members WHERE blend_id = ? AND user_id = ?",
                                   (r["blend_id"], viewer)).fetchone()
             if not member:
                 continue  # a Blend shows only to the people in it
@@ -84,10 +84,10 @@ def feed(viewer: str) -> list[Item]:
     """Newest first, at most FEED_LIMIT items from the last DAYS days."""
     items: list[Item] = []
     shown = people(viewer)
-    names = {p["spotify_id"]: sharing.first_name(p) for p in shown}
+    names = {p["user_id"]: sharing.first_name(p) for p in shown}
     with get_conn() as conn:
         for person in shown:
-            sid = person["spotify_id"]
+            sid = person["user_id"]
             mine = sid == viewer
             who = "You" if mine else names[sid]
             for r in _playlists(conn, sid, viewer):
@@ -95,9 +95,9 @@ def feed(viewer: str) -> list[Item]:
                 details = f" · {_minutes(r)} min{_parts(r)}"
                 link = r["id"] if mine else None
                 if r["blend_id"] is not None:
-                    others = [sharing.first_name(m) if m["spotify_id"] != viewer else "you" for m in conn.execute(
-                        "SELECT u.spotify_id, u.display_name FROM blend_members m JOIN users u USING (spotify_id)"
-                        " WHERE m.blend_id = ? AND m.spotify_id != ? ORDER BY m.position", (r["blend_id"], sid))]
+                    others = [sharing.first_name(m) if m["user_id"] != viewer else "you" for m in conn.execute(
+                        "SELECT u.user_id, u.display_name FROM blend_members m JOIN users u USING (user_id)"
+                        " WHERE m.blend_id = ? AND m.user_id != ? ORDER BY m.position", (r["blend_id"], sid))]
                     kind = "blend" if mine else "blend_with_you"
                     # Friends who disconnected are gone from blend_members; with nobody left it's just "a Blend"
                     with_whom = f" with {_and(others)}" if others else ""
@@ -114,9 +114,9 @@ def feed(viewer: str) -> list[Item]:
                     items.append(Item(r["created_at"], "playlist", who, "made", title, details, link))
         # Blends you're in that someone who doesn't show their taste made
         for r in conn.execute(
-            "SELECT b.owner, u.display_name, u.spotify_id, p.created_at, json_extract(p.brief_json, '$.title') AS title"
+            "SELECT b.owner, u.display_name, u.user_id, p.created_at, json_extract(p.brief_json, '$.title') AS title"
             " FROM blend_members m JOIN blends b ON b.id = m.blend_id JOIN playlists p ON p.id = b.playlist_id"
-            f" JOIN users u ON u.spotify_id = b.owner WHERE m.spotify_id = ? AND b.owner != ? AND p.created_at >= ? AND {NOT_SUPPORT}",
+            f" JOIN users u ON u.user_id = b.owner WHERE m.user_id = ? AND b.owner != ? AND p.created_at >= ? AND {NOT_SUPPORT}",
             (viewer, viewer, _since()),
         ):
             if r["owner"] not in names:
@@ -124,12 +124,12 @@ def feed(viewer: str) -> list[Item]:
         # Your own likes and ratings: yours only
         for r in conn.execute(
             "SELECT l.liked_at, min(t.name) AS name FROM track_likes l JOIN playlist_tracks t ON t.uri = l.uri"
-            " JOIN playlists p ON p.id = t.playlist_id AND p.spotify_id = l.spotify_id"
-            " WHERE l.spotify_id = ? AND l.liked_at >= ? GROUP BY l.uri", (viewer, _since())):
+            " JOIN playlists p ON p.id = t.playlist_id AND p.user_id = l.user_id"
+            " WHERE l.user_id = ? AND l.liked_at >= ? GROUP BY l.uri", (viewer, _since())):
             items.append(Item(r["liked_at"], "like", "You", "liked", r["name"]))
         for r in conn.execute(
             "SELECT p.id, p.rated_at, p.rating, json_extract(p.brief_json, '$.title') AS title FROM playlists p"
-            f" WHERE p.spotify_id = ? AND p.rated_at >= ? AND {NOT_SUPPORT}", (viewer, _since())):
+            f" WHERE p.user_id = ? AND p.rated_at >= ? AND {NOT_SUPPORT}", (viewer, _since())):
             items.append(Item(r["rated_at"], "rating", "You", "rated", r["title"], f" {r['rating']}/10", r["id"]))
     items.sort(key=lambda i: i.at, reverse=True)
     return items[:FEED_LIMIT]
@@ -147,7 +147,7 @@ def timeline(viewer: str) -> dict:
     out = []
     with get_conn() as conn:
         for person in people(viewer):
-            sid = person["spotify_id"]
+            sid = person["user_id"]
             marks = []
             for r in _playlists(conn, sid, viewer):
                 energy = r["energy"] if r["energy"] is not None else r["brief_energy"]

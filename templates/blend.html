@@ -14,7 +14,7 @@
       <legend class="mf-label">Who's in it, besides you? (1 to {{ max_friends }})</legend>
       <div class="mf-cluster">
         {% for f in friends %}
-        <label class="mf-chip mf-chip--plain mf-chip--box"><input class="mf-vh" type="checkbox" name="friends" value="{{ f.spotify_id }}" {% if f.spotify_id in picked %}checked{% endif %}>{{ f.display_name or f.spotify_id }}<svg class="mf-chip__check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"></path></svg></label>
+        <label class="mf-chip mf-chip--plain mf-chip--box"><input class="mf-vh" type="checkbox" name="friends" value="{{ f.user_id }}" {% if f.user_id in picked %}checked{% endif %}>{{ f.display_name or f.user_id }}<svg class="mf-chip__check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"></path></svg></label>
         {% endfor %}
       </div>
     </fieldset>
@@ -27,8 +27,8 @@
       <div class="mf-select-wrap">
         <select id="lean" class="mf-select" name="lean">
           <option value="">Nobody: equal shares</option>
-          <option value="{{ user.spotify_id }}">Me</option>
-          {% for f in friends %}<option value="{{ f.spotify_id }}">{{ f.display_name or f.spotify_id }}</option>{% endfor %}
+          <option value="{{ user.user_id }}">Me</option>
+          {% for f in friends %}<option value="{{ f.user_id }}">{{ f.display_name or f.user_id }}</option>{% endfor %}
         </select>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"></path></svg>
       </div>

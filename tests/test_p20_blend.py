@@ -18,15 +18,15 @@ SAMS = [Track(f"spotify:track:s{i}", f"Jazz {i}", ("Bill Evans",), SONG_MS) for 
 SHARED = Track("spotify:track:shared", "Shared Song", ("Frank Ocean",), SONG_MS)
 
 
-def _friend(spotify_id="friend2", name="Sam Rivera", blends=True, avoid="", tracks=(), summary=None):
-    users.upsert(spotify_id, name, f"refresh-{spotify_id}", auth.SCOPES)
-    users.set_onboarding(spotify_id, {"genres": "jazz, classical", "artists": "Bill Evans", "energy": "low", "avoid": avoid})
+def _friend(user_id="friend2", name="Sam Rivera", blends=True, avoid="", tracks=(), summary=None):
+    users.upsert(user_id, name, f"refresh-{user_id}", auth.SCOPES)
+    users.set_onboarding(user_id, {"genres": "jazz, classical", "artists": "Bill Evans", "energy": "low", "avoid": avoid})
     if summary:
-        users.set_taste_summary(spotify_id, summary, "2026-10-24 08:00:00")
+        users.set_taste_summary(user_id, summary, "2026-10-24 08:00:00")
     if blends:
-        sharing.save(spotify_id, False, True, False)
-    library.replace(spotify_id, {"liked": list(tracks)})
-    return spotify_id
+        sharing.save(user_id, False, True, False)
+    library.replace(user_id, {"liked": list(tracks)})
+    return user_id
 
 
 def _song(track: Track, for_whom=None, section=1) -> dict:
@@ -300,10 +300,10 @@ def test_live_blend_with_a_synthetic_jazz_friend():
         with SpotifyClient.for_user(me) as sp:  # real URIs for the friend's library, found with your login
             found = [next(iter(sp.search_track(t, a)), None) for t, a in JAZZ]
         library.replace(friend, {"top": [t for t in found if t]})
-        taste.profile_for(users.get(me["spotify_id"]))  # your own library, fresh
-        playlist_id = blend.build_blend(users.get(me["spotify_id"]), "sunday cooking", [friend])
+        taste.profile_for(users.get(me["user_id"]))  # your own library, fresh
+        playlist_id = blend.build_blend(users.get(me["user_id"]), "sunday cooking", [friend])
         tracks = playlists.tracks(playlist_id)
-        shown = blend.for_playlist(playlist_id, me["spotify_id"], tracks)
+        shown = blend.for_playlist(playlist_id, me["user_id"], tracks)
         for t, who in zip(tracks, shown.credits):
             print(f"{t.name} by {', '.join(t.artists)}: {[m['name'] for m in shown.members if m['id'] in who]}")
         for s in shown.shares:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_spotify.html" import icon, open_spotify, get_spotify with context %}
+{% from "_spotify.html" import icon, open_app, get_spotify with context %}
 {% set nav = "history" %}
 {% set title = brief.title if brief else (playlist.prompt | truncate(80)) %}
 {% block title %}Moodify · {{ title }}{% endblock %}
@@ -52,7 +52,7 @@
       {% endfor %}
     </div>
     <div class="mf-stack-3">
-      {{ open_spotify(playlist.spotify_url) }}
+      {{ open_app(playlist.url) }}
       {% if phone %}{{ get_spotify() }}{% endif %}
       <form method="post" action="/queue/{{ playlist.id }}" class="mf-stack-2" data-busy="Adding to your queue…">
         <button class="mf-btn mf-btn--quiet mf-btn--block" type="submit" aria-describedby="play-note">Play now</button>
@@ -134,7 +134,7 @@
       <div class="mf-well mf-stack-2"><p class="mf-strong">This playlist was made before Moodify kept track lists.</p><p class="mf-muted">Open it in Spotify to see the songs.</p></div>
     {% endif %}
     {% if tracks %}
-    <p class="mf-small mf-muted">♥ the songs you like. {% if user.likes_to_spotify %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</p>
+    <p class="mf-small mf-muted">♥ the songs you like. {% if user.likes_to_service %}They're saved to your Spotify Liked Songs too{% else %}They stay in Moodify{% endif %} (<a href="/settings">change</a>).</p>
     {% endif %}
   </section>
 

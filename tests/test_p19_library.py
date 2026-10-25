@@ -18,10 +18,10 @@ def _t(name, artist="Artist", uri=None, explicit=False) -> Track:
     return Track(uri or f"spotify:track:{name.replace(' ', '')}", name, (artist,), 200_000, explicit)
 
 
-def _rows(spotify_id="friend1"):
+def _rows(user_id="friend1"):
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT uri, source, weight FROM library WHERE spotify_id = ? ORDER BY source, position", (spotify_id,))]
+            "SELECT uri, source, weight FROM library WHERE user_id = ? ORDER BY source, position", (user_id,))]
 
 
 def _track_uris():
@@ -29,8 +29,8 @@ def _track_uris():
         return {r[0] for r in conn.execute("SELECT uri FROM tracks")}
 
 
-def _second_user(spotify_id="friend2"):
-    users.upsert(spotify_id, "Sam", f"r-{spotify_id}", auth.SCOPES)
+def _second_user(user_id="friend2"):
+    users.upsert(user_id, "Sam", f"r-{user_id}", auth.SCOPES)
 
 
 # --- rebuilding ---------------------------------------------------------------------------------------------
@@ -154,8 +154,8 @@ def test_rows_not_refreshed_for_30_days_are_pruned_with_their_tracks(user):
     library.replace("friend1", {"liked": [_t("Old"), _t("Shared")]})
     library.replace("friend2", {"liked": [_t("Fresh"), _t("Shared")]})
     with get_conn() as conn:
-        conn.execute("UPDATE library SET refreshed_at = datetime('now', '-31 days') WHERE spotify_id = 'friend1'")
-        conn.execute("UPDATE library SET refreshed_at = datetime('now', '-29 days') WHERE spotify_id = 'friend2'")
+        conn.execute("UPDATE library SET refreshed_at = datetime('now', '-31 days') WHERE user_id = 'friend1'")
+        conn.execute("UPDATE library SET refreshed_at = datetime('now', '-29 days') WHERE user_id = 'friend2'")
     assert library.prune() == 2
     assert _rows("friend1") == [] and len(_rows("friend2")) == 2
     assert _track_uris() == {"spotify:track:Fresh", "spotify:track:Shared"}
@@ -199,7 +199,7 @@ def test_migration_moves_the_pool_out_of_users(test_settings):
 def test_unknown_sources_are_refused(user):
     with pytest.raises(sqlite3.IntegrityError), get_conn() as conn:
         conn.execute("INSERT INTO tracks (uri, name, artists_json, duration_ms) VALUES ('u', 'n', '[]', 1)")
-        conn.execute("INSERT INTO library (spotify_id, uri, source, weight, position) VALUES ('friend1', 'u', 'radio', 1, 0)")
+        conn.execute("INSERT INTO library (user_id, uri, source, weight, position) VALUES ('friend1', 'u', 'radio', 1, 0)")
 
 
 # --- live ---------------------------------------------------------------------------------------------------
@@ -210,13 +210,13 @@ def test_live_your_library():
     init_db()
     with get_conn() as conn:
         user = conn.execute("SELECT * FROM users WHERE onboarding_json IS NOT NULL ORDER BY created_at LIMIT 1").fetchone()
-        conn.execute("UPDATE users SET taste_updated_at = NULL WHERE spotify_id = ?", (user["spotify_id"],))
-    profile = taste.profile_for(users.get(user["spotify_id"]))
-    counts = library.counts(user["spotify_id"])
+        conn.execute("UPDATE users SET taste_updated_at = NULL WHERE user_id = ?", (user["user_id"],))
+    profile = taste.profile_for(users.get(user["user_id"]))
+    counts = library.counts(user["user_id"])
     print(f"rows per source: {counts} (total {sum(counts.values())})")
-    print("heaviest:", [(t.name, w) for t, w in library.for_user(user["spotify_id"])[:8]])
-    print("top artists:", library.top_artists(user["spotify_id"], 8))
-    print(f"pool: {len(profile.pool)} songs, same as the library's: {library.pool(user['spotify_id']) == profile.pool}")
+    print("heaviest:", [(t.name, w) for t, w in library.for_user(user["user_id"])[:8]])
+    print("top artists:", library.top_artists(user["user_id"], 8))
+    print(f"pool: {len(profile.pool)} songs, same as the library's: {library.pool(user['user_id']) == profile.pool}")
     assert 0 < sum(counts.values()) <= library.MAX_ROWS
 
 

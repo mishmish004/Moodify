@@ -116,7 +116,7 @@ Request: 🌧️☕
 Brief: {"title": "Rain and coffee", "summary": "A calm, cosy rainy-day playlist.", "sections": [{"label": "Rainy day", "feeling": "cosy, calm, a little wistful", "energy": 3, "minutes": null, "activity": null, "transition_in": "blend"}], "total_minutes": null, "hard_rules": {"no_vocals": false, "no_explicit": false, "no_sudden_loud_changes": false, "steady_tempo": false, "languages": [], "avoid": [], "max_track_minutes": null, "min_track_minutes": null}, "familiarity": "default", "tags": ["rainy", "cosy", "calm"], "support_note": false}"""
 
 
-def read_prompt(prompt: str, taste_summary: str, trace: Trace = NO_TRACE, spotify_id: str = "", memory: str = "",
+def read_prompt(prompt: str, taste_summary: str, trace: Trace = NO_TRACE, user_id: str = "", memory: str = "",
                 correction: str = "", recalled: str = "") -> Brief:
     """The brief for this prompt. Never raises: a failed or empty read gives fallback(prompt).
     `memory`: the user-wide memory block (per user). `recalled`: lessons recalled for this request (per request).
@@ -130,7 +130,7 @@ def read_prompt(prompt: str, taste_summary: str, trace: Trace = NO_TRACE, spotif
     messages = prompts.layout(SYSTEM_PROMPT, per_user, per_request)
     parsed = prompts.ask(
         "brief", settings.OPENAI_BRIEF_MODEL or settings.OPENAI_MODEL, messages, Brief, trace,
-        cache_key=f"moodify:brief:{spotify_id}" if spotify_id else "", usable=lambda brief: bool(brief.sections),
+        cache_key=f"moodify:brief:{user_id}" if user_id else "", usable=lambda brief: bool(brief.sections),
     )
     return tidy(parsed, prompt) if parsed else fallback(prompt)
 

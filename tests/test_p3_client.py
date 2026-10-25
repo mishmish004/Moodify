@@ -21,7 +21,7 @@ def user(test_settings):
 @pytest.fixture
 def sp(user):
     # Start with a valid-looking access token so tests only see a refresh when they cause one
-    with SpotifyClient(user["spotify_id"], user["refresh_token"], access_token="access-0") as client:
+    with SpotifyClient(user["user_id"], user["refresh_token"], access_token="access-0") as client:
         yield client
 
 

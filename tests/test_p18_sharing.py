@@ -16,13 +16,13 @@ from .test_p16_memory import assert_no_rows_for
 KINDS = list(sharing.SWITCHES)
 
 
-def _friend(spotify_id="friend2", name="Sam Rivera", taste=False, blend=False, listen_as=False, summary="Loves jazz and Bach."):
-    users.upsert(spotify_id, name, f"refresh-{spotify_id}", auth.SCOPES)
-    users.set_onboarding(spotify_id, {"genres": "jazz", "artists": "Bill Evans", "energy": "low"})
-    users.set_taste_summary(spotify_id, summary, "2026-10-24 08:00:00")
+def _friend(user_id="friend2", name="Sam Rivera", taste=False, blend=False, listen_as=False, summary="Loves jazz and Bach."):
+    users.upsert(user_id, name, f"refresh-{user_id}", auth.SCOPES)
+    users.set_onboarding(user_id, {"genres": "jazz", "artists": "Bill Evans", "energy": "low"})
+    users.set_taste_summary(user_id, summary, "2026-10-24 08:00:00")
     if taste or blend or listen_as:
-        sharing.save(spotify_id, taste, blend, listen_as)
-    return spotify_id
+        sharing.save(user_id, taste, blend, listen_as)
+    return user_id
 
 
 def _playlist(owner, title="Sunday cooking", prompt="secret prompt words", support=False, hidden=False) -> int:
@@ -41,8 +41,8 @@ def _access_rows():
 
 def _everywhere(viewer="friend1") -> dict:
     """Every list a person could appear in, by feature."""
-    return {"friends": [r["spotify_id"] for r in sharing.friends(viewer)],
-            **{kind: [r["spotify_id"] for r in sharing.friends(viewer, kind)] for kind in KINDS}}
+    return {"friends": [r["user_id"] for r in sharing.friends(viewer)],
+            **{kind: [r["user_id"] for r in sharing.friends(viewer, kind)] for kind in KINDS}}
 
 
 # --- off by default ---------------------------------------------------------------------------------------
