@@ -75,10 +75,11 @@ def upgraded(test_settings):
 
 
 def test_a_version_14_database_upgrades_with_every_row_and_foreign_key(upgraded, test_settings, tmp_path):
-    assert _counts(test_settings.DB_PATH) == upgraded and all(upgraded.values())
+    after = _counts(test_settings.DB_PATH)  # later migrations may add tables of their own
+    assert {t: after[t] for t in upgraded} == upgraded and all(upgraded.values())
     with get_conn() as conn:
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION == 15
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION
     init_db(tmp_path / "fresh.db")
     assert _schema(test_settings.DB_PATH) == _schema(tmp_path / "fresh.db")
 

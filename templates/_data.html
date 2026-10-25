@@ -1,0 +1,49 @@
+{# What Moodify does with people's data, on the login page and /privacy. `youtube`: show YouTube Music's parts.
+   YouTube's API policy (III.A.2) wants the privacy policy to link Google's and say where access is taken back. #}
+{% macro data_section(youtube=false) -%}
+<section class="mf-stack-4" aria-labelledby="data-h">
+  <h2 id="data-h" class="mf-h2">What happens to your data</h2>
+  <dl class="mf-stack-5">
+    <div class="mf-stack-2">
+      <dt class="mf-h3">What goes to OpenAI</dt>
+      <dd class="mf-muted">Each mood you type, with your answers to the taste questions and a summary of your listening, so its model can suggest songs. On Spotify the summary covers your most played artists and tracks, what you played recently, some of your liked songs, the artists you follow and your playlists' names.{% if youtube %} On YouTube Music it covers the music videos you liked, the channels you subscribe to and your playlists' names.{% endif %} Up to 150 songs you know are listed too, so some can go into your playlists. Not your email or your login.</dd>
+    </div>
+    <div class="mf-stack-2">
+      <dt class="mf-h3">What Moodify keeps</dt>
+      <dd class="mf-muted">Your account ID and name on your music service, a login token and which permissions you gave, your answers, that summary and song list (refreshed daily), the playlists it made for you with their tracks, and the songs you like and the 1–10 ratings you give in Moodify.</dd>
+    </div>
+    <div class="mf-stack-2">
+      <dt class="mf-h3">What it can do in your Spotify</dt>
+      <dd class="mf-muted">Read your listening history, liked songs, followed artists and playlists; create playlists in your account; add songs to your liked songs when you like them in Moodify (you can turn this off in Settings); and, when you press Play now, add songs to your queue.</dd>
+    </div>
+    {% if youtube %}
+    <div class="mf-stack-2">
+      <dt class="mf-h3">What it can do in your YouTube Music</dt>
+      <dd class="mf-muted">Moodify uses YouTube API Services. It reads the videos you liked, your playlists and your subscriptions; creates private playlists in your account when you ask for one; and likes songs on YouTube when you like them in Moodify, only if you switch that on. It never uploads anything, never changes your existing playlists, and never makes anything public unless you tick that box. Songs are found with YouTube Music's own search, which Moodify uses without your login.</dd>
+    </div>
+    {% endif %}
+    <div class="mf-stack-2">
+      <dt class="mf-h3">Your reviews and what Moodify learns</dt>
+      <dd class="mf-muted">When you write a review of a playlist, it's sent to OpenAI with that playlist's tracks, your likes and rating, so its model can work out what to do differently. What it learns (a few short lessons, each quoting your review) is sent along with your next requests, together with the songs you liked and what you asked for in playlists you rated 8 or more. Reviews, their earlier versions and the lessons are kept until you delete them or disconnect; "Memory" shows all of it and lets you delete any part.</dd>
+    </div>
+    <div class="mf-stack-2">
+      <dt class="mf-h3">How your songs are described</dt>
+      <dd class="mf-muted">The songs in your library (what you play, like and keep) are sent to OpenAI to be described: energy, mood, how electronic or danceable they are, decade, genres and language. Moodify keeps those descriptions with the songs, and they go when the songs leave your library.</dd>
+    </div>
+    <div class="mf-stack-2">
+      <dt class="mf-h3">Friends</dt>
+      <dd class="mf-muted">Nothing about you is shown to or used for other people on Moodify unless you switch it on under Friends → Sharing settings. Even then, what you type, your reviews, ratings and lessons are never shared.</dd>
+    </div>
+    <div class="mf-stack-2">
+      <dt class="mf-h3">How to delete it</dt>
+      <dd class="mf-muted">"Disconnect and delete my data", at the bottom of the home page, deletes everything Moodify stored about you, straight away. Playlists already in your music app stay there. To remove its access to Spotify as well, go to <a href="https://www.spotify.com/account/apps/">spotify.com/account/apps</a>.{% if youtube %} Disconnecting a YouTube Music account also takes back Moodify's access to it; you can take it back yourself at any time in your Google Account's security settings, at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.{% endif %}</dd>
+    </div>
+    {% if youtube %}
+    <div class="mf-stack-2">
+      <dt class="mf-h3">YouTube's and Google's terms</dt>
+      <dd class="mf-muted">Using Moodify with YouTube Music means agreeing to <a href="https://www.youtube.com/t/terms">YouTube's Terms of Service</a>. Google handles your sign-in and your YouTube data under the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</dd>
+    </div>
+    {% endif %}
+  </dl>
+</section>
+{%- endmacro %}

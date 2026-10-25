@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_data.html" import data_section %}
+{% block title %}Moodify · privacy{% endblock %}
+{% block content %}
+{# Phase 27: the privacy policy YouTube's API policy asks for (III.A.2), linked from the login page and the footer.
+   It says the same as the login page's data section, plus who to ask #}
+<div class="mf-stack-6" style="max-width: 640px; margin: 0 auto">
+  <div class="mf-stack-3">
+    <h1 class="mf-h1">Privacy</h1>
+    <p class="mf-lead">Moodify is a small app for a group of friends. This is everything it does with your data.</p>
+  </div>
+  {{ data_section(true) }}
+  <section class="mf-stack-2" aria-labelledby="ask-h">
+    <h2 id="ask-h" class="mf-h3">Questions</h2>
+    <p class="mf-muted">{% if contact %}Write to <a href="mailto:{{ contact }}">{{ contact }}</a> with any question or complaint about your data.{% else %}Ask whoever sent you the link to Moodify: they run it, and can answer any question or complaint about your data.{% endif %}</p>
+  </section>
+</div>
+{% endblock %}

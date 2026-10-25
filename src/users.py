@@ -1,4 +1,6 @@
-"""The users table: who has logged in, and the refresh token Moodify acts with."""
+"""The users table: who has logged in, on which music service, and the refresh token Moodify acts with there.
+
+A Spotify user's id is their Spotify id; other services' ids are "<service>:<account id>" (Phase 25)."""
 import json
 import sqlite3
 from typing import Optional
@@ -6,14 +8,18 @@ from typing import Optional
 from src.db import get_conn
 
 
-def upsert(user_id: str, display_name: Optional[str], refresh_token: str, granted_scopes: Optional[str] = None) -> None:
-    """Create the user, or refresh name, token and granted scopes on a repeat login without touching onboarding or taste."""
+def upsert(user_id: str, display_name: Optional[str], refresh_token: str, granted_scopes: Optional[str] = None,
+           service: str = "spotify") -> None:
+    """Create the user, or refresh name, token and granted scopes on a repeat login without touching onboarding,
+    taste or settings. A new YouTube user's likes stay in Moodify until they say otherwise: YouTube's policy
+    wants express consent before Moodify likes anything for them (Phase 27)."""
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO users (user_id, display_name, refresh_token, granted_scopes) VALUES (?, ?, ?, ?)"
+            "INSERT INTO users (user_id, display_name, refresh_token, granted_scopes, service, likes_to_service)"
+            " VALUES (?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name,"
             " refresh_token = excluded.refresh_token, granted_scopes = excluded.granted_scopes",
-            (user_id, display_name, refresh_token, granted_scopes),
+            (user_id, display_name, refresh_token, granted_scopes, service, int(service != "youtube")),
         )
 
 

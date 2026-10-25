@@ -84,6 +84,9 @@ INFO = {
     # Spotify's quota is per developer account, so searches per build are capped
     "spotify": Info("spotify", "Spotify", "Liked Songs", can_queue=True, pool_explicit=True, max_searches=150,
                     name_chars=100, description_chars=300, access_url="https://www.spotify.com/account/apps/"),
+    # YouTube Music search costs no quota but is unofficial, so it's asked less; liked videos carry no explicit flag
+    "youtube": Info("youtube", "YouTube Music", "Liked music", can_queue=False, pool_explicit=False, max_searches=100,
+                    name_chars=100, description_chars=5000, access_url="https://myaccount.google.com/connections"),
 }
 
 
@@ -115,15 +118,23 @@ class MusicService(Protocol):
 
     def unlike(self, uri: str) -> None: ...
 
+    def check_room(self, songs: int) -> None:
+        """Raise QuotaExceeded now if the service couldn't save a playlist of `songs` songs, before any write."""
+
     def queue(self, uri: str) -> None:
         """Only where info(service).can_queue."""
 
 
+# The clients import Track from here, so they're imported when first needed
+
 def for_user(user) -> MusicService:
     """The client that acts for this user on their service."""
     if user["service"] == "spotify":
-        from src.spotify.client import SpotifyClient  # it imports Track from here
+        from src.spotify.client import SpotifyClient
         return SpotifyClient.for_user(user)
+    if user["service"] == "youtube":
+        from src.youtube.client import YouTubeClient
+        return YouTubeClient.for_user(user)
     raise ValueError(f"no client for {user['service']}")
 
 
@@ -132,7 +143,26 @@ def missing_scopes(user) -> set[str]:
     if user["service"] == "spotify":
         from src.spotify import auth
         return auth.missing_scopes(user["granted_scopes"])
+    if user["service"] == "youtube":
+        from src.youtube import auth
+        return auth.missing_scopes(user["granted_scopes"])
     return set()
+
+
+def revoke(user) -> None:
+    """Take back Moodify's access on the service, where it has a way to (Google does; Spotify doesn't)."""
+    if user["service"] == "youtube":
+        from src.youtube import auth
+        auth.revoke(user["refresh_token"])
+
+
+def quota_words(service: str) -> tuple[str, str]:
+    """(title, sentence) for a build or request stopped by the service's quota."""
+    if service == "youtube":
+        from src.youtube import quota
+        return quota.words()
+    name = INFO[service].name if service in INFO else "The music service"
+    return f"{name} is asking us to slow down", f"The app's {name} quota is used up for now. Try again in an hour or so."
 
 
 T = TypeVar("T")

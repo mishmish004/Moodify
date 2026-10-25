@@ -818,9 +818,9 @@ Before building (you)
 - [ ] OAuth client of type "Web application", with redirect URIs `https://moodify.mish4mish.com/callback/youtube` and `http://127.0.0.1:9091/callback/youtube`. Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
 
 Build
-- [ ] `src/youtube/auth.py`: authorization code flow with PKCE plus the client secret (Google's web clients need both), `access_type=offline`, and `prompt=consent` on the first login. The account id is the ID token's `sub` and the name is its `name`. `invalid_grant` raises `ReauthRequired`
-- [ ] Login page: "Continue with YouTube Music" next to "Continue with Spotify", with `POST /login/youtube` and `GET /callback/youtube`. Spotify's routes stay where they are, since Spotify's dashboard has `/callback` registered. The data section says what's read from each service
-- [ ] `src/youtube/client.py` implements `MusicService`:
+- [x] `src/youtube/auth.py`: authorization code flow with PKCE plus the client secret (Google's web clients need both), `access_type=offline`, and `prompt=consent` on the first login. The account id is the ID token's `sub` and the name is its `name`. `invalid_grant` raises `ReauthRequired`
+- [x] Login page: "Continue with YouTube Music" next to "Continue with Spotify", with `POST /login/youtube` and `GET /callback/youtube`. Spotify's routes stay where they are, since Spotify's dashboard has `/callback` registered. The data section says what's read from each service
+- [x] `src/youtube/client.py` implements `MusicService`:
   - `listening()` reads, for about 15 units:
     - liked videos (`videos.list?myRating=like`), Music category only, up to 4 pages of 50
     - your playlists (`playlists.list?mine=true`), and the items of the first 5, with lengths from `videos.list` (50 ids per call)
@@ -831,39 +831,50 @@ Build
   - `search_track`: a `ytmusicapi` search with `filter="songs"` and 10 results, run in a thread with a 10-second timeout. Errors become `ServiceError`. Three failures in a row stop the search step, instead of trying 150 times.
   - `create_playlist` calls `playlists.insert` with the playlist private, a title of at most 150 characters and a description of at most 5,000. `add_items` makes one `playlistItems.insert` call per song.
   - Likes: `videos.getRating` (1 unit), and `videos.rate` with `like` or `none` (50 units).
-- [ ] Quota:
+- [x] Quota:
   - `service_quota(service, day, units)`, where the day is a Pacific-time date. Every call adds its cost.
   - Before a build starts, its writes for the target length (50 + 50 per song) must fit in what's left. If they don't, the build fails with "YouTube's daily limit for Moodify is used up. It resets at {time in IST}".
   - A 403 `quotaExceeded` from Google gives the same message.
-- [ ] YouTube likes default to **off** for YouTube users. The onboarding page asks once ("Also like songs on YouTube when I ♥ them in Moodify"), and settings can change it
-- [ ] Links:
+- [x] YouTube likes default to **off** for YouTube users. The onboarding page asks once ("Also like songs on YouTube when I ♥ them in Moodify"), and settings can change it
+- [x] Links:
   - Playlists open at `https://music.youtube.com/playlist?list=…`, songs at `https://music.youtube.com/watch?v=…`.
   - On Android, an `intent://` link opens the YouTube Music app (`com.google.android.apps.youtube.music`), falling back to the web page.
   - On iPhone, a tap on the music.youtube.com link opens the app.
   - Opening the playlist by itself when it's ready works like Phase 17 where the phone allows it; otherwise there's the big button.
 - [ ] Branding: "Open in YouTube Music" with the YouTube Music icon from YouTube's brand resources. Every YouTube track links back to YouTube Music
-- [ ] `/privacy` covers:
+- [x] `/privacy` covers:
   - what Moodify stores, what goes to OpenAI, and how to delete it
   - links to YouTube's Terms of Service and Google's Privacy Policy
   - how to revoke access at https://myaccount.google.com/connections
 
   It's linked from the login page and the footer, and the Google button says that signing in means agreeing to it.
-- [ ] Disconnect revokes the Google token at `https://oauth2.googleapis.com/revoke` before deleting the data
-- [ ] An account without a YouTube channel may not be able to own playlists. If `playlists.insert` answers `youtubeSignupRequired`, show how to create a channel. Check in the live test whether this happens
-- [ ] `ytmusicapi`, pinned, in `requirements.txt`
+- [x] Disconnect revokes the Google token at `https://oauth2.googleapis.com/revoke` before deleting the data
+- [x] An account without a YouTube channel may not be able to own playlists. If `playlists.insert` answers `youtubeSignupRequired`, show how to create a channel. (Whether real accounts hit it: see the live test)
+- [x] `ytmusicapi`, pinned, in `requirements.txt`
 
 Tests (`tests/test_p27_youtube.py`: Google APIs mocked with `respx`, `ytmusicapi` stubbed)
-- [ ] login: the state check, the code exchange, and a new `youtube:<sub>` user. A second login updates the token without touching onboarding
-- [ ] `listening()` handles Topic channels, "Artist - Title" uploads and plain uploads, and leaves out liked videos that aren't music
-- [ ] a full build makes one private playlist with one insert per song, counts the units, and saves `youtube:track:` URIs
-- [ ] a build that can't afford its writes fails before any write and gives the reset time. A 403 `quotaExceeded` during a build gives the same message
-- [ ] likes: with the setting off, there's no `videos.rate` call. With it on, a like rates `like`, and an unlike rates `none` only if Moodify did the like
-- [ ] three search errors in a row stop the searching. With nothing found, the build fails with "Nothing matched", never an unhandled error
-- [ ] disconnect calls the revoke endpoint and leaves no rows
-- [ ] every page for a YouTube user shows YouTube Music links and branding, and no queue button
+- [x] login: the state check, the code exchange, and a new `youtube:<sub>` user. A second login updates the token without touching onboarding
+- [x] `listening()` handles Topic channels, "Artist - Title" uploads and plain uploads, and leaves out liked videos that aren't music
+- [x] a full build makes one private playlist with one insert per song, counts the units, and saves `youtube:track:` URIs
+- [x] a build that can't afford its writes fails before any write and gives the reset time. A 403 `quotaExceeded` during a build gives the same message
+- [x] likes: with the setting off, there's no `videos.rate` call. With it on, a like rates `like`, and an unlike rates `none` only if Moodify did the like
+- [x] three search errors in a row stop the build with "YouTube Music isn't answering"; one or two only cost those songs. Never an unhandled error
+- [x] disconnect calls the revoke endpoint and leaves no rows
+- [x] every page for a YouTube user shows YouTube Music links and branding, and no queue button
 - [ ] `live`: your Google account signs in and builds a 20-minute playlist that shows in YouTube Music, and the quota counter matches the Google Cloud console
 
 Gate: `pytest tests/test_p27_youtube.py` green, and a playlist made on `moodify.mish4mish.com` with a YouTube account plays in the YouTube Music app on your phone.
+
+Built 2026-10-25; not yet checked against Google, because that needs the steps above. What's left: you set up Google Cloud and add the official YouTube icon; then the live test and the gate. Built as planned, plus:
+- **Off until set up.** Without `GOOGLE_CLIENT_ID`, the YouTube button is hidden and `/login/youtube` answers 404, so this can ship before Google is set up. `GOOGLE_CLIENT_SECRET` is required with it. `YOUTUBE_DAILY_QUOTA` (default 10,000) is the allowance Moodify counts against.
+- **The quota check happens at the last moment.** It runs when the songs are found and their number is known, just before the first write: 50 for the playlist plus 50 per song must fit in what's left. That's exact, where the plan's estimate from the target length wasn't. Reads are counted as they're made (Google charges failed calls too). Days are Pacific dates, and the message gives the reset time in India time.
+- **Two new failure messages, for every service.** A service that stops answering mid-build now ends it with "{service} isn't answering" instead of the generic error. A Google account without a channel is told to create one at youtube.com/create_channel.
+- **Song data.** Liked videos and playlist items count only if they're in YouTube's Music category and have a length (no live streams). Titles lose "(Official Video)"-style tails. "Artist - Topic" and "…VEVO" channels give the artist's name. Searches run through one shared ytmusicapi client with a 10-second request timeout.
+- **Privacy contact.** `/privacy` shares the login page's data section, plus YouTube's terms, Google's Privacy Policy and the revoke link. YouTube's policy also wants a privacy contact. Your email isn't published: `CONTACT_EMAIL` sets one, and without it the page says to ask whoever sent the link.
+- **Pages.** Rows on YouTube tracks show an "opens elsewhere" arrow, since only Spotify's icon is in the repo. Settings and onboarding ask YouTube users about likes in YouTube's words. Opening the app by itself works on Android only; the iPhone gets the button.
+- **Image.** `ytmusicapi==1.12.3` adds `requests`. The image is 256 MB and the Docker tests pass.
+
+35 tests (1 live, which only reads).
 
 ---
 

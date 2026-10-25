@@ -232,6 +232,15 @@ MIGRATIONS = [
     ALTER TABLE track_likes RENAME COLUMN added_to_spotify TO added_to_service;
     ALTER TABLE users ADD COLUMN service TEXT NOT NULL DEFAULT 'spotify' CHECK (service IN ('spotify', 'youtube', 'apple'));
     """,
+    # 16 (Phase 27): quota units spent per service and day
+    """
+    CREATE TABLE IF NOT EXISTS service_quota (
+        service  TEXT NOT NULL,
+        day      TEXT NOT NULL,
+        units    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (service, day)
+    );
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

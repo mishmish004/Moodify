@@ -12,6 +12,7 @@ from src.db import get_conn, init_db
 from src.main import app
 from src.music import Info, Listening, Playlist, Track
 from src.spotify import auth
+from src.youtube import auth as youtube_auth
 
 from .conftest import default_brief, finish_build
 from .test_p4_taste import ONBOARDING
@@ -51,6 +52,9 @@ class FakeService:
     def add_items(self, playlist_id, uris):
         self.added += uris
 
+    def check_room(self, songs):
+        pass
+
     def is_liked(self, uri):
         return uri in self.liked
 
@@ -76,8 +80,8 @@ def fake(monkeypatch):
 def client(test_settings, fake):
     init_db()
     with get_conn() as conn:
-        conn.execute("INSERT INTO users (user_id, display_name, refresh_token, service, onboarding_json)"
-                     " VALUES ('youtube:t1', 'Tess Fake', 'r', 'youtube', ?)", (json.dumps(ONBOARDING),))
+        conn.execute("INSERT INTO users (user_id, display_name, refresh_token, service, onboarding_json, granted_scopes)"
+                     " VALUES ('youtube:t1', 'Tess Fake', 'r', 'youtube', ?, ?)", (json.dumps(ONBOARDING), youtube_auth.SCOPES))
     with TestClient(app, follow_redirects=False) as c:
         c.cookies.set("moodify_session", _cookie(test_settings, {"user_id": "youtube:t1"}))
         yield c
@@ -179,7 +183,8 @@ def test_no_queue_where_the_service_has_none(client, fake, respx_mock, briefs):
     assert client.post(f"/queue/{playlist_id}").status_code == 404
 
 
-def test_disconnect_names_where_to_take_back_access(client, fake):
+def test_disconnect_names_where_to_take_back_access(client, fake, respx_mock):
+    respx_mock.post(youtube_auth.REVOKE_URL).respond(200)  # a youtube user's token is taken back too (Phase 27)
     page = client.post("/disconnect")
     assert "https://tunebox.example/apps" in page.text and "Spotify" not in page.text
     assert users.get("youtube:t1") is None

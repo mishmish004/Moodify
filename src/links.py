@@ -22,7 +22,19 @@ GET_SPOTIFY = {
     "ios": "https://apps.apple.com/app/spotify-music-and-podcasts/id324684580",
     "desktop": "https://www.spotify.com/download/",
 }
-GET_APP = {"spotify": GET_SPOTIFY}
+GET_APP = {
+    "spotify": GET_SPOTIFY,
+    "youtube": {
+        "android": "https://play.google.com/store/apps/details?id=com.google.android.apps.youtube.music",
+        "ios": "https://apps.apple.com/app/youtube-music/id1017492454",
+        "desktop": "https://music.youtube.com/",
+    },
+}
+
+# YouTube Music (Phase 27): on Android an intent opens the app, falling back to the web page; on iPhone a tap on
+# the music.youtube.com link opens the app when it's installed. Only plain playlist and song links are rewritten
+YOUTUBE_MUSIC_APP = "com.google.android.apps.youtube.music"
+_YOUTUBE_PATH = re.compile(r"^/(playlist\?list=|watch\?v=)[A-Za-z0-9_-]+$")
 
 # Where each service's web pages live
 HOSTS = {"open.spotify.com": "spotify", "music.youtube.com": "youtube", "music.apple.com": "apple"}
@@ -98,6 +110,28 @@ def parse(url: str) -> Optional[tuple[str, str]]:
 
 
 def for_url(url: str, user_agent: Optional[str]) -> str:
-    """An open.spotify.com URL as the link for this device. URLs it doesn't recognise are returned as they are."""
+    """A Spotify or YouTube Music URL as the link for this device. URLs it doesn't recognise are returned as they are."""
     found = parse(url)
-    return open_link(*found, user_agent) if found else url
+    if found:
+        return open_link(*found, user_agent)
+    return _youtube_app(url) if device(user_agent) == "android" and service_of(url) == "youtube" else url
+
+
+def auto_open_for_url(url: str, user_agent: Optional[str]) -> Optional[str]:
+    """What a page may open by itself when the playlist at `url` is ready, or None."""
+    found = parse(url)
+    if found:
+        return auto_open_link(*found, user_agent)
+    if device(user_agent) == "android" and service_of(url) == "youtube":
+        app = _youtube_app(url)
+        return app if app != url else None
+    return None
+
+
+def _youtube_app(url: str) -> str:
+    split = urlsplit(url)
+    rest = split.path + (f"?{split.query}" if split.query else "")
+    if split.hostname != "music.youtube.com" or not _YOUTUBE_PATH.match(rest):
+        return url
+    return (f"intent://music.youtube.com{rest}#Intent;scheme=https;package={YOUTUBE_MUSIC_APP};"
+            f"S.browser_fallback_url={quote(url, safe='')};end")

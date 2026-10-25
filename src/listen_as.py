@@ -13,7 +13,7 @@ from typing import Optional
 
 from src import blend, jobs, library, playlists, sharing, taste, users
 from src.brief import Brief
-from src.core.exceptions import QuotaExceeded, ReauthRequired
+from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
 from src.jobs import NO_TRACE, Trace
@@ -81,6 +81,9 @@ def run(job_id: int, user_id: str, mood: str, friend_id: str) -> None:
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:
         jobs.fail(job_id, jobs.REAUTH)
+    except ServiceError as exc:
+        log.warning("job %d: %s didn't answer: %s", job_id, exc.service, exc)
+        jobs.fail(job_id, jobs.service_failure(exc))
     except Exception:
         log.exception("job %d failed", job_id)
         jobs.fail(job_id, jobs.ERROR)

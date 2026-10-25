@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # Spotify rejects `localhost`; loopback must be 127.0.0.1, anything else HTTPS
     SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:9091/callback"
 
+    # YouTube Music (Phase 27): Google sign-in for the YouTube Data API. Unset: only Spotify is offered
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[SecretStr] = None
+    GOOGLE_REDIRECT_URI: str = "http://127.0.0.1:9091/callback/youtube"
+    # The Google Cloud project's daily YouTube Data API units; raise it if Google grants more
+    YOUTUBE_DAILY_QUOTA: int = Field(10_000, gt=0)
+
     # LLM that turns mood + taste into song suggestions
     OPENAI_API_KEY: SecretStr = Field(...)
     OPENAI_MODEL: str = "gpt-5.4-mini"
@@ -37,6 +44,8 @@ class Settings(BaseSettings):
 
     DB_PATH: Path = PROJECT_ROOT / "data" / "moodify.db"
     BASE_URL: str = "http://127.0.0.1:9091"
+    # Where the privacy page says to send questions (YouTube API policy III.A.2.i). Unset: "ask whoever sent the link"
+    CONTACT_EMAIL: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
@@ -54,7 +63,15 @@ class Settings(BaseSettings):
             raise ValueError("SPOTIFY_REDIRECT_URI: Spotify rejects localhost, use 127.0.0.1")
         if self.ENV == "prod" and not self.SPOTIFY_REDIRECT_URI.startswith("https://"):
             raise ValueError("SPOTIFY_REDIRECT_URI must use https:// in prod")
+        if self.GOOGLE_CLIENT_ID and not self.GOOGLE_CLIENT_SECRET:
+            raise ValueError("GOOGLE_CLIENT_SECRET is needed with GOOGLE_CLIENT_ID: Google's web clients send both")
+        if self.GOOGLE_CLIENT_ID and self.ENV == "prod" and not self.GOOGLE_REDIRECT_URI.startswith("https://"):
+            raise ValueError("GOOGLE_REDIRECT_URI must use https:// in prod")
         return self
+
+    @property
+    def youtube_enabled(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID)
 
 
 @lru_cache()

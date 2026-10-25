@@ -12,11 +12,13 @@
 {%- endif %}
 {%- endmacro %}
 
+{# Rows have room for an icon only. Without the service's own mark here yet, an "opens elsewhere" arrow stands in;
+   the row's label names the service #}
 {% macro icon(service="spotify") -%}
 {% if service == "spotify" -%}
 <img class="mf-sp-icon" src="/static/spotify-icon.svg" alt="" width="25" height="24">
 {%- else -%}
-<span class="mf-xs mf-muted">{{ service_info(service).name }}</span>
+<svg class="mf-out-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>
 {%- endif %}
 {%- endmacro %}
 
@@ -36,6 +38,8 @@
 {% macro get_app(service="spotify") -%}
 {% if service == "spotify" -%}
 <p class="mf-small mf-muted mf-get-spotify">No Spotify app? <a class="mf-strong" href="{{ get_app_url('spotify') }}">GET SPOTIFY FREE</a></p>
+{%- elif service == "youtube" -%}
+<p class="mf-small mf-muted mf-get-spotify">No YouTube Music app? <a class="mf-strong" href="{{ get_app_url('youtube') }}">Get it</a></p>
 {%- endif %}
 {%- endmacro %}
 

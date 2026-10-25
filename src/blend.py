@@ -20,7 +20,7 @@ from typing import Optional
 
 from src import jobs, library, playlists, sharing, taste, users
 from src.brief import Brief
-from src.core.exceptions import QuotaExceeded, ReauthRequired
+from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
 from src.fill import SectionFill, minutes, songs_to_ask_for, window
@@ -300,6 +300,9 @@ def run(job_id: int, user_id: str, mood: str, friend_ids: list[str], lean: Optio
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:
         jobs.fail(job_id, jobs.REAUTH)
+    except ServiceError as exc:
+        log.warning("blend job %d: %s didn't answer: %s", job_id, exc.service, exc)
+        jobs.fail(job_id, jobs.service_failure(exc))
     except Exception:
         log.exception("blend job %d failed", job_id)
         jobs.fail(job_id, jobs.ERROR)

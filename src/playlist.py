@@ -19,7 +19,7 @@ from typing import Callable, Optional
 from src import jobs, likes, memory, music, playlists, search_cache, taste, users
 from src.arc import arrange, timeline
 from src.brief import Brief, familiar_percent, read_prompt
-from src.core.exceptions import QuotaExceeded, ReauthRequired
+from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError
 from src.core.logger import MoodifyLogger
 from src.fill import SectionFill, section_targets, songs_to_ask_for
 from src.jobs import NO_TRACE, Trace
@@ -56,6 +56,9 @@ def run(job_id: int, user_id: str, mood: str, fix_of: Optional[int] = None, like
         jobs.fail(job_id, jobs.QUOTA)
     except ReauthRequired:
         jobs.fail(job_id, jobs.REAUTH)
+    except ServiceError as exc:
+        log.warning("job %d: %s didn't answer: %s", job_id, exc.service, exc)
+        jobs.fail(job_id, jobs.service_failure(exc))
     except Exception:
         log.exception("job %d failed", job_id)
         jobs.fail(job_id, jobs.ERROR)
@@ -170,6 +173,7 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
         tracks = [t for section in ordered for t in section]
         minutes = round(sum(f.total for f in fills))
         trace.step(f"Saving the playlist to your {service.name}")
+        sp.check_room(len(tracks))  # a used-up quota stops the build here, before any write
         description = _description(brief, [f.total for f in fills], minutes, recipe.note, service.description_chars)
         playlist = sp.create_playlist(recipe.name(brief)[:service.name_chars], description, public=recipe.public)
         sp.add_items(playlist.id, [t.uri for t in tracks])

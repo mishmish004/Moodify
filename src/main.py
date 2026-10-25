@@ -24,6 +24,8 @@ from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError, Spo
 from src.core.logger import MoodifyLogger
 from src.db import init_db
 from src.spotify import auth
+from src.youtube import auth as youtube_auth
+from src.youtube import quota as youtube_quota
 
 SESSION_MAX_AGE = 30 * 24 * 60 * 60  # 30 days
 templates = Jinja2Templates(directory=PROJECT_ROOT / "templates")
@@ -79,6 +81,7 @@ async def lifespan(app: FastAPI):
     search_cache.prune()
     memory.expire_unused()
     library.prune()
+    youtube_quota.prune()
     yield
 
 
@@ -132,8 +135,8 @@ def _reauth(request: Request, exc: ReauthRequired) -> RedirectResponse:
 @app.exception_handler(QuotaExceeded)
 def _quota(request: Request, exc: QuotaExceeded):
     MoodifyLogger.get_logger("music").warning("quota/rate limit hit: %s", exc)
-    title, text = BUILD_FAILURES[jobs.QUOTA]
-    return _message(request, title.format(service=exc.service), text.format(service=exc.service), tone="low")
+    title, text = music.quota_words(exc.service_id or "")
+    return _message(request, title, text, tone="low")
 
 
 def _message(request: Request, title: str, text: str, status_code: int = 200, *, tone: Optional[str] = None,
@@ -194,14 +197,22 @@ def health() -> dict[str, str]:
 
 @app.get("/login")
 def login_page(request: Request, reason: str = ""):
-    return templates.TemplateResponse(request, "login.html", {"reason": reason})
+    return templates.TemplateResponse(request, "login.html", {
+        "reason": reason, "youtube": get_settings().youtube_enabled,
+    })
 
 
 @app.post("/login")
 def login(request: Request) -> RedirectResponse:
     state, verifier = secrets.token_urlsafe(16), auth.new_verifier()
-    request.session["oauth"] = {"state": state, "verifier": verifier}
+    request.session["oauth"] = {"state": state, "verifier": verifier, "service": "spotify"}
     return RedirectResponse(auth.authorize_url(state, verifier), status_code=303)
+
+
+def _oauth_ok(oauth: Optional[dict], service: str, code: str, state: str) -> bool:
+    """The callback finishes a login that started here, for this service, and hasn't been used."""
+    return bool(oauth and code and oauth.get("service", "spotify") == service
+                and secrets.compare_digest(state.encode(), oauth["state"].encode()))
 
 
 @app.get("/callback")
@@ -211,7 +222,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
         return _message(request, "Login cancelled",
                         "You didn't finish logging in with Spotify, so nothing changed. You can try again whenever you like.",
                         status_code=400, back=("Try again", "/login"), tone="up")
-    if not oauth or not code or not secrets.compare_digest(state.encode(), oauth["state"].encode()):
+    if not _oauth_ok(oauth, "spotify", code, state):
         return _message(request, "Login expired", "This login link is stale or didn't start here. Please log in again.",
                         status_code=400)
     try:
@@ -227,6 +238,56 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
     users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token, tokens.scope)
     request.session["user_id"] = profile["id"]
     return RedirectResponse("/", status_code=303)
+
+
+# --- YouTube Music (Phase 27): Google sign-in --------------------------------------------------------------
+
+@app.post("/login/youtube")
+def login_youtube(request: Request) -> RedirectResponse:
+    if not get_settings().youtube_enabled:
+        raise StarletteHTTPException(404)
+    state, verifier = secrets.token_urlsafe(16), youtube_auth.new_verifier()
+    request.session["oauth"] = {"state": state, "verifier": verifier, "service": "youtube"}
+    return RedirectResponse(youtube_auth.authorize_url(state, verifier), status_code=303)
+
+
+@app.get("/callback/youtube")
+def callback_youtube(request: Request, code: str = "", state: str = "", error: str = ""):
+    oauth = request.session.pop("oauth", None)
+    if error:
+        return _message(request, "Sign-in cancelled",
+                        "You didn't finish signing in with Google, so nothing changed. You can try again whenever you like.",
+                        status_code=400, back=("Try again", "/login"), tone="up")
+    if not _oauth_ok(oauth, "youtube", code, state):
+        return _message(request, "Login expired", "This login link is stale or didn't start here. Please log in again.",
+                        status_code=400)
+    try:
+        tokens = youtube_auth.exchange_code(code, oauth["verifier"])
+    except ServiceError as exc:
+        MoodifyLogger.get_logger("auth").warning("YouTube sign-in failed: %s", exc)
+        return _message(request, "Sign-in failed", "Google sign-in failed. Please try again.", status_code=502)
+    if youtube_auth.missing_scopes(tokens.scope):
+        # Google lets people untick a permission; without this one Moodify can't read or make anything
+        return _message(request, "Moodify needs YouTube access",
+                        "To read your likes and save playlists to YouTube Music, Moodify needs the permission to manage"
+                        " your YouTube account. Sign in again and leave it ticked.",
+                        status_code=403, back=("Try again", "/login"), tone="low")
+    user_id = f"youtube:{tokens.claims.get('sub', '')}"
+    existing = users.get(user_id)
+    refresh_token = tokens.refresh_token or (existing["refresh_token"] if existing else "")
+    if not tokens.claims.get("sub") or not refresh_token:
+        return _message(request, "Sign-in failed", "Google didn't say who signed in. Please try again.", status_code=502)
+    users.upsert(user_id, tokens.claims.get("name"), refresh_token, tokens.scope, service="youtube")
+    request.session["user_id"] = user_id
+    return RedirectResponse("/", status_code=303)
+
+
+@app.get("/privacy")
+def privacy(request: Request):
+    user_id = _session_user_id(request)
+    return templates.TemplateResponse(request, "privacy.html", {
+        "user": users.get(user_id) if user_id else None, "contact": get_settings().CONTACT_EMAIL,
+    })
 
 
 def onboarded_user(user: sqlite3.Row = Depends(current_user)) -> sqlite3.Row:
@@ -270,8 +331,11 @@ BUILD_FAILURES = {
                           "The AI model didn't answer, even on a second try. Nothing was created. Try again in a minute."),
     jobs.NO_MATCHES: ("Nothing matched",
                       "None of the suggested songs could be found on {service}. Try describing the mood differently."),
-    jobs.QUOTA: ("{service} is asking us to slow down",
-                 "The app's {service} quota is used up for now. Try again in an hour or so."),
+    jobs.UNREACHABLE: ("{service} isn't answering",
+                       "Moodify couldn't get through to {service}, so nothing was made. Try again in a few minutes."),
+    jobs.NO_CHANNEL: ("Your Google account needs a YouTube channel",
+                      "YouTube only lets accounts with a channel own playlists, so nothing was made. Create one at"
+                      " youtube.com/create_channel (it can stay empty), then make the playlist again."),
     jobs.INTERRUPTED: ("Interrupted", "Moodify restarted while making this playlist. Nothing was saved. Try again."),
     jobs.ERROR: ("Something went wrong", "The playlist couldn't be made, and nothing was saved. Try again."),
     blend.NOT_SHARED: ("Not shared any more", "Someone you picked switched off sharing before the playlist started."
@@ -302,7 +366,10 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
             request.session.clear()
             return RedirectResponse("/login", status_code=303)
         service = music.info(user["service"]).name
-        title, text = (words.format(service=service) for words in BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR]))
+        if job["error"] == jobs.QUOTA:
+            title, text = music.quota_words(user["service"])
+        else:
+            title, text = (words.format(service=service) for words in BUILD_FAILURES.get(job["error"], BUILD_FAILURES[jobs.ERROR]))
         return templates.TemplateResponse(request, "job.html", {
             "user": user, "job": job, "failed": True, "title": title, "text": text,
             "steps": pages.build_steps(job["step"], failed=True, service=service),
@@ -319,9 +386,8 @@ def playlist_page(request: Request, playlist_id: int, user: sqlite3.Row = Depend
     if row is None:
         return _message(request, "Not found", "That playlist isn't yours or doesn't exist.", status_code=404, user=user,
                         code="404 · Not found")
-    found = links.parse(row["url"])
-    auto_open = (links.auto_open_link(*found, request.headers.get("user-agent"))
-                 if ready and found and user["open_app"] else None)
+    auto_open = (links.auto_open_for_url(row["url"], request.headers.get("user-agent"))
+                 if ready and user["open_app"] else None)
     brief = Brief.model_validate_json(row["brief_json"]) if row["brief_json"] else None
     tracks = playlists.tracks(playlist_id)
     total_ms = sum(t.duration_ms for t in tracks)
@@ -724,6 +790,8 @@ async def onboarding_submit(request: Request, user: sqlite3.Row = Depends(curren
     if errors:
         return _onboarding_page(request, user, answers, errors, status_code=422)
     users.set_onboarding(user["user_id"], answers)
+    if user["service"] == "youtube":  # asked on this page for YouTube users (Phase 27)
+        users.set_likes_to_service(user["user_id"], form.get("likes_to_service") is not None)
     return RedirectResponse("/", status_code=303)
 
 
@@ -731,6 +799,7 @@ async def onboarding_submit(request: Request, user: sqlite3.Row = Depends(curren
 def disconnect(request: Request, user: sqlite3.Row = Depends(any_user)):
     # Spotify requires deleting a user's data within 5 days of disconnect; we do it now
     service = music.info(user["service"])
+    music.revoke(user)  # Google's policy: take back the token too, not only the data (Phase 27)
     users.delete(user["user_id"])
     request.session.clear()
     return _message(request, "Disconnected",

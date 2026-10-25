@@ -25,6 +25,13 @@ QUOTA = "quota"
 REAUTH = "reauth"
 ERROR = "error"
 INTERRUPTED = "interrupted"
+UNREACHABLE = "unreachable"  # the user's service didn't answer, or kept failing (Phase 27)
+NO_CHANNEL = "no_channel"    # a Google account without a YouTube channel can't own playlists (Phase 27)
+
+
+def service_failure(exc) -> str:
+    """The failure code for a ServiceError that ended a build."""
+    return NO_CHANNEL if getattr(exc, "reason", "") == "youtubeSignupRequired" else UNREACHABLE
 
 
 def create(user_id: str, prompt: str) -> int:

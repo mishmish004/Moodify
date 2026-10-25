@@ -226,3 +226,11 @@ CREATE TABLE IF NOT EXISTS track_features (
     model        TEXT NOT NULL,
     judged_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Phase 27: quota units spent per service and day; YouTube's day is a Pacific-time date (src/youtube/quota.py)
+CREATE TABLE IF NOT EXISTS service_quota (
+    service  TEXT NOT NULL,
+    day      TEXT NOT NULL,
+    units    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (service, day)
+);

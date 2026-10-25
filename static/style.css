@@ -389,6 +389,8 @@
   .mf:not([data-theme="light"]) .mf-sp-logo, .mf:not([data-theme="light"]) .mf-sp-icon { filter: invert(1); }
   .mf:not([data-theme="light"]) .mf-btn--spotify .mf-sp-logo { filter: none; }
 }
+/* Phase 26: a row's "opens on its service" mark for services without their own icon here; follows the text colour */
+.mf-out-icon { display: block; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mf-sp-link { display: inline-flex; align-items: center; justify-content: center; width: var(--mf-tap); height: var(--mf-tap); flex: 0 0 var(--mf-tap); border-radius: 50%; }
 .mf-sp-attrib { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 

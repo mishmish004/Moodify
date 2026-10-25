@@ -83,6 +83,11 @@
     {{ options("familiar", [("new", "Mostly new"), ("mix", "A mix"), ("known", "Mostly ones I know")], answers.familiar or "mix") }}
   </fieldset>
 
+  {% if user.service == "youtube" %}
+  {# Phase 27: YouTube's policy wants express consent before Moodify likes anything for someone, so it's asked here, off #}
+  <label class="mf-switch"><input type="checkbox" name="likes_to_service" value="on" {% if user.likes_to_service %}checked{% endif %}><span class="mf-switch__track" aria-hidden="true"><span class="mf-switch__thumb"></span></span><span class="mf-stack-2"><span class="mf-strong">Also like songs on YouTube when I ♥ them in Moodify</span><span class="mf-hint">Off unless you switch it on. Unliking takes the like back, but only if Moodify made it. You can change this in Settings.</span></span></label>
+  {% endif %}
+
   <div class="mf-stack-3">
     <button class="mf-btn mf-btn--primary mf-btn--block mf-btn--xl" type="submit">Save</button>
     <p class="mf-hint" style="text-align: center">You can change these later from the home page.</p>

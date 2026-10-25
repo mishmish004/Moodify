@@ -159,6 +159,9 @@ class SpotifyClient:
     def unlike(self, uri: str) -> None:
         self.remove_from_library([uri])
 
+    def check_room(self, songs: int) -> None:
+        """Spotify's quota isn't counted ahead: a 429 says when it's used up."""
+
     def queue(self, uri: str) -> None:
         """Premium only, on the user's active device: expect a SpotifyError (403/404) otherwise."""
         self._request("POST", "/me/player/queue", params={"uri": uri})
