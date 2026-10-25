@@ -98,6 +98,16 @@ def test_blends_show_to_the_people_in_them(user):
     assert _lines("friend3") == []  # not in it
 
 
+def test_a_blend_whose_friends_all_left_still_shows(user):
+    """Disconnecting deletes a friend's blend_members row; the Blend stays its owner's playlist."""
+    _friend("friend2", "Sam Rivera")
+    sharing.save("friend1", True, False, False)
+    pid = _playlist("friend1", "Sunday cooking")
+    blend.save(pid, "friend1", blend.members_for(users.get("friend1"), ["friend2"]), [set()], None)
+    users.delete("friend2")
+    assert _lines("friend1") == ["You made a Blend: Sunday cooking · 42 min"]
+
+
 def test_a_blend_by_someone_who_doesnt_show_their_taste_still_reaches_its_members(user):
     _friend("friend2", "Sam Rivera", show=False)
     pid = _playlist("friend2", "Sam's blend")

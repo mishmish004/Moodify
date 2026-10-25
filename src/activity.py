@@ -99,7 +99,9 @@ def feed(viewer: str) -> list[Item]:
                         "SELECT u.spotify_id, u.display_name FROM blend_members m JOIN users u USING (spotify_id)"
                         " WHERE m.blend_id = ? AND m.spotify_id != ? ORDER BY m.position", (r["blend_id"], sid))]
                     kind = "blend" if mine else "blend_with_you"
-                    items.append(Item(r["created_at"], kind, who, f"made a Blend with {_and(others)}:", title, details, link))
+                    # Friends who disconnected are gone from blend_members; with nobody left it's just "a Blend"
+                    with_whom = f" with {_and(others)}" if others else ""
+                    items.append(Item(r["created_at"], kind, who, f"made a Blend{with_whom}:", title, details, link))
                 elif r["heard_as"] and not mine:  # only that friend gets here (see _playlists)
                     items.append(Item(r["created_at"], "heard_as_you", who, "made", title,
                                       f" the way you'd hear it{details}"))
