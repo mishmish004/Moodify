@@ -107,19 +107,29 @@ export const uses = {
   ],
 };
 
+type Work = { name: string; client: string; points: string[] };
+
 export const resume = {
   updated: 'Oct 2026',
   // A PDF in public/, e.g. '/amish-shah-resume.pdf'. Empty hides the Download button.
   pdf: '',
-  summary: 'I build backend systems that have to be right: exactly-once metering on Kafka, storage engines in Rust, data pipelines that never lose a row. Co-founder of Viralyzer, which I built end to end.',
+  summary: 'I build backend systems that have to be right: exactly-once metering on Kafka, storage engines in Rust, data pipelines that never lose a row. Self-employed, I built Viralyzer end to end for lochanandjune.',
+  // org is shown muted after the role, e.g. 'at Acme'. Empty shows the role on its own.
+  // work is the work done in that role: one entry per project, with the client it was for.
   jobs: [
     {
-      role: 'Technical Co-founder', company: 'Viralyzer', when: 'Aug 2026 – now',
-      points: [
-        'Built Viralyzer entirely, from the first commit to production.',
-        'Viralyzer is AI that doomscrolls, spots, tracks, scripts, edits and generates content for you, so you don’t have to.',
-        'Built to make life easier for social media marketers: a must-have for making short-form and long-form content in 2026.',
-      ],
+      role: 'S/W Engineer', org: '– self-employed', when: 'Aug 2026 – now',
+      points: [] as string[],
+      work: [
+        {
+          name: 'Viralyzer', client: 'lochanandjune',
+          points: [
+            'Built Viralyzer entirely, from the first commit to production.',
+            'Viralyzer is AI that doomscrolls, spots, tracks, scripts, edits and generates content for you, so you don’t have to.',
+            'Built to make life easier for social media marketers: a must-have for making short-form and long-form content in 2026.',
+          ],
+        },
+      ] as Work[],
       // TODO: Viralyzer's URL. Empty hides "Visit Viralyzer".
       site: '', siteLabel: 'Visit Viralyzer',
       repos: [] as { name: string; href: string }[],
@@ -127,9 +137,10 @@ export const resume = {
       tag: 'viralyzer',
     },
     {
-      role: 'Intern', company: 'startups', when: '2024 – 2025',
+      role: 'Interning here and there yet everywhere', org: '', when: '2024 – 2025',
       // TODO: what you built or shipped, one line per startup
       points: [] as string[],
+      work: [] as Work[],
       site: '', siteLabel: '',
       // TODO: { name: 'repo-name', href: 'https://github.com/…' }
       repos: [] as { name: string; href: string }[],

@@ -47,10 +47,20 @@ const jobs = resume.jobs.map((j) => ({
         {jobs.map((j) => (
           <li>
             <div class="job-head">
-              <h3 class="display">{j.role} <span class="muted">at {j.company}</span></h3>
+              <h3 class="display">{j.role} {j.org && <span class="muted">{j.org}</span>}</h3>
               <span class="mono when">{j.when}</span>
             </div>
             {j.points.length > 0 && <ul class="points">{j.points.map((pt) => <li>{pt}</li>)}</ul>}
+            {j.work.length > 0 && (
+              <ul class="points work">
+                {j.work.map((w) => (
+                  <li>
+                    <span class="work-name">{w.name}</span> – {w.client}
+                    {w.points.length > 0 && <ul class="points">{w.points.map((pt) => <li>{pt}</li>)}</ul>}
+                  </li>
+                ))}
+              </ul>
+            )}
             {j.site && <a class="site-link" href={j.site}>{j.siteLabel}<span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>}
             {j.repos.length > 0 && (
               <div class="repos">
@@ -62,7 +72,7 @@ const jobs = resume.jobs.map((j) => ({
               <div class="docs">
                 <p class="label">write-ups tagged {j.tag}</p>
                 <ul>{j.docs.map((d) => <li><a href={`/yapping/${d.id}`}>{d.data.title}<span class="arrow" aria-hidden="true">&#160;→</span></a></li>)}</ul>
-                <a class="muted all" href="/yapping">All {j.company} posts in the log <span class="arrow" aria-hidden="true">&#160;→</span></a>
+                <a class="muted all" href="/yapping">All {j.tag} posts in the log <span class="arrow" aria-hidden="true">&#160;→</span></a>
               </div>
             )}
           </li>
@@ -130,6 +140,8 @@ const jobs = resume.jobs.map((j) => ({
   .job-head h3 { font-size: clamp(24px, 2.2vw, 30px); line-height: 1.15; letter-spacing: -0.015em; }
   .when { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .points { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 17px; line-height: 1.55; color: var(--ink-2); }
+  .work-name { font-weight: 500; color: var(--ink); }
+  .work .points { margin-top: 8px; }
   .site-link { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; font-weight: 500; }
   .repos { margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
   .repos .label { margin-right: 4px; }
