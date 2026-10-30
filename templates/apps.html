@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Moodify · Spotify apps{% endblock %}
+{% block content %}
+<div class="mf-stack-6" style="max-width: 640px; margin: 0 auto">
+  <div class="mf-stack-2">
+    <h1 class="mf-h1">Spotify apps</h1>
+    <p class="mf-muted">Paste each app's allowlist from the Spotify dashboard (Settings → User Management): the Spotify emails, in any layout. When a friend types their email on the login page, Moodify sends them to their app first. A login that works on another app updates the list by itself.</p>
+  </div>
+  {% if saved %}<div class="mf-notice" role="status"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"></circle><path d="M6 10l3 3 5-6"></path></svg><p>Saved.</p></div>{% endif %}
+  <form method="post" action="/apps" class="mf-stack-5">
+    {% for a in apps %}
+    <div class="mf-field">
+      <label class="mf-strong" for="app{{ a.number }}">App {{ a.number }} <span class="mf-small mf-muted mf-num">· {{ a.client_id[:8] }}… · {{ a.users }} logged in · {{ a.emails | length }} listed</span></label>
+      <textarea id="app{{ a.number }}" class="mf-textarea mf-textarea--short" name="app{{ a.number }}" rows="5" placeholder="friend@example.com, another@example.com">{{ a.emails | join("\n") }}</textarea>
+    </div>
+    {% endfor %}
+    <button class="mf-btn mf-btn--primary" type="submit" style="align-self: flex-start">Save</button>
+  </form>
+</div>
+{% endblock %}

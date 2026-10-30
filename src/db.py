@@ -251,6 +251,18 @@ MIGRATIONS = [
     ALTER TABLE lessons ADD COLUMN embedding BLOB;
     ALTER TABLE lessons ADD COLUMN embedded_with TEXT;
     """,
+    # 19: the OAuth app each user logged in through (SPOTIFY_EXTRA_CLIENT_IDS); NULL is the service's main app
+    """
+    ALTER TABLE users ADD COLUMN oauth_client_id TEXT;
+    """,
+    # 20: which Spotify app's allowlist holds each friend's email, pasted by the owner (src/spotify_apps.py)
+    """
+    CREATE TABLE IF NOT EXISTS spotify_app_members (
+        email            TEXT PRIMARY KEY,
+        oauth_client_id  TEXT NOT NULL,
+        added_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

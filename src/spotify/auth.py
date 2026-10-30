@@ -10,6 +10,7 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass
+from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
@@ -53,10 +54,11 @@ def code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def authorize_url(state: str, verifier: str) -> str:
+def authorize_url(state: str, verifier: str, client_id: Optional[str] = None) -> str:
+    """`client_id`: the Spotify app to log in through (SPOTIFY_EXTRA_CLIENT_IDS). None: SPOTIFY_CLIENT_ID."""
     settings = get_settings()
     params = {
-        "client_id": settings.SPOTIFY_CLIENT_ID,
+        "client_id": client_id or settings.SPOTIFY_CLIENT_ID,
         "response_type": "code",
         "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
         "scope": SCOPES,
@@ -67,24 +69,25 @@ def authorize_url(state: str, verifier: str) -> str:
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
-def exchange_code(code: str, verifier: str) -> Tokens:
+def exchange_code(code: str, verifier: str, client_id: Optional[str] = None) -> Tokens:
     settings = get_settings()
     data = _token_request({
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
-        "client_id": settings.SPOTIFY_CLIENT_ID,
+        "client_id": client_id or settings.SPOTIFY_CLIENT_ID,
         "code_verifier": verifier,
     })
     return Tokens(data["access_token"], data["refresh_token"], int(data["expires_in"]), data.get("scope", ""))
 
 
-def refresh(refresh_token: str) -> Tokens:
-    """New access token. Raises SpotifyReauthRequired when Spotify rejects the refresh token."""
+def refresh(refresh_token: str, client_id: Optional[str] = None) -> Tokens:
+    """New access token. Raises SpotifyReauthRequired when Spotify rejects the refresh token.
+    `client_id` must be the app the user logged in through: a refresh token only works with its own app."""
     data = _token_request({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
-        "client_id": get_settings().SPOTIFY_CLIENT_ID,
+        "client_id": client_id or get_settings().SPOTIFY_CLIENT_ID,
     })
     # Spotify sometimes rotates the refresh token; keep the old one when it doesn't
     return Tokens(data["access_token"], data.get("refresh_token") or refresh_token, int(data["expires_in"]))

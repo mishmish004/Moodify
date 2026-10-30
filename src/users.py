@@ -9,17 +9,21 @@ from src.db import get_conn
 
 
 def upsert(user_id: str, display_name: Optional[str], refresh_token: str, granted_scopes: Optional[str] = None,
-           service: str = "spotify") -> None:
+           service: str = "spotify", oauth_client_id: Optional[str] = None) -> None:
     """Create the user, or refresh name, token and granted scopes on a repeat login without touching onboarding,
     taste or settings. A new YouTube user's likes stay in Moodify until they say otherwise: YouTube's policy
-    wants express consent before Moodify likes anything for them (Phase 27)."""
+    wants express consent before Moodify likes anything for them (Phase 27). `oauth_client_id` is the app (OAuth
+    client) this login went through, e.g. one of SPOTIFY_EXTRA_CLIENT_IDS. It's kept with the refresh token,
+    which only works with that app."""
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO users (user_id, display_name, refresh_token, granted_scopes, service, likes_to_service)"
-            " VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (user_id, display_name, refresh_token, granted_scopes, service, likes_to_service,"
+            " oauth_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name,"
-            " refresh_token = excluded.refresh_token, granted_scopes = excluded.granted_scopes",
-            (user_id, display_name, refresh_token, granted_scopes, service, int(service != "youtube")),
+            " refresh_token = excluded.refresh_token, granted_scopes = excluded.granted_scopes,"
+            " oauth_client_id = excluded.oauth_client_id",
+            (user_id, display_name, refresh_token, granted_scopes, service, int(service != "youtube"),
+             oauth_client_id),
         )
 
 
@@ -54,6 +58,14 @@ def set_open_app(user_id: str, on: bool) -> None:
 def set_refresh_token(user_id: str, refresh_token: str) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE users SET refresh_token = ? WHERE user_id = ?", (refresh_token, user_id))
+
+
+def count_by_app() -> dict[Optional[str], int]:
+    """Spotify users per app they logged in through (oauth_client_id; None for the main app before extra apps)."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT oauth_client_id, count(*) FROM users WHERE service = 'spotify'"
+                            " GROUP BY oauth_client_id")
+        return {row[0]: row[1] for row in rows}
 
 
 def get(user_id: str) -> Optional[sqlite3.Row]:

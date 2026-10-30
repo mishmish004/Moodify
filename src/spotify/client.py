@@ -38,16 +38,18 @@ class SpotifyClient:
     means the user has to log in again.
     """
 
-    def __init__(self, spotify_id: str, refresh_token: str, access_token: Optional[str] = None):
+    def __init__(self, spotify_id: str, refresh_token: str, access_token: Optional[str] = None,
+                 client_id: Optional[str] = None):
         self.spotify_id = spotify_id
         self.refresh_token = refresh_token
         self.access_token = access_token
+        self.client_id = client_id  # the Spotify app the user logged in through; None: SPOTIFY_CLIENT_ID
         self.http = httpx.Client(base_url=API_URL, timeout=auth.TIMEOUT)
 
     @classmethod
     def for_user(cls, user) -> "SpotifyClient":
         # A Spotify user's Moodify id is their Spotify id (src/schema.sql)
-        return cls(user["user_id"], user["refresh_token"])
+        return cls(user["user_id"], user["refresh_token"], client_id=user["oauth_client_id"])
 
     def __enter__(self) -> "SpotifyClient":
         return self
@@ -190,7 +192,7 @@ class SpotifyClient:
             raise SpotifyError(0, repr(exc)) from exc
 
     def _refresh_access_token(self) -> None:
-        tokens = auth.refresh(self.refresh_token)
+        tokens = auth.refresh(self.refresh_token, self.client_id)
         self.access_token = tokens.access_token
         if tokens.refresh_token != self.refresh_token:
             self.refresh_token = tokens.refresh_token

@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS users (
     open_app          INTEGER NOT NULL DEFAULT 1,
     -- Phase 25: which music service the account uses. A Spotify user's user_id is their Spotify id;
     -- other services' ids are '<service>:<the service's account id>'
-    service           TEXT NOT NULL DEFAULT 'spotify' CHECK (service IN ('spotify', 'youtube', 'apple'))
+    service           TEXT NOT NULL DEFAULT 'spotify' CHECK (service IN ('spotify', 'youtube', 'apple')),
+    -- The OAuth app the user logged in through, e.g. one of SPOTIFY_EXTRA_CLIENT_IDS; their refresh token
+    -- only works with it. NULL: the service's main app (SPOTIFY_CLIENT_ID)
+    oauth_client_id   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS playlists (
@@ -239,4 +242,12 @@ CREATE TABLE IF NOT EXISTS service_quota (
     day      TEXT NOT NULL,
     units    INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (service, day)
+);
+
+-- Which Spotify app's allowlist holds each friend's email, pasted by the owner on /apps (src/spotify_apps.py).
+-- The login page asks for the email and tries that app first
+CREATE TABLE IF NOT EXISTS spotify_app_members (
+    email            TEXT PRIMARY KEY,
+    oauth_client_id  TEXT NOT NULL,
+    added_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

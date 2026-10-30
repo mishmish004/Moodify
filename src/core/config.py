@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_SECRET: Optional[SecretStr] = None
     # Spotify rejects `localhost`; loopback must be 127.0.0.1, anything else HTTPS
     SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:9091/callback"
+    # More Spotify developer apps for testing, comma-separated Client IDs. App 1 is SPOTIFY_CLIENT_ID; the invite
+    # link /login?app=N logs a friend in through app N, and their refresh token then only works with that app.
+    # Each app needs SPOTIFY_REDIRECT_URI and its own 5-person allowlist on the dashboard. Spotify's rules allow
+    # one Development Mode Client ID per developer and one per app (Developer Policy VII)
+    SPOTIFY_EXTRA_CLIENT_IDS: str = ""
+    # The Moodify account (user_id) that may edit which friends are on which Spotify app (/apps). Unset: nobody
+    OWNER_USER_ID: Optional[str] = None
 
     # YouTube Music (Phase 27): Google sign-in for the YouTube Data API. Unset: only Spotify is offered
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -75,6 +82,12 @@ class Settings(BaseSettings):
     @property
     def youtube_enabled(self) -> bool:
         return bool(self.GOOGLE_CLIENT_ID)
+
+    @property
+    def spotify_client_ids(self) -> list[str]:
+        """Every Spotify app Moodify logs people in through: app N is item N - 1, SPOTIFY_CLIENT_ID first."""
+        ids = [self.SPOTIFY_CLIENT_ID, *(part.strip() for part in self.SPOTIFY_EXTRA_CLIENT_IDS.split(","))]
+        return list(dict.fromkeys(i for i in ids if i))
 
 
 @lru_cache()

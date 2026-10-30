@@ -16,8 +16,20 @@
     <div class="mf-stack-3">
       {# POST, not a link: starting the Spotify login from a GET lets prefetchers and crawlers use up the one-time state #}
       <form method="post" action="/login">
+        {# /login?app=N forces Spotify app N (SPOTIFY_EXTRA_CLIENT_IDS), for testing; the plain link finds the app itself #}
+        {% if spotify_app %}<input type="hidden" name="app" value="{{ spotify_app }}">{% endif %}
+        {% if ask_email %}
+        {# Several Spotify apps: the owner's list (/apps) says which one this account is on. Dev Mode never tells
+           Moodify the email, so it's only a lookup key #}
+        <div class="mf-field" style="margin-bottom: 12px">
+          <label class="mf-small mf-strong" for="spotify-email">The email of your Spotify account</label>
+          <input id="spotify-email" class="mf-input" type="email" name="email" maxlength="254" autocomplete="email" inputmode="email" placeholder="you@example.com" aria-describedby="spotify-email-hint">
+          <p id="spotify-email-hint" class="mf-xs mf-muted">Moodify uses it only to find which of its Spotify apps you were added to. Leave it empty and Moodify tries them all.</p>
+        </div>
+        {% endif %}
         <button type="submit" class="mf-btn mf-btn--primary mf-btn--xl mf-btn--block">Log in with Spotify</button>
       </form>
+      {% if spotify_app %}<p class="mf-xs mf-muted">This link logs you in through Spotify app {{ spotify_app }}.</p>{% endif %}
       {% if youtube %}
       {# Phase 27: Google sign-in. YouTube's API policy III.A.1: say that using it means agreeing to YouTube's terms #}
       <form method="post" action="/login/youtube">
