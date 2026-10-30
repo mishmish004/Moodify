@@ -16,8 +16,8 @@ from jinja2 import pass_context
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from src import (activity, blend, jobs, library, likes, links, listen_as, memory, music, pages, playlist, playlists,
-                 prompts, reflect, search_cache, sharing, taste, tastemap, users)
+from src import (activity, blend, clarify, jobs, library, likes, links, listen_as, memory, music, pages, playlist,
+                 playlists, prompts, reflect, search_cache, sharing, taste, tastemap, users)
 from src.brief import Brief, rule_list
 from src.core.config import PROJECT_ROOT, get_settings
 from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError, SpotifyError
@@ -374,10 +374,26 @@ def job_page(request: Request, job_id: int, user: sqlite3.Row = Depends(current_
             "user": user, "job": job, "failed": True, "title": title, "text": text,
             "steps": pages.build_steps(job["step"], failed=True, service=service),
         })
+    question = clarify.for_page(job)
     return templates.TemplateResponse(request, "job.html", {
-        "user": user, "job": job, "failed": False,
-        "steps": pages.build_steps(job["step"], service=music.info(user["service"]).name),
+        "user": user, "job": job, "failed": False, "question": question,
+        # Without JavaScript the page reloads itself: not while someone is choosing an answer
+        "refresh": question["seconds"] + 1 if question and question["open"] else 3,
+        "steps": pages.build_steps(job["step"], service=music.info(user["service"]).name,
+                                   asking=bool(question and question["open"])),
     })
+
+
+@app.post("/jobs/{job_id}/answer")
+def answer_question(request: Request, job_id: int, user: sqlite3.Row = Depends(current_user),
+                    choice: Literal["keep", "this_time", "from_now_on"] = Form(...)):
+    """The answer to the question a build asked before going on (Phase 30). Too late, or already answered:
+    back to the build, which has gone on without it."""
+    if jobs.get(job_id, user["user_id"]) is None:
+        return _message(request, "Not found", "That build isn't yours or doesn't exist.", status_code=404, user=user,
+                        code="404 · Not found")
+    clarify.answer(job_id, user["user_id"], choice)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
 @app.get("/playlists/{playlist_id}")

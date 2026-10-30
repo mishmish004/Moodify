@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Iterable, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -258,18 +258,19 @@ def words(text: str) -> set[str]:
     return expand(out)
 
 
-def recall(user_id: str, wanted: set[str], limit: Optional[int] = None) -> list[sqlite3.Row]:
-    """Active lasting lessons sharing a tag with `wanted`, not already in the memory block, most overlap first,
-    then newest. At most `limit` (RECALL_LESSONS less the preferences the block holds)."""
+def recall(user_id: str, wanted: set[str], limit: Optional[int] = None, skip: Iterable[int] = ()) -> list[sqlite3.Row]:
+    """Active lasting lessons sharing a tag with `wanted`, not already in the memory block and not in `skip`, most
+    overlap first, then newest. At most `limit` (RECALL_LESSONS less the preferences the block holds)."""
     with get_conn() as conn:
         in_block = {r["id"] for r in _block_preferences(conn, user_id)}
     if limit is None:
         limit = RECALL_LESSONS - len(in_block)
+    leave_out = in_block | set(skip)
     scored = []
     wanted = expand(wanted)
     for row in active(user_id):
         overlap = len(wanted & expand(tags(row)))
-        if overlap and row["id"] not in in_block:
+        if overlap and row["id"] not in leave_out:
             scored.append((overlap, row["id"], row))
     scored.sort(key=lambda item: (-item[0], -item[1]))
     return [row for _, _, row in scored[:max(limit, 0)]]
@@ -284,10 +285,11 @@ class Parts:
     ids: tuple[int, ...]  # the recalled lessons, for mark_used()
 
 
-def prompt_parts(user_id: str, wanted: set[str]) -> Parts:
+def prompt_parts(user_id: str, wanted: set[str], skip: Iterable[int] = ()) -> Parts:
+    """`wanted`: words for tag overlap. `skip`: lessons this build was told to leave out (Phase 30)."""
     expire_unused(user_id)
     block = memory_block(user_id)
-    rows = recall(user_id, wanted)
+    rows = recall(user_id, wanted, skip=skip)
     room = LESSONS_CHARS - len(block) - len(RECALL_HEADER) - 2
     text = render(rows, limit=room) if room > 0 else ""
     if not text:
@@ -318,6 +320,29 @@ def brief_words(brief) -> set[str]:
     """What a brief is about, for recall: its tags, title, section labels, feelings and activities."""
     text = " ".join([brief.title, *brief.tags, *(f"{s.label} {s.feeling} {s.activity or ''}" for s in brief.sections)])
     return words(text) | expand(brief.tags)
+
+
+def find(user_id: str, title: str) -> Optional[sqlite3.Row]:
+    """The active lasting lesson with this title, as the model quoted it from the prompt (Phase 30)."""
+    wanted = _plain(title)
+    return next((row for row in active(user_id) if _plain(row["title"]) == wanted), None) if wanted else None
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s+-]", " ", text.casefold()).split())
+
+
+def retire(user_id: str, lesson_id: int) -> bool:
+    """The listener said before a build that a lesson no longer holds (Phase 30): it's superseded, with no
+    lesson replacing it, and stays in the table as the audit trail."""
+    with get_conn() as conn:
+        gone = conn.execute(
+            "UPDATE lessons SET status = 'superseded' WHERE id = ? AND user_id = ? AND status = 'active'",
+            (lesson_id, user_id),
+        ).rowcount == 1
+        if gone:
+            invalidate(conn, user_id)
+        return gone
 
 
 def expire_unused(user_id: Optional[str] = None) -> int:

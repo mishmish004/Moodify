@@ -241,6 +241,11 @@ MIGRATIONS = [
         PRIMARY KEY (service, day)
     );
     """,
+    # 17 (Phase 30): the question a build asks before it goes on, and the answer (src/clarify.py)
+    """
+    ALTER TABLE jobs ADD COLUMN question_json TEXT;
+    ALTER TABLE jobs ADD COLUMN answer TEXT;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

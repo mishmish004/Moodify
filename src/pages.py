@@ -30,7 +30,8 @@ def duration(minutes: Optional[float]) -> str:
 # --- the build's steps (progress page) -------------------------------------------------------------
 
 # The steps src/playlist.py reports, in order, as they start; the last two end with the service's name
-# ("Finding the songs on Spotify"). "Asking for a few more songs" happens inside step 4.
+# ("Finding the songs on Spotify"). "Asking for a few more songs" happens inside step 4, and the question
+# asked before building (Phase 30) inside step 2.
 BUILD_STEPS = [
     "Reading your taste",
     "Reading your prompt",
@@ -38,20 +39,23 @@ BUILD_STEPS = [
     "Finding the songs on {service}",
     "Saving the playlist to your {service}",
 ]
-FIND = 3
+READ, FIND = 1, 3
+ASKING = "Checking one thing with you"  # src/clarify.py STEP
 COUNT = re.compile(r"\((\d+)/(\d+)\)")
 
 
-def build_steps(step: Optional[str], failed: bool = False, service: str = "Spotify") -> list[dict]:
+def build_steps(step: Optional[str], failed: bool = False, service: str = "Spotify", asking: bool = True) -> list[dict]:
     """Every step with its state (done, now, wait or failed) and the words that say so.
     `step` is jobs.step: the text of the step running, or the one a failed build stopped in.
-    `service` is the name of the user's service."""
+    `service` is the name of the user's service. `asking`: the question on the page is still open (Phase 30)."""
     current = 0
     for i, name in enumerate(BUILD_STEPS):
         if step and step.startswith(name.split(" {", 1)[0]):  # any service's name
             current = i
     if step and step.startswith("Asking for a few more songs"):
         current = FIND
+    if step and step.startswith(ASKING):
+        current = READ
     count = COUNT.search(step or "") if current == FIND else None
 
     steps = []
@@ -72,6 +76,8 @@ def build_steps(step: Optional[str], failed: bool = False, service: str = "Spoti
                 status = f"Stopped here: {found} of {of} looked up"
         if i == current and step and step.startswith("Asking for a few more songs") and not failed:
             status = "Asking for a few more songs"
+        if i == current and step and step.startswith(ASKING) and not failed and asking:
+            status = "One question for you, below"
         steps.append({"label": label, "state": state, "status": status, "percent": percent})
     return steps
 

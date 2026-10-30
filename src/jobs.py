@@ -90,6 +90,14 @@ def fail(job_id: int, reason: str) -> None:
         _log(conn, job_id, "failed", {"reason": reason})
 
 
+def ask(job_id: int, question_json: str, step: str) -> None:
+    """Show a question on the progress page (Phase 30): the question and the step that says so, in one write,
+    so the page never shows one without the other."""
+    with get_conn() as conn:
+        conn.execute("UPDATE jobs SET question_json = ?, answer = NULL, step = ? WHERE id = ?", (question_json, step, job_id))
+        _log(conn, job_id, "step", {"text": step})
+
+
 def fail_interrupted() -> int:
     """At startup: a build still marked running was cut off by a restart. Returns how many."""
     with get_conn() as conn:

@@ -142,6 +142,11 @@ def build_log(playlist_id: int, user_id: str) -> str:
             out.append("minutes per section asked vs made: " + ", ".join(f"{t:g} vs {m:g}" for t, m in zip(targets, made)))
     if searches:
         out.append(f"{sum(not e.get('matched') for e in searches)} of {len(searches)} looked-up songs weren't found on Spotify")
+    asked = next((e for e in events if e["kind"] == "question"), None)
+    answered = next((e for e in events if e["kind"] == "answer"), None)
+    if asked and answered:  # Phase 30
+        out.append(f"before building, Moodify asked \"{asked.get('text')}\" and the listener answered "
+                   + (f"\"{answered['said']}\"" if answered.get("said") else "nothing, so it kept to their earlier lesson"))
     return "; ".join(out) + "." if out else ""
 
 

@@ -77,7 +77,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     error        TEXT,
     playlist_id  INTEGER REFERENCES playlists(id) ON DELETE SET NULL,
     created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    finished_at  TEXT
+    finished_at  TEXT,
+    -- Phase 30: the question asked before building (src/clarify.py) and the answer; 'none' when none came
+    question_json TEXT,
+    answer        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS jobs_by_user ON jobs (user_id, status);

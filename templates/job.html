@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {# While the build runs: the steps update every 3 seconds (a fetch that swaps the list, or a plain
    refresh without JavaScript); /jobs/{id} redirects to the playlist when it's done. A failed build
-   stays here, showing the step it stopped at. #}
+   stays here, showing the step it stopped at. A build may stop for one question first (Phase 30): it
+   shows here with its answers and goes on by itself after 20 seconds. #}
 {% set nav = "new" %}
-{% block head %}{% if not failed %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock %}
+{% block head %}{% if not failed %}<noscript><meta http-equiv="refresh" content="{{ refresh }}"></noscript>{% endif %}{% endblock %}
 {% block title %}Moodify · {{ title if failed else "making your playlist" }}{% endblock %}
 {% block content %}
 <div class="mf-stack-6" style="max-width: 640px; margin: 0 auto"{% if not failed %} data-job-running{% endif %}>
@@ -17,6 +18,28 @@
   <div class="mf-stack-2">
     <a class="mf-btn mf-btn--primary mf-btn--block" href="/?again={{ job.id }}">Back</a>
     <p class="mf-hint" style="text-align: center">What you wrote is kept in the box.</p>
+  </div>
+  {% endif %}
+
+  {% if not failed %}
+  <div data-question data-state="{{ ('open' if question.open else 'closed') if question else 'none' }}"{% if not question %} hidden{% endif %}>
+    {% if question and question.open %}
+    <section class="mf-card mf-stack-5" aria-labelledby="q-h">
+      <div class="mf-stack-2">
+        <p class="mf-eyebrow">One question first</p>
+        <h2 id="q-h" class="mf-h2">{{ question.text }}</h2>
+        <p class="mf-small mf-muted">From your <a href="/memory">Memory</a>: “{{ question.lesson }}”</p>
+      </div>
+      <form method="post" action="/jobs/{{ job.id }}/answer" class="mf-stack-2">
+        {% for value, label in question.choices %}
+        <button class="mf-btn mf-btn--block {{ 'mf-btn--primary' if value == 'keep' else 'mf-btn--quiet' }}" type="submit" name="choice" value="{{ value }}">{{ label }}</button>
+        {% endfor %}
+      </form>
+      <p class="mf-hint" data-countdown data-seconds="{{ question.seconds }}">{% if question.seconds %}No answer within {{ question.seconds }} second{{ "" if question.seconds == 1 else "s" }}: Moodify keeps to what you said before.{% else %}No answer: Moodify is going on with what you said before…{% endif %}</p>
+    </section>
+    {% elif question %}
+    <p class="mf-small mf-muted">{% if question.no_answer %}No answer, so Moodify kept to what you said before: “{{ question.lesson }}”.{% else %}You answered: {{ question.said }}.{% endif %}</p>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -50,16 +73,40 @@
 {% if not failed %}
 <script>
   // Check in every 3 seconds. Done: the server redirects to the playlist, so follow it. Failed:
-  // reload to show what happened. Otherwise swap the step list and say the new step, once.
+  // reload to show what happened. Otherwise swap the step list and say the new step, once, and
+  // swap the question in or out when it's asked or answered.
   const steps = document.querySelector("[data-steps]");
   const live = document.querySelector("[data-step-live]");
+  let question = document.querySelector("[data-question]");
   let said = steps.querySelector("[data-current]")?.dataset.current ?? "";
+  let timer;
+  // The seconds left before the build goes on without an answer
+  const countdown = () => {
+    clearInterval(timer);
+    const line = question.querySelector("[data-countdown]");
+    if (!line) return;
+    let left = Number(line.dataset.seconds);
+    const show = () => {
+      line.textContent = left > 0 ? `No answer within ${left} second${left === 1 ? "" : "s"}: Moodify keeps to what you said before.`
+        : "No answer: Moodify is going on with what you said before…";
+    };
+    show();
+    timer = setInterval(() => { left = Math.max(0, left - 1); show(); if (!left) clearInterval(timer); }, 1000);
+  };
+  countdown();
   const poll = async () => {
     try {
       const res = await fetch(location.href, { headers: { Accept: "text/html" }, cache: "no-store" });
       if (res.redirected) { location.replace(res.url); return; }
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
       if (!doc.querySelector("[data-job-running]")) { location.reload(); return; }
+      const asked = doc.querySelector("[data-question]");
+      const opened = asked && asked.dataset.state !== question.dataset.state && asked.dataset.state === "open";
+      if (asked && asked.dataset.state !== question.dataset.state) {
+        question.replaceWith(asked);
+        question = asked;
+        countdown();
+      }
       const fresh = doc.querySelector("[data-steps]");
       if (fresh) {
         steps.replaceChildren(...fresh.children);
@@ -67,6 +114,8 @@
         if (now && now.split(" (")[0] !== said.split(" (")[0]) live.textContent = now;
         said = now;
       }
+      // A new question is said instead of the step that brought it
+      if (opened) live.textContent = question.querySelector("h2")?.textContent ?? "";
     } catch { /* offline for a moment: try again */ }
     setTimeout(poll, 3000);
   };

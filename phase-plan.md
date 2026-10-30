@@ -1,6 +1,6 @@
-# Moodify phase plan: Phases 9–29
+# Moodify phase plan: Phases 9–31
 
-The next build plan, written 2026-10-23 after the first real run. Part 2 (Phases 18–24, friends) starts after Phase 17. Part 3 (Phases 25–29, YouTube Music and Apple Music) was added on 2026-10-25. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
+The next build plan, written 2026-10-23 after the first real run. Part 2 (Phases 18–24, friends) starts after Phase 17. Part 3 (Phases 25–29, YouTube Music and Apple Music) was added on 2026-10-25. Part 4 (Phases 30–31, the agent's two missing pieces) was added on 2026-10-27. It continues `plan.md`: same rules, same test layout (`tests/test_pN_<name>.py`, `respx`-mocked, `live` on demand), and the phase numbers carry on from Phase 8. Work phases in order. A phase is done when every box is ticked and its gate is green.
 
 ```bash
 .venv/bin/python -m pytest -m "not live and not docker"   # fast, every commit
@@ -40,7 +40,7 @@ Prompt: *"I want to remember the chill summer morning and a hella stuff to do, w
 Moodify is a small agent: it reads a request, plans, acts through tools (OpenAI, Spotify), gets feedback, and should improve. The structure follows published agent designs from Google and Meta, scaled down to one process and one SQLite file. Sources are listed at the end.
 
 **The loop for one playlist.** It follows Meta's PAHF loop: "(1) seeking pre-action clarification to resolve ambiguity, (2) grounding actions in preferences retrieved from memory, and (3) integrating post-action feedback to update memory when preferences drift".
-1. **Read** the prompt into a brief, grounded in the user's taste and memory (Phase 11, 16)
+1. **Read** the prompt into a brief, grounded in the user's taste and memory (Phase 11, 16). When the prompt pulls against something in memory, **ask** one question first (Phase 30)
 2. **Act**: suggest songs, search Spotify, fill sections to length, order the arc, create the playlist (Phases 12–13)
 3. **Observe**: likes, the 1–10 rating and the written review (Phases 14–15)
 4. **Reflect**: turn the review into a verdict and a few grounded lessons (Phase 15)
@@ -308,7 +308,7 @@ Build
 - [x] No-repeat: tracks from the last 3 playlists are not used again unless liked, at most 2 per playlist. Enforced in code, not only in the prompt
 - [x] `users.memory_block` + `users.memory_version` (caching layer 2): the user-wide part (preferences, likes, ratings) is rendered once and rebuilt only when it changes, so the per-user prompt block stays byte-identical between builds and hits OpenAI's prompt cache (layer 3). The brief-specific recalled lessons go in the per-request block
 - [x] Lesson upkeep: `last_used_at` and `use_count` updated on recall. `pitfall` and `strategy` lessons unused for 180 days become `expired` (Memory Bank-style TTL); `preference` lessons never expire but can be superseded
-- [ ] (Not built: optional) After PAHF's pre-action clarification: when the brief's sections conflict with an active lesson, the job page asks one question with 2–3 choices ("Last time you said workout music was too slow; keep it high-energy?"). It auto-continues with the lesson after 20 s, so a build never stalls
+- [x] (Optional; built in Phase 30) After PAHF's pre-action clarification: when the brief's sections conflict with an active lesson, the job page asks one question with 2–3 choices ("Last time you said workout music was too slow; keep it high-energy?"). It auto-continues with the lesson after 20 s, so a build never stalls
 - [x] "More like this" on any past playlist: builds a new one seeded with that playlist's brief, its liked tracks and its review
 - [x] "What Moodify remembers" page: the memory block as the LLM sees it, active lessons with the review each came from, delete per lesson or per playlist
 - [x] Disconnect still deletes everything (`ON DELETE CASCADE` on every new table)
@@ -319,7 +319,7 @@ Tests (`tests/test_p16_memory.py`)
 - [x] `memory_block` unchanged between two builds with no new feedback → per-user prompt block byte-identical; a new like changes it and bumps `memory_version`
 - [x] cached tokens from mocked `usage` are recorded in `job_events`
 - [x] expiry: a `pitfall` unused for 181 days → `expired`; a `preference` unused for 400 days → still `active`
-- [ ] (not built) clarification: no answer in 20 s → build continues with the lesson applied
+- [x] (Phase 30) clarification: no answer in 20 s → build continues with the lesson applied
 - [x] deleting a playlist from memory removes its likes, rating, review and lessons; Disconnect leaves zero rows in every table for that user
 - [x] `live`: two builds by the same user within an hour → the second reports cached input tokens > 0 (98%, see below)
 - [x] `live`: rate a playlist 2/10 with the review "too slow", make a similar prompt, and its brief has higher energy (8 → 9)
@@ -943,16 +943,90 @@ Gate: `pytest tests/test_p29_apple.py` green, and the playlist plays in Apple Mu
 
 ---
 
+# Part 4: The agent's two missing pieces (Phases 30–31)
+
+Asked on 2026-10-27: "implement the pending AI features of making it better" from the Meta and Google work this plan follows. Two were still open, and you picked both:
+- **Meta's PAHF, step 1.** Phases 15–16 built PAHF's memory-grounded action and its post-action feedback, but not "seeking pre-action clarification to resolve ambiguity". It was optional in Phase 16 and listed under Later.
+- **Google's ReasoningBank retrieval.** ReasoningBank recalls memory items "using embedding-based similarity search". Phase 16 used tag overlap plus a hand-made word list (`memory.TAG_GROUPS`), and the Later list held embeddings back until a user had ~100 lessons.
+
+These don't depend on Phases 28–29, so they're built ahead of them. Not picked: lessons learned from ratings and likes without a written review (ReasoningBank learns from successes and failures alike), and Phase 22's judged energy feeding Phase 13's ordering. Both stay open.
+
+## Phase 30: Ask before building
+
+Goal: when a prompt pulls against something the listener told Moodify before, Moodify asks one question before it builds, instead of guessing, and the answer can update memory.
+
+Build
+- [x] The brief call (Phase 11) spots the clash, so no extra LLM call is made. `Brief.clarify` (null by default) names the lesson's title, a question, and words for three answers:
+  - `keep`: follow the lesson
+  - `this_time`: follow the prompt, this playlist only
+  - `from_now_on`: follow the prompt, and the lesson no longer holds
+  The brief is written following the lesson. The static prompt gets the rule and one worked example; every other example has `"clarify": null`. The rule: ask only when the prompt hints against a lesson without settling it. Don't ask when they agree, when the prompt plainly overrides the lesson, or about taste or onboarding answers. At most one question.
+- [x] `src/clarify.py`: the question is asked only when it names one of the user's active lessons (titles compared loosely: case, spaces, punctuation). It goes on the job page, together with its step, in one write (`jobs.ask`), and the build waits up to 20 s. An answer wakes the build at once. With no answer, the build keeps to the lesson and stores `none`; an answer posted after that changes nothing.
+- [x] `this_time` and `from_now_on` read the prompt again, leaving that lesson out of recall, with the question and the answer as a correction. The song picker gets the same note. `from_now_on` also supersedes the lesson with nothing replacing it (`memory.retire`), so it leaves the memory block. It stays in the table as the audit trail
+- [x] Only a build of your own playlist asks. Blends and "hear it like a friend" carry no memory. "Fix it" and "More like this" already carry your newest feedback. A build without a job page (scripts, live tests) never waits
+- [x] The job page shows the question in a card, with one button per answer and a countdown. The first button is the default. Without JavaScript the form still posts, and the page's refresh waits out the countdown instead of reloading every 3 s. The step list shows "One question for you, below" under "Reading your prompt", and a screen reader hears the question when it appears. Afterwards the page says what was answered
+- [x] `POST /jobs/{id}/answer` (`keep | this_time | from_now_on`, else 422), owner only (404 otherwise)
+- [x] Migration 17: `jobs.question_json`, `jobs.answer`. The brief stored with a playlist never contains the question (`exclude=True`)
+- [x] Reflection's build log (Phase 15) says what was asked and answered
+- [x] Login page and `/privacy`: Moodify may ask before building, and "from now on" retires that lesson
+
+Tests (`tests/test_p30_clarify.py`)
+- [x] a clash shows one question with its three answers, the countdown and the step; the no-JS refresh waits for the countdown
+- [x] `keep`: one brief call, the lesson stays, events record the question and the answer
+- [x] no answer in time → the build goes on with the lesson (it reaches the song picker), answer `none`
+- [x] `this_time`: a second brief call with the answer as a correction, the song picker hears it, the second brief is used, the lesson stays active
+- [x] `from_now_on`: the lesson is superseded with no replacement, gone from the memory block and from the Memory page
+- [x] a question about a lesson that isn't in memory isn't asked
+- [x] "More like this" never asks; a build without a job never waits
+- [x] the answer route: 422 for an unknown answer, 404 for an unknown or someone else's build, a second answer and a late answer change nothing
+- [x] the static prompt's examples are valid briefs, and exactly one asks; the stored brief never holds the question
+- [x] reflection's build log names the question and the answer
+- [x] `live`: six prompts against two lessons ("Workout energy 8+", "Less Drake"). It asks on the two that hint against a lesson and on none of the other four (a plain match, a plain override, two unrelated). At least 5 of 6 right
+
+Gate: `pytest tests/test_p30_clarify.py` green, and the live check passes.
+
+Done 2026-10-27, not yet tried on a real build of yours. Live on `gpt-6.1-sol`, three runs: 17 of 18 right. It asked about "Workout energy 8+" for "gym session, running on 4 hours of sleep" every time ("You previously wanted workout energy at 8 or higher from the first song—keep that today on four hours of sleep?"). It asked about "Less Drake" for "drake vibes tonight" in two runs of three. The other four prompts never got a question. Checked in headless Chrome at phone width, light and dark: the card sits above "You wrote", with the default answer in the accent colour. 17 tests.
+Your check: with a lesson in memory (say, a 2/10 "too slow" review of a workout playlist), ask for a workout while hinting at going easy, and try each answer once.
+
+## Phase 31: Recall by meaning
+
+Goal: a build recalls the lessons that fit its prompt even when they share no tag with it ("leg day" finds "Workout energy 8+"), without making builds slower or less reliable.
+
+Build
+- [ ] `src/embeddings.py`: OpenAI embeddings (`OPENAI_EMBEDDING_MODEL`, default `text-embedding-3-large`, at 512 dimensions). A lesson is embedded as its title and description, which say what it's about and when it applies. Its content isn't included: in the calibration it made recall worse. Vectors are kept in `lessons.embedding` (float32), with `embedded_with` = model/dimensions (migration 18)
+- [ ] A lesson fits a query when its similarity is at least 0.36, or at least 0.15 above the median of the user's lessons (once there are 5 to compare).
+- [ ] Recall (Phase 16) takes lessons that fit by tag **or** by meaning. Lessons that fit both ways come first, then by similarity, overlap, recency. The brief call asks about the prompt. The suggestion call asks about the whole brief and about each section on its own, so a lesson about one part of a three-part playlist still comes up
+- [ ] One embeddings call per recall: lessons missing a current vector go in the same request as the queries. Vectors are made right after reflection stores new lessons (in the background), so builds rarely need to make them. A lesson that consolidation rewrites loses its vector. A vector made from text that changed in the meantime isn't kept. Changing the model re-embeds everything
+- [ ] Consolidation (Phase 15) also looks at existing lessons close in meaning to a new one (similarity ≥ 0.45), so "Skip slow openings" meets "Loves long intros" without a shared tag
+- [ ] Failure never blocks a build. A failed call (one retry on timeouts and 5xx) or an empty `OPENAI_EMBEDDING_MODEL` falls back to tags. Each call is logged in `job_events` (`embed`, with tokens and seconds)
+- [ ] Login page and `/privacy`: lesson titles and prompts are sent to OpenAI to make embeddings, and each lesson's embedding is kept with it
+- [ ] Offline tests keep embeddings off unless they test them (`TEST_ENV`)
+
+Tests (`tests/test_p31_recall.py`, embeddings mocked with a keyword model)
+- [ ] "leg day" and "pouring rain" find their lessons by meaning where tags found nothing; an unrelated prompt finds nothing; tags still count ("homework" → focus)
+- [ ] lessons that fit both ways come first; skipped lessons stay out; a brief is asked about whole and per section
+- [ ] one call per recall, missing lessons batched with the queries, vectors kept; no lessons, no call
+- [ ] a rewritten lesson or another model is embedded again; a vector for text that changed meanwhile isn't kept
+- [ ] a failed call falls back to tags (5xx retried once); no model set, no call
+- [ ] consolidation sees a lesson close in meaning without a shared tag, and doesn't without embeddings
+- [ ] reflection embeds the new lessons; a build recalls by meaning, logs two calls, and goes on when the call fails; disconnect takes the vectors along
+- [ ] `live`: the calibration set (12 lessons, 14 prompts) against the real model in a scratch database. At least 70% of the lessons that fit are found, with at most 3 wrong
+
+Gate: `pytest tests/test_p31_recall.py` green, and the live check passes.
+
+
+---
+
 ## Later, only if needed
 
-- [ ] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones
+- [ ] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones. Planned as Phase 31, asked for on 2026-10-27
 - [ ] Streaming progress (server-sent events) instead of the 3-second refresh, if the refresh feels clunky
 - [ ] Per-section LLM calls run in parallel, if builds regularly take over 2 minutes
 - [ ] Per-track 1–10 ratings, if playlist ratings turn out too coarse
 - [ ] Energy check from a second source, if the LLM's energy judgements turn out unreliable in Phase 13 listening tests
 - [ ] "Compare": the same prompt as you'd hear it and as a friend would, side by side (Phase 21 twice), if friends ask for it
 - [ ] Judged energy from Phase 22 feeding Phase 13's ordering, if the per-build energy guesses disagree with it
-- [ ] The pre-action clarification question from Phase 16 (optional there, not built): ask one question when a brief conflicts with an active lesson, auto-continuing after 20 s
+- [x] The pre-action clarification question from Phase 16 (optional there, not built): ask one question when a brief conflicts with an active lesson, auto-continuing after 20 s. Built in Phase 30, asked for on 2026-10-27
 - [ ] "Play on this phone" from Phase 17 (optional there, not built): `GET /me/player/devices`, then `PUT /me/player/play` on the phone (Premium only)
 - [ ] Replace a playlist's songs in place for "Fix it" (check that Spotify's replace-items endpoint still works for Dev Mode first), if v1/v2 copies pile up
 - [ ] Two services on one Moodify account (Part 3, question 7)

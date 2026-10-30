@@ -11,12 +11,14 @@ call) and for the brief (suggestion call). Songs from the last 3 playlists aren'
 and then at most MAX_REPEATS of them (Phase 16). "Fix it with this review" is a build with `fix_of`: the
 earlier brief and its review go in as a correction, and the new playlist points back at the old one.
 "More like this" is a build with `like_of`: that playlist's brief, liked songs and review seed it.
+When the prompt pulls against a lesson, the build asks the listener first and waits up to 20 s for the answer
+(Phase 30, src/clarify.py).
 """
 import json
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from src import jobs, likes, memory, music, playlists, search_cache, taste, users
+from src import clarify, jobs, likes, memory, music, playlists, search_cache, taste, users
 from src.arc import arrange, timeline
 from src.brief import Brief, familiar_percent, read_prompt
 from src.core.exceptions import QuotaExceeded, ReauthRequired, ServiceError
@@ -73,7 +75,9 @@ class Recipe:
     make their own from stored profiles, so their builds never use anyone's service but the requester's."""
     profile: taste.Profile
     familiar_percent: int                                  # share of known songs unless the prompt says otherwise
-    recall: Optional[Callable[[set[str]], memory.Parts]] = None  # the requester's memory, for their own playlists
+    # The requester's memory, for their own playlists: recall(words, skip=lesson ids) -> memory.Parts
+    recall: Optional[Callable[..., memory.Parts]] = None
+    clarify: bool = False                                  # may ask before building when the prompt and memory clash
     correction: str = ""
     feedback: str = ""
     repeats: Optional["_Repeats"] = None
@@ -106,7 +110,8 @@ def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None
     version = f" (v{playlists.version(parent['id']) + 1})" if parent else ""
     recipe = Recipe(
         profile=profile, familiar_percent=taste.familiar_percent(json.loads(user["onboarding_json"] or "{}")),
-        recall=lambda wanted: memory.prompt_parts(user_id, wanted), correction=correction, feedback=feedback,
+        recall=lambda wanted, skip=(): memory.prompt_parts(user_id, wanted, skip),
+        clarify=not correction, correction=correction, feedback=feedback,
         repeats=_Repeats(user_id, skip=parent["id"] if parent else None, also=seed["id"] if seed else None),
         name=lambda brief: f"Moodify: {brief.title}{version}", parent_id=parent["id"] if parent else None,
     )
@@ -125,10 +130,24 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
     trace.step("Reading your prompt")
     brief = recipe.tidy(read_prompt(mood, profile.summary, trace, user_id=user_id, memory=for_prompt.block,
                                     correction=recipe.correction, recalled=for_prompt.recalled))
+    feedback, skip = recipe.feedback, ()
+    asks = recipe.clarify and recipe.recall is not None and trace.job_id is not None  # someone may be watching
+    question = clarify.from_brief(brief, user_id) if asks else None
+    if question:
+        answer = clarify.ask(trace, question)
+        if answer in (clarify.THIS_TIME, clarify.FROM_NOW_ON):
+            if answer == clarify.FROM_NOW_ON:
+                memory.retire(user_id, question.lesson_id)
+            note, skip = clarify.note(question, answer), (question.lesson_id,)
+            feedback = "\n\n".join(x for x in (feedback, note) if x)
+            for_prompt = recipe.recall(memory.words(mood), skip=skip)
+            trace.step("Reading your prompt again")
+            brief = recipe.tidy(read_prompt(mood, profile.summary, trace, user_id=user_id, memory=for_prompt.block,
+                                            correction=note, recalled=for_prompt.recalled))
     targets = section_targets(brief)
     trace.event("brief", title=brief.title, sections=len(brief.sections), support_note=brief.support_note,
                 minutes=[round(t, 1) for t in targets])
-    remembered = recipe.recall(memory.brief_words(brief) | memory.words(mood)) if recipe.recall else no_memory
+    remembered = recipe.recall(memory.brief_words(brief) | memory.words(mood), skip=skip) if recipe.recall else no_memory
     if recipe.recall:
         memory.mark_used(user_id, for_prompt.ids + remembered.ids)
     repeats = recipe.repeats
@@ -137,7 +156,7 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
     ask = {"known": profile.pool, "known_labels": profile.labels,
            "familiar_percent": familiar_percent(brief, recipe.familiar_percent),
            "brief": brief, "user_id": user_id, "memory": remembered.block, "recalled": remembered.recalled,
-           "feedback": recipe.feedback, "recent": repeats.listed if repeats else []}
+           "feedback": feedback, "recent": repeats.listed if repeats else []}
 
     trace.step("Asking for song ideas")
     counts = [songs_to_ask_for(t) for t in targets]
@@ -165,7 +184,7 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
             songs = songs + recipe.balance.settle(
                 lambda counts, note: suggest_songs(mood, profile.summary, n=sum(counts), counts=counts, exclude=songs,
                                                    trace=trace, **{**ask, "feedback": "\n\n".join(
-                                                       x for x in (recipe.feedback, note) if x)}),
+                                                       x for x in (feedback, note) if x)}),
                 sp, finder, fills, trace)
         if not any(f.tracks for f in fills):
             raise BuildFailed(jobs.NO_MATCHES)
