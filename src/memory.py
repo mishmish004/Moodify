@@ -17,7 +17,7 @@ from typing import Iterable, Literal, Optional
 
 from pydantic import BaseModel
 
-from src import prompts
+from src import embeddings, prompts
 from src.core.config import get_settings
 from src.core.logger import MoodifyLogger
 from src.db import get_conn
@@ -134,8 +134,9 @@ def render(rows: list[sqlite3.Row], limit: int = LESSONS_CHARS) -> str:
 #   - the memory block, user-wide: recent preference lessons, liked songs and artists, playlists rated 8+.
 #     Rendered once and cached in users.memory_block until feedback changes it, so the per-user prompt
 #     block stays byte-identical between builds and hits OpenAI's prompt cache (caching layers 2 and 3)
-#   - recalled lessons, per request: lessons whose tags overlap the request, ranked by overlap then
-#     recency. Tag overlap, not embeddings: a user has at most MAX_ACTIVE lessons (see "Later")
+#   - recalled lessons, per request: lessons whose tags overlap the request, or (Phase 31) whose meaning is close
+#     to it, by embeddings (src/embeddings.py). Lessons that fit both ways come first, then the closest in meaning,
+#     then the most overlap, then the newest
 
 RECALL_LESSONS = 8        # lessons per build, block and recalled together
 BLOCK_PREFERENCES = 4     # preference lessons in the memory block
@@ -258,22 +259,27 @@ def words(text: str) -> set[str]:
     return expand(out)
 
 
-def recall(user_id: str, wanted: set[str], limit: Optional[int] = None, skip: Iterable[int] = ()) -> list[sqlite3.Row]:
-    """Active lasting lessons sharing a tag with `wanted`, not already in the memory block and not in `skip`, most
-    overlap first, then newest. At most `limit` (RECALL_LESSONS less the preferences the block holds)."""
+def recall(user_id: str, wanted: set[str], limit: Optional[int] = None, about: Iterable[str] = (),
+           skip: Iterable[int] = (), trace: Trace = NO_TRACE) -> list[sqlite3.Row]:
+    """Active lasting lessons that fit the request, not already in the memory block and not in `skip`: sharing a
+    tag with `wanted`, or close in meaning to one of the texts in `about` (Phase 31). Lessons that fit both ways
+    first, then the closest, the most overlap, the newest. At most `limit` (RECALL_LESSONS less the preferences
+    the block holds)."""
     with get_conn() as conn:
         in_block = {r["id"] for r in _block_preferences(conn, user_id)}
     if limit is None:
         limit = RECALL_LESSONS - len(in_block)
     leave_out = in_block | set(skip)
+    close = embeddings.relevant(user_id, about, trace) if about else {}
     scored = []
     wanted = expand(wanted)
     for row in active(user_id):
         overlap = len(wanted & expand(tags(row)))
-        if overlap and row["id"] not in leave_out:
-            scored.append((overlap, row["id"], row))
-    scored.sort(key=lambda item: (-item[0], -item[1]))
-    return [row for _, _, row in scored[:max(limit, 0)]]
+        similar = row["id"] in close
+        if (overlap or similar) and row["id"] not in leave_out:
+            scored.append(((-(bool(overlap) + similar), -close.get(row["id"], 0.0), -overlap, -row["id"]), row))
+    scored.sort(key=lambda item: item[0])
+    return [row for _, row in scored[:max(limit, 0)]]
 
 
 @dataclass(frozen=True)
@@ -285,11 +291,13 @@ class Parts:
     ids: tuple[int, ...]  # the recalled lessons, for mark_used()
 
 
-def prompt_parts(user_id: str, wanted: set[str], skip: Iterable[int] = ()) -> Parts:
-    """`wanted`: words for tag overlap. `skip`: lessons this build was told to leave out (Phase 30)."""
+def prompt_parts(user_id: str, wanted: set[str], about: Iterable[str] = (), skip: Iterable[int] = (),
+                 trace: Trace = NO_TRACE) -> Parts:
+    """`wanted`: words for tag overlap. `about`: texts for recall by meaning. `skip`: lessons this build was
+    told to leave out (Phase 30)."""
     expire_unused(user_id)
     block = memory_block(user_id)
-    rows = recall(user_id, wanted, skip=skip)
+    rows = recall(user_id, wanted, about=about, skip=skip, trace=trace)
     room = LESSONS_CHARS - len(block) - len(RECALL_HEADER) - 2
     text = render(rows, limit=room) if room > 0 else ""
     if not text:
@@ -299,7 +307,7 @@ def prompt_parts(user_id: str, wanted: set[str], skip: Iterable[int] = ()) -> Pa
 
 def memory_for(user_id: str, brief) -> str:
     """Everything a build recalls for this brief, as one text (the memory page shows it this way)."""
-    parts = prompt_parts(user_id, brief_words(brief))
+    parts = prompt_parts(user_id, brief_words(brief), about=brief_queries(brief))
     return "\n\n".join(p for p in (parts.block, parts.recalled) if p)
 
 
@@ -320,6 +328,14 @@ def brief_words(brief) -> set[str]:
     """What a brief is about, for recall: its tags, title, section labels, feelings and activities."""
     text = " ".join([brief.title, *brief.tags, *(f"{s.label} {s.feeling} {s.activity or ''}" for s in brief.sections)])
     return words(text) | expand(brief.tags)
+
+
+def brief_queries(brief) -> list[str]:
+    """What a brief is about, for recall by meaning: the whole of it, then each section on its own, so a lesson
+    about one part of a three-part playlist isn't drowned out by the other two."""
+    whole = f"{brief.title}. {', '.join(brief.tags)}".strip(". ")
+    sections = [f"{s.label}: {s.feeling}" + (f" ({s.activity})" if s.activity else "") for s in brief.sections]
+    return [whole, *sections] if len(sections) > 1 else [f"{whole}. {sections[0]}" if sections else whole]
 
 
 def find(user_id: str, title: str) -> Optional[sqlite3.Row]:
@@ -366,22 +382,26 @@ def delete_lesson(user_id: str, lesson_id: int) -> bool:
 
 # --- consolidating ------------------------------------------------------------------------------------
 
-def candidates(user_id: str, drafts: list[Draft], source_playlist_id: Optional[int]) -> list[sqlite3.Row]:
-    """The existing lessons consolidation looks at: active lasting ones that share a tag with a new lesson or
-    came from the same playlist (an edited review). All of them when the new ones would pass MAX_ACTIVE."""
+def candidates(user_id: str, drafts: list[Draft], source_playlist_id: Optional[int],
+               trace: Trace = NO_TRACE) -> list[sqlite3.Row]:
+    """The existing lessons consolidation looks at: active lasting ones that share a tag with a new lesson, are
+    close to one in meaning (Phase 31), or came from the same playlist (an edited review). All of them when the
+    new ones would pass MAX_ACTIVE."""
     existing = active(user_id)
     if len(existing) + len(drafts) > MAX_ACTIVE:
         return existing
     wanted = expand({t for d in drafts for t in d.tags})
+    close = embeddings.close_to(user_id, drafts, trace) if existing and drafts else set()
     return [row for row in existing
-            if wanted & expand(tags(row)) or (source_playlist_id is not None and row["source_playlist_id"] == source_playlist_id)]
+            if wanted & expand(tags(row)) or row["id"] in close
+            or (source_playlist_id is not None and row["source_playlist_id"] == source_playlist_id)]
 
 
 def consolidate(user_id: str, drafts: list[Draft], source_playlist_id: Optional[int],
                 trace: Trace = NO_TRACE) -> Consolidation:
     """How the new lasting lessons join memory. One LLM call when there's anything to merge with,
     none otherwise (all ADD). A failed call also falls back to ADD, so a grounded lesson is never lost."""
-    existing = candidates(user_id, drafts, source_playlist_id)
+    existing = candidates(user_id, drafts, source_playlist_id, trace)
     adds = Consolidation(operations=[_as_op(i, d, "ADD") for i, d in enumerate(drafts, start=1)], merges=[])
     if not drafts or not existing:
         return adds
@@ -437,9 +457,10 @@ def store(conn: sqlite3.Connection, user_id: str, source_playlist_id: Optional[i
         if kind == "ADD":
             touched.append(_insert(conn, user_id, source_playlist_id, draft, op))
         elif kind == "UPDATE":
-            conn.execute(
+            conn.execute(  # a new text needs a new embedding (Phase 31)
                 "UPDATE lessons SET title = ?, description = ?, content = ?, tags_json = ?, about = ?,"
-                " evidence = substr(? || ' / ' || evidence, 1, ?), source_playlist_id = ? WHERE id = ? AND user_id = ?",
+                " evidence = substr(? || ' / ' || evidence, 1, ?), source_playlist_id = ?, embedding = NULL,"
+                " embedded_with = NULL WHERE id = ? AND user_id = ?",
                 (op.title, op.description, op.content, json.dumps(_tidy_tags(op.tags)), draft.about, draft.evidence,
                  EVIDENCE_CHARS, source_playlist_id, op.target, user_id),
             )

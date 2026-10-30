@@ -20,6 +20,8 @@ TEST_ENV = {
     "SECRET_KEY": "test-secret-key",
     "SPOTIFY_CLIENT_ID": "test-client-id",
     "OPENAI_API_KEY": "test-openai-key",
+    # Recall by tags alone, as before Phase 31: tests of recall by meaning switch it on and mock the endpoint
+    "OPENAI_EMBEDDING_MODEL": "",
 }
 
 

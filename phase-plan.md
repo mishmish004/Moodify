@@ -45,7 +45,7 @@ Moodify is a small agent: it reads a request, plans, acts through tools (OpenAI,
 3. **Observe**: likes, the 1–10 rating and the written review (Phases 14–15)
 4. **Reflect**: turn the review into a verdict and a few grounded lessons (Phase 15)
 5. **Consolidate**: merge the lessons into the user's memory. Newer feedback wins when preferences change (Phase 15)
-6. **Recall**: the next build retrieves only the lessons relevant to its prompt (Phase 16)
+6. **Recall**: the next build retrieves only the lessons relevant to its prompt, by tags (Phase 16) and by meaning (Phase 31)
 
 **Storage is kept apart from what the model sees**, after Google's ADK: "Separate storage from presentation: We distinguish between durable state (Sessions) and per-call views (working context)." In Moodify:
 
@@ -993,33 +993,34 @@ Your check: with a lesson in memory (say, a 2/10 "too slow" review of a workout 
 Goal: a build recalls the lessons that fit its prompt even when they share no tag with it ("leg day" finds "Workout energy 8+"), without making builds slower or less reliable.
 
 Build
-- [ ] `src/embeddings.py`: OpenAI embeddings (`OPENAI_EMBEDDING_MODEL`, default `text-embedding-3-large`, at 512 dimensions). A lesson is embedded as its title and description, which say what it's about and when it applies. Its content isn't included: in the calibration it made recall worse. Vectors are kept in `lessons.embedding` (float32), with `embedded_with` = model/dimensions (migration 18)
-- [ ] A lesson fits a query when its similarity is at least 0.36, or at least 0.15 above the median of the user's lessons (once there are 5 to compare).
-- [ ] Recall (Phase 16) takes lessons that fit by tag **or** by meaning. Lessons that fit both ways come first, then by similarity, overlap, recency. The brief call asks about the prompt. The suggestion call asks about the whole brief and about each section on its own, so a lesson about one part of a three-part playlist still comes up
-- [ ] One embeddings call per recall: lessons missing a current vector go in the same request as the queries. Vectors are made right after reflection stores new lessons (in the background), so builds rarely need to make them. A lesson that consolidation rewrites loses its vector. A vector made from text that changed in the meantime isn't kept. Changing the model re-embeds everything
-- [ ] Consolidation (Phase 15) also looks at existing lessons close in meaning to a new one (similarity ≥ 0.45), so "Skip slow openings" meets "Loves long intros" without a shared tag
-- [ ] Failure never blocks a build. A failed call (one retry on timeouts and 5xx) or an empty `OPENAI_EMBEDDING_MODEL` falls back to tags. Each call is logged in `job_events` (`embed`, with tokens and seconds)
-- [ ] Login page and `/privacy`: lesson titles and prompts are sent to OpenAI to make embeddings, and each lesson's embedding is kept with it
-- [ ] Offline tests keep embeddings off unless they test them (`TEST_ENV`)
+- [x] `src/embeddings.py`: OpenAI embeddings (`OPENAI_EMBEDDING_MODEL`, default `text-embedding-3-large`, at 512 dimensions). A lesson is embedded as its title and description, which say what it's about and when it applies. Its content isn't included: in the calibration it made recall worse. Vectors are kept in `lessons.embedding` (float32), with `embedded_with` = model/dimensions (migration 18)
+- [x] A lesson fits a query when its similarity is at least 0.36, or at least 0.15 above the median of the user's lessons (once there are 5 to compare). Both thresholds come from a calibration on 2026-10-27 (below)
+- [x] Recall (Phase 16) takes lessons that fit by tag **or** by meaning. Lessons that fit both ways come first, then by similarity, overlap, recency. The brief call asks about the prompt. The suggestion call asks about the whole brief and about each section on its own, so a lesson about one part of a three-part playlist still comes up
+- [x] One embeddings call per recall: lessons missing a current vector go in the same request as the queries. Vectors are made right after reflection stores new lessons (in the background), so builds rarely need to make them. A lesson that consolidation rewrites loses its vector. A vector made from text that changed in the meantime isn't kept. Changing the model re-embeds everything
+- [x] Consolidation (Phase 15) also looks at existing lessons close in meaning to a new one (similarity ≥ 0.45), so "Skip slow openings" meets "Loves long intros" without a shared tag
+- [x] Failure never blocks a build. A failed call (one retry on timeouts and 5xx) or an empty `OPENAI_EMBEDDING_MODEL` falls back to tags. Each call is logged in `job_events` (`embed`, with tokens and seconds)
+- [x] Login page and `/privacy`: lesson titles and prompts are sent to OpenAI to make embeddings, and each lesson's embedding is kept with it
+- [x] Offline tests keep embeddings off unless they test them (`TEST_ENV`)
 
 Tests (`tests/test_p31_recall.py`, embeddings mocked with a keyword model)
-- [ ] "leg day" and "pouring rain" find their lessons by meaning where tags found nothing; an unrelated prompt finds nothing; tags still count ("homework" → focus)
-- [ ] lessons that fit both ways come first; skipped lessons stay out; a brief is asked about whole and per section
-- [ ] one call per recall, missing lessons batched with the queries, vectors kept; no lessons, no call
-- [ ] a rewritten lesson or another model is embedded again; a vector for text that changed meanwhile isn't kept
-- [ ] a failed call falls back to tags (5xx retried once); no model set, no call
-- [ ] consolidation sees a lesson close in meaning without a shared tag, and doesn't without embeddings
-- [ ] reflection embeds the new lessons; a build recalls by meaning, logs two calls, and goes on when the call fails; disconnect takes the vectors along
-- [ ] `live`: the calibration set (12 lessons, 14 prompts) against the real model in a scratch database. At least 70% of the lessons that fit are found, with at most 3 wrong
+- [x] "leg day" and "pouring rain" find their lessons by meaning where tags found nothing; an unrelated prompt finds nothing; tags still count ("homework" → focus)
+- [x] lessons that fit both ways come first; skipped lessons stay out; a brief is asked about whole and per section
+- [x] one call per recall, missing lessons batched with the queries, vectors kept; no lessons, no call
+- [x] a rewritten lesson or another model is embedded again; a vector for text that changed meanwhile isn't kept
+- [x] a failed call falls back to tags (5xx retried once); no model set, no call
+- [x] consolidation sees a lesson close in meaning without a shared tag, and doesn't without embeddings
+- [x] reflection embeds the new lessons; a build recalls by meaning, logs two calls, and goes on when the call fails; disconnect takes the vectors along
+- [x] `live`: the calibration set (12 lessons, 14 prompts) against the real model in a scratch database. At least 70% of the lessons that fit are found, with at most 3 wrong
 
 Gate: `pytest tests/test_p31_recall.py` green, and the live check passes.
 
+Done 2026-10-27. Calibration, with 12 made-up lessons and 17 requests on the real models: `text-embedding-3-large` beat `-small`, and a lesson's title and description beat its whole text. An absolute threshold alone either missed half the matches or let in up to 10 wrong ones. Adding "0.15 above the user's median" fixed that: 14 of 17 found, 1 wrong. The live test (14 requests) found 12 of 14, with 1 wrong ("chill sunday afternoon" also got "Morning start gentle"). The two misses: "road trip" didn't reach the commute lesson, and "leg day" found one of its two gym lessons. Tags still catch some of what embeddings miss. An embeddings call took 0.5–4 s, and a build makes two. 19 tests.
 
 ---
 
 ## Later, only if needed
 
-- [ ] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones. Planned as Phase 31, asked for on 2026-10-27
+- [x] Embedding search for lesson recall (ReasoningBank retrieves "using embedding-based similarity search"), if a user ever has more than ~100 active lessons and tag overlap misses relevant ones. Built in Phase 31, asked for on 2026-10-27
 - [ ] Streaming progress (server-sent events) instead of the 3-second refresh, if the refresh feels clunky
 - [ ] Per-section LLM calls run in parallel, if builds regularly take over 2 minutes
 - [ ] Per-track 1–10 ratings, if playlist ratings turn out too coarse

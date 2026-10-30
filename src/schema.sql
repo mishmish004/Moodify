@@ -147,7 +147,10 @@ CREATE TABLE IF NOT EXISTS lessons (
     superseded_by       INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at        TEXT,
-    use_count           INTEGER NOT NULL DEFAULT 0
+    use_count           INTEGER NOT NULL DEFAULT 0,
+    -- Phase 31: the embedding of title and description (src/embeddings.py), and "model/dimensions" it was made with
+    embedding           BLOB,
+    embedded_with       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS lessons_by_user ON lessons (user_id, status);

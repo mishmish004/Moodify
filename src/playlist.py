@@ -11,8 +11,8 @@ call) and for the brief (suggestion call). Songs from the last 3 playlists aren'
 and then at most MAX_REPEATS of them (Phase 16). "Fix it with this review" is a build with `fix_of`: the
 earlier brief and its review go in as a correction, and the new playlist points back at the old one.
 "More like this" is a build with `like_of`: that playlist's brief, liked songs and review seed it.
-When the prompt pulls against a lesson, the build asks the listener first and waits up to 20 s for the answer
-(Phase 30, src/clarify.py).
+Lessons are recalled by their tags and by meaning (Phase 31). When the prompt pulls against one of them, the
+build asks the listener first and waits up to 20 s for the answer (Phase 30, src/clarify.py).
 """
 import json
 from dataclasses import dataclass
@@ -75,7 +75,7 @@ class Recipe:
     make their own from stored profiles, so their builds never use anyone's service but the requester's."""
     profile: taste.Profile
     familiar_percent: int                                  # share of known songs unless the prompt says otherwise
-    # The requester's memory, for their own playlists: recall(words, skip=lesson ids) -> memory.Parts
+    # The requester's memory, for their own playlists: recall(words, about=texts, skip=lesson ids) -> memory.Parts
     recall: Optional[Callable[..., memory.Parts]] = None
     clarify: bool = False                                  # may ask before building when the prompt and memory clash
     correction: str = ""
@@ -110,7 +110,7 @@ def build(user, mood: str, trace: Trace = NO_TRACE, fix_of: Optional[int] = None
     version = f" (v{playlists.version(parent['id']) + 1})" if parent else ""
     recipe = Recipe(
         profile=profile, familiar_percent=taste.familiar_percent(json.loads(user["onboarding_json"] or "{}")),
-        recall=lambda wanted, skip=(): memory.prompt_parts(user_id, wanted, skip),
+        recall=lambda wanted, about=(), skip=(): memory.prompt_parts(user_id, wanted, about, skip, trace),
         clarify=not correction, correction=correction, feedback=feedback,
         repeats=_Repeats(user_id, skip=parent["id"] if parent else None, also=seed["id"] if seed else None),
         name=lambda brief: f"Moodify: {brief.title}{version}", parent_id=parent["id"] if parent else None,
@@ -126,7 +126,7 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
     mood = clean_mood(mood)
     profile = recipe.profile
     no_memory = memory.Parts("", "", ())
-    for_prompt = recipe.recall(memory.words(mood)) if recipe.recall else no_memory
+    for_prompt = recipe.recall(memory.words(mood), about=[mood]) if recipe.recall else no_memory
     trace.step("Reading your prompt")
     brief = recipe.tidy(read_prompt(mood, profile.summary, trace, user_id=user_id, memory=for_prompt.block,
                                     correction=recipe.correction, recalled=for_prompt.recalled))
@@ -140,14 +140,15 @@ def make(user, mood: str, recipe: Recipe, trace: Trace = NO_TRACE) -> Built:
                 memory.retire(user_id, question.lesson_id)
             note, skip = clarify.note(question, answer), (question.lesson_id,)
             feedback = "\n\n".join(x for x in (feedback, note) if x)
-            for_prompt = recipe.recall(memory.words(mood), skip=skip)
+            for_prompt = recipe.recall(memory.words(mood), about=[mood], skip=skip)
             trace.step("Reading your prompt again")
             brief = recipe.tidy(read_prompt(mood, profile.summary, trace, user_id=user_id, memory=for_prompt.block,
                                             correction=note, recalled=for_prompt.recalled))
     targets = section_targets(brief)
     trace.event("brief", title=brief.title, sections=len(brief.sections), support_note=brief.support_note,
                 minutes=[round(t, 1) for t in targets])
-    remembered = recipe.recall(memory.brief_words(brief) | memory.words(mood), skip=skip) if recipe.recall else no_memory
+    remembered = recipe.recall(memory.brief_words(brief) | memory.words(mood), about=memory.brief_queries(brief),
+                               skip=skip) if recipe.recall else no_memory
     if recipe.recall:
         memory.mark_used(user_id, for_prompt.ids + remembered.ids)
     repeats = recipe.repeats

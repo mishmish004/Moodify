@@ -13,7 +13,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from src import jobs, likes, memory, playlists, prompts
+from src import embeddings, jobs, likes, memory, playlists, prompts
 from src.brief import Brief, describe
 from src.core.config import get_settings
 from src.core.logger import MoodifyLogger
@@ -198,6 +198,7 @@ def run(playlist_id: int, user_id: str, review: str) -> None:
             conn.execute("DELETE FROM lessons WHERE user_id = ? AND source_playlist_id = ? AND scope = 'this_playlist'",
                          (user_id, playlist_id))
             memory.store(conn, user_id, playlist_id, result.lessons, plan)
+        embeddings.fill(user_id)  # so the next build doesn't wait on it (Phase 31)
         log.info("%s: review of playlist %d read as %s, %d lesson(s)", user_id, playlist_id, result.verdict,
                  len(result.lessons))
     except Exception:

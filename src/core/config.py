@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     OPENAI_BRIEF_MODEL: Optional[str] = None
     # Judges how library tracks sound, 50 a call, in the background (Phase 22). Unset: OPENAI_MODEL
     OPENAI_FEATURES_MODEL: Optional[str] = None
+    # Recalls lessons by meaning (Phase 31). The thresholds in src/embeddings.py were measured on this model;
+    # another one needs them measured again. Empty: lessons are recalled by their tags alone
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-large"
 
     DB_PATH: Path = PROJECT_ROOT / "data" / "moodify.db"
     BASE_URL: str = "http://127.0.0.1:9091"

@@ -246,6 +246,11 @@ MIGRATIONS = [
     ALTER TABLE jobs ADD COLUMN question_json TEXT;
     ALTER TABLE jobs ADD COLUMN answer TEXT;
     """,
+    # 18 (Phase 31): each lesson's embedding, and the model and size it was made with (src/embeddings.py)
+    """
+    ALTER TABLE lessons ADD COLUMN embedding BLOB;
+    ALTER TABLE lessons ADD COLUMN embedded_with TEXT;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 
