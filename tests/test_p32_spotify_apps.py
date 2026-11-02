@@ -112,15 +112,21 @@ def test_a_cookie_for_an_app_that_is_gone_is_ignored(client, respx_mock):
     assert tried == ["test-client-id"]
 
 
-def test_apps_with_free_slots_come_before_full_ones(client, respx_mock):
-    # 5 people already use the main app and 2 use app 2: a new friend is most likely on app 3
+def test_the_main_app_comes_first_even_when_it_is_full(client, respx_mock):
+    # Everyone from before the extra apps is on the main app with no cookie yet, so a full main app is still the
+    # likeliest; Spotify doesn't always send someone back from an app they aren't on, so the first try has to count
     for i in range(5):
         users.upsert(f"old{i}", None, "r", auth.SCOPES, oauth_client_id=None if i % 2 else "test-client-id")
+    tried, _ = _log_in(client, Spotify(respx_mock, home="test-client-id"))
+    assert tried == ["test-client-id"]
+
+
+def test_after_the_main_app_the_others_go_fewest_users_first(client, respx_mock):
     for i in range(2):
         users.upsert(f"two{i}", None, "r", auth.SCOPES, oauth_client_id="app-two")
     users.upsert("youtube:g", None, "r", auth.SCOPES, service="youtube")
-    tried, _ = _log_in(client, Spotify(respx_mock, home="test-client-id"))
-    assert tried == ["app-three", "app-two", "test-client-id"]
+    tried, _ = _log_in(client, Spotify(respx_mock, home="app-two"))
+    assert tried == ["test-client-id", "app-three", "app-two"]
 
 
 def test_not_on_any_app_says_so_once(client, respx_mock):
@@ -181,7 +187,8 @@ def test_friends_on_different_apps_share_one_moodify(logged_in, respx_mock):
     _spotify(respx_mock, SAMS + MINE + [SHARED])
     page = finish_build(logged_in, _blend(logged_in))
     assert page.status_code == 200 and "Sam" in page.text
-    refreshes = [_form(c.request) for c in respx_mock.calls if c.request.url == auth.TOKEN_URL]
+    tokens = [_form(c.request) for c in respx_mock.calls if c.request.url == auth.TOKEN_URL]
+    refreshes = [t for t in tokens if t["grant_type"] == "refresh_token"]  # not the login's code exchange
     assert refreshes and {r["client_id"] for r in refreshes} == {"app-two"}  # the requester's own app
 
 

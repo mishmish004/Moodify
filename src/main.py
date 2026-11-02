@@ -198,6 +198,8 @@ def health() -> dict[str, str]:
 # --- Spotify login through one of several developer apps (SPOTIFY_EXTRA_CLIENT_IDS) ------------------------
 # One link for everyone. Moodify tries the apps in turn: Spotify lets a user log in to a Development Mode app
 # they aren't allowlisted on but answers 403 to every API call after, so a 403 from /me means "wrong app, next".
+# That fallback isn't reliable: live logins sent to an app the friend wasn't on never came back from Spotify. So
+# the first try has to be the right one: the owner's list (/apps), then this browser's cookie, then the main app.
 # The app that works is kept with the user (users.oauth_client_id, since a refresh token only works with its own
 # app) and in a cookie, so later logins from this browser go straight to it.
 
@@ -213,12 +215,12 @@ def _spotify_client_id(number: int) -> Optional[str]:
 
 def _spotify_app_order(request: Request, email: str = "") -> list[str]:
     """The apps to try, most likely first: the one the owner listed this email under (/apps), then the one this
-    browser last logged in through, then the apps with the fewest known users, since a new friend was added to
-    one with a free slot. The rest follow as a safety net, in case the owner's list is out of date."""
+    browser last logged in through, then the main app, where everyone from before the extra apps is (they have no
+    cookie yet). The other apps follow with the fewest known users first, as a safety net for a friend the owner
+    hasn't listed."""
     ids = get_settings().spotify_client_ids
     counts = users.count_by_app()
-    counts[ids[0]] = counts.get(ids[0], 0) + counts.pop(None, 0)  # users from before the extra apps: the main app
-    order = sorted(ids, key=lambda cid: counts.get(cid, 0))
+    order = [ids[0]] + sorted(ids[1:], key=lambda cid: counts.get(cid, 0))
     for first in (request.cookies.get(SPOTIFY_APP_COOKIE), spotify_apps.app_for(email) if email else None):
         if first in order:
             order.remove(first)
