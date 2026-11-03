@@ -247,7 +247,7 @@ def test_a_listed_email_goes_to_its_app_first(client, respx_mock):
     from src import spotify_apps
     spotify_apps.set_members("app-three", "sam@example.com")
     spotify = Spotify(respx_mock, home="app-three")
-    resp = client.post("/login", data={"email": "Sam@Example.com"})
+    resp = client.post("/login", data={"account": "Sam@Example.com"})
     tried, done = [], resp
     while done.status_code == 303 and done.headers["location"].startswith(auth.AUTHORIZE_URL):
         params = _query(done.headers["location"])
@@ -259,7 +259,7 @@ def test_a_listed_email_goes_to_its_app_first(client, respx_mock):
 def test_an_unlisted_email_still_gets_in_and_is_remembered(client, respx_mock):
     from src import spotify_apps
     Spotify(respx_mock, home="app-two")
-    resp = client.post("/login", data={"email": "new@example.com"})
+    resp = client.post("/login", data={"account": "new@example.com"})
     tried = []
     while resp.status_code == 303 and resp.headers["location"].startswith(auth.AUTHORIZE_URL):
         params = _query(resp.headers["location"])
@@ -273,7 +273,7 @@ def test_a_wrong_listing_is_corrected_by_the_login_that_worked(client, respx_moc
     from src import spotify_apps
     spotify_apps.set_members("app-two", "sam@example.com")  # the owner moved Sam to app 3 on the dashboard
     Spotify(respx_mock, home="app-three")
-    resp = client.post("/login", data={"email": "sam@example.com"})
+    resp = client.post("/login", data={"account": "sam@example.com"})
     tried = []
     while resp.status_code == 303 and resp.headers["location"].startswith(auth.AUTHORIZE_URL):
         params = _query(resp.headers["location"])
@@ -284,20 +284,116 @@ def test_a_wrong_listing_is_corrected_by_the_login_that_worked(client, respx_moc
 
 
 def test_the_login_page_asks_for_the_email_only_when_it_helps(client, monkeypatch):
-    assert 'name="email"' in client.get("/login").text
+    assert 'name="account"' in client.get("/login").text
     client.cookies.set(SPOTIFY_APP_COOKIE, "app-two")
-    assert 'name="email"' not in client.get("/login").text  # this browser knows its app
+    assert 'name="account"' not in client.get("/login").text  # this browser knows its app
     client.cookies.clear()
     monkeypatch.delenv("SPOTIFY_EXTRA_CLIENT_IDS")
     get_settings.cache_clear()
-    assert 'name="email"' not in client.get("/login").text  # one app: nothing to look up
+    assert 'name="account"' not in client.get("/login").text  # one app: nothing to look up
 
 
 def test_the_email_is_never_stored_on_the_user(client, respx_mock):
     Spotify(respx_mock)
-    resp = client.post("/login", data={"email": "me@example.com"})
+    resp = client.post("/login", data={"account": "me@example.com"})
     params = _query(resp.headers["location"])
     client.get("/callback", params={"code": "auth-code", "state": params["state"]})
     with get_conn() as conn:
         assert "me@example.com" not in " ".join(str(v) for v in dict(users.get("friend1")).values())
         assert conn.execute("SELECT count(*) FROM spotify_app_members").fetchone()[0] == 1
+
+
+# --- phone numbers: a friend who logs in to Spotify with one -------------------------------------------------
+
+def _follow(client, resp):
+    tried = []
+    while resp.status_code == 303 and resp.headers["location"].startswith(auth.AUTHORIZE_URL):
+        params = _query(resp.headers["location"])
+        tried.append(params["client_id"])
+        resp = client.get("/callback", params={"code": "auth-code", "state": params["state"]})
+    return tried, resp
+
+
+@pytest.mark.parametrize("typed", ["+91 98765 43210", "+91-98765-43210", "098765 43210", "9876543210",
+                                   "(+91) 98765.43210", "0091 9876543210"])
+def test_a_phone_number_is_the_same_friend_however_it_is_typed(typed):
+    from src import spotify_apps
+    assert spotify_apps.normalize(typed) == "9876543210"
+
+
+@pytest.mark.parametrize("typed", ["", "12345", "98765 4321", "not a number", "sam@", "1234567890123456",
+                                   "+91 98765 43210 ext 2"])
+def test_what_isnt_an_email_or_phone_number_is_no_lookup_at_all(typed):
+    from src import spotify_apps
+    assert spotify_apps.normalize(typed) is None and spotify_apps.app_for(typed) is None
+
+
+def test_pasted_lists_take_phone_numbers_each_on_their_own_line():
+    from src import spotify_apps
+    text = "Sam Rivera\tsam@example.com\tAdded 2026-11-01\n+91 98765 43210, Priya 91234-56780;\n098765 43210\n"
+    assert spotify_apps.parse(text) == ["sam@example.com", "9876543210", "9123456780"]
+
+
+def test_a_listed_phone_number_goes_to_its_app_first(client, respx_mock):
+    from src import spotify_apps
+    spotify_apps.set_members("app-three", "+91 98765 43210")
+    Spotify(respx_mock, home="app-three")
+    tried, done = _follow(client, client.post("/login", data={"account": "98765 43210"}))
+    assert tried == ["app-three"] and done.headers["location"] == "/"
+
+
+def test_the_owner_lists_phone_numbers_on_the_apps_page(client, monkeypatch):
+    from src import spotify_apps
+    _owner(monkeypatch)
+    _as(client, OWNER)
+    client.post("/apps", data={"app1": "a@x.com", "app2": "+91 98765 43210\nb@x.com", "app3": ""})
+    assert spotify_apps.members()["app-two"] == ["9876543210", "b@x.com"]
+    page = client.get("/apps").text
+    assert "9876543210" in page and "2 listed" in page and "phone number" in page
+
+
+def test_the_login_page_asks_for_an_email_or_phone_number(client):
+    page = html.unescape(client.get("/login").text)
+    assert 'type="text" name="account"' in page and "email or phone number you log in to Spotify with" in page
+
+
+def test_a_phone_number_that_worked_is_remembered_and_deleted_with_the_friend(client, respx_mock):
+    from src import spotify_apps
+    Spotify(respx_mock, home="app-two")
+    tried, done = _follow(client, client.post("/login", data={"account": "+91 98765 43210"}))
+    assert tried == ["test-client-id", "app-two"] and done.headers["location"] == "/"
+    assert spotify_apps.app_for("9876543210") == "app-two"
+    assert "9876543210" not in " ".join(str(v) for v in dict(users.get("friend1")).values())
+    users.delete("friend1")
+    assert spotify_apps.app_for("9876543210") is None
+
+
+def test_saving_the_owners_list_again_keeps_a_friends_row_theirs(client, respx_mock, monkeypatch):
+    from src import spotify_apps
+    Spotify(respx_mock, home="app-two")
+    _follow(client, client.post("/login", data={"account": "friend@example.com"}))
+    spotify_apps.set_members("app-two", "friend@example.com, other@example.com")
+    users.delete("friend1")
+    assert spotify_apps.members()["app-two"] == ["other@example.com"]
+
+
+def test_a_version_20_list_upgrades_with_its_emails(tmp_path):
+    import sqlite3
+    from src import db
+    from .test_p9_jobs import V0_SCHEMA, _schema
+    path = tmp_path / "v20.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(V0_SCHEMA)
+    conn.close()
+    conn = db._connect(path)
+    for number, step in enumerate(db.MIGRATIONS[:20], start=1):
+        db._apply(conn, step, number)
+    with conn:
+        conn.execute("INSERT INTO spotify_app_members (email, oauth_client_id) VALUES ('sam@example.com', 'app-two')")
+    conn.close()
+    init_db(path)
+    with get_conn(path) as conn:
+        assert [tuple(r) for r in conn.execute("SELECT account, oauth_client_id, user_id FROM spotify_app_members")] == [
+            ("sam@example.com", "app-two", None)]
+    init_db(tmp_path / "fresh.db")
+    assert _schema(path) == _schema(tmp_path / "fresh.db")

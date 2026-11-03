@@ -263,6 +263,12 @@ MIGRATIONS = [
         added_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     """,
+    # 21: a friend can be listed by the phone number they log in to Spotify with, and a row their own login wrote
+    # is linked to them, so deleting their data deletes it
+    """
+    ALTER TABLE spotify_app_members RENAME COLUMN email TO account;
+    ALTER TABLE spotify_app_members ADD COLUMN user_id TEXT REFERENCES users(user_id) ON DELETE CASCADE;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

@@ -213,27 +213,27 @@ def _spotify_client_id(number: int) -> Optional[str]:
     return ids[number - 1] if 1 <= number <= len(ids) else None
 
 
-def _spotify_app_order(request: Request, email: str = "") -> list[str]:
-    """The apps to try, most likely first: the one the owner listed this email under (/apps), then the one this
-    browser last logged in through, then the main app, where everyone from before the extra apps is (they have no
-    cookie yet). The other apps follow with the fewest known users first, as a safety net for a friend the owner
-    hasn't listed."""
+def _spotify_app_order(request: Request, account: str = "") -> list[str]:
+    """The apps to try, most likely first: the one the owner listed this email or phone number under (/apps), then
+    the one this browser last logged in through, then the main app, where everyone from before the extra apps is
+    (they have no cookie yet). The other apps follow with the fewest known users first, as a safety net for a
+    friend the owner hasn't listed."""
     ids = get_settings().spotify_client_ids
     counts = users.count_by_app()
     order = [ids[0]] + sorted(ids[1:], key=lambda cid: counts.get(cid, 0))
-    for first in (request.cookies.get(SPOTIFY_APP_COOKIE), spotify_apps.app_for(email) if email else None):
+    for first in (request.cookies.get(SPOTIFY_APP_COOKIE), spotify_apps.app_for(account) if account else None):
         if first in order:
             order.remove(first)
             order.insert(0, first)
     return order
 
 
-def _start_spotify_login(request: Request, queue: list[str], email: str = "") -> RedirectResponse:
+def _start_spotify_login(request: Request, queue: list[str], account: str = "") -> RedirectResponse:
     """Send the browser to Spotify's login for the first app in `queue`; the rest wait in the session for a 403."""
     client_id, rest = queue[0], queue[1:]
     state, verifier = secrets.token_urlsafe(16), auth.new_verifier()
     request.session["oauth"] = {"state": state, "verifier": verifier, "service": "spotify",
-                                "client_id": client_id, "queue": rest, "email": email}
+                                "client_id": client_id, "queue": rest, "account": account}
     return RedirectResponse(auth.authorize_url(state, verifier, client_id), status_code=303)
 
 
@@ -252,20 +252,20 @@ def login_page(request: Request, reason: str = "", spotify_app: int = Query(0, a
     settings = get_settings()
     return templates.TemplateResponse(request, "login.html", {
         "reason": reason, "youtube": settings.youtube_enabled, "spotify_app": spotify_app,
-        # With several apps, ask which Spotify account: the owner's list (/apps) says which app it's on.
-        # A browser that logged in before knows its app from the cookie, so it isn't asked again
-        "ask_email": len(settings.spotify_client_ids) > 1 and not request.cookies.get(SPOTIFY_APP_COOKIE),
+        # With several apps, ask which Spotify account (email or phone number): the owner's list (/apps) says which
+        # app it's on. A browser that logged in before knows its app from the cookie, so it isn't asked again
+        "ask_account": len(settings.spotify_client_ids) > 1 and not request.cookies.get(SPOTIFY_APP_COOKIE),
     })
 
 
 @app.post("/login")
-def login(request: Request, spotify_app: int = Form(0, alias="app"), email: str = Form("", max_length=254)):
+def login(request: Request, spotify_app: int = Form(0, alias="app"), account: str = Form("", max_length=254)):
     if spotify_app:
         client_id = _spotify_client_id(spotify_app)
         if not client_id:
             return _unknown_spotify_app(request, spotify_app)
-        return _start_spotify_login(request, [client_id], email)
-    return _start_spotify_login(request, _spotify_app_order(request, email), email)
+        return _start_spotify_login(request, [client_id], account)
+    return _start_spotify_login(request, _spotify_app_order(request, account), account)
 
 
 def _oauth_ok(oauth: Optional[dict], service: str, code: str, state: str) -> bool:
@@ -294,7 +294,7 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
         log = MoodifyLogger.get_logger("auth")
         if exc.status == 403 and oauth.get("queue"):
             log.info("not on Spotify app %s's allowlist, trying the next of %d", number, len(oauth["queue"]))
-            return _start_spotify_login(request, oauth["queue"], oauth.get("email", ""))
+            return _start_spotify_login(request, oauth["queue"], oauth.get("account", ""))
         log.warning("login failed (Spotify app %s): %s", number, exc)
         if exc.status == 403:
             which = "this app's allowlist" if len(ids) == 1 else f"the allowlist of any of Moodify's {len(ids)} Spotify apps"
@@ -304,8 +304,9 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
         return _message(request, "Login failed", "Spotify login failed. Please try again.", status_code=502)
     users.upsert(profile["id"], profile.get("display_name"), tokens.refresh_token, tokens.scope,
                  oauth_client_id=client_id)
-    if oauth.get("email") and len(ids) > 1:
-        spotify_apps.remember(oauth["email"], client_id)  # the owner's list learns from a login that worked
+    if oauth.get("account") and len(ids) > 1:
+        # The owner's list learns from a login that worked
+        spotify_apps.remember(oauth["account"], client_id, profile["id"])
     request.session["user_id"] = profile["id"]
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(SPOTIFY_APP_COOKIE, client_id, max_age=SPOTIFY_APP_COOKIE_MAX_AGE, httponly=True,
@@ -315,14 +316,14 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
 
 @app.get("/apps")
 def apps_page(request: Request, user: sqlite3.Row = Depends(current_user), saved: int = 0):
-    """The owner's page: which friends (Spotify emails) are on which Spotify app's allowlist."""
+    """The owner's page: which friends (Spotify emails and phone numbers) are on which Spotify app's allowlist."""
     settings = get_settings()
     if not settings.OWNER_USER_ID or user["user_id"] != settings.OWNER_USER_ID:
         raise StarletteHTTPException(404)
     counts = users.count_by_app()
     counts[settings.spotify_client_ids[0]] = counts.get(settings.spotify_client_ids[0], 0) + counts.pop(None, 0)
     listed = spotify_apps.members()
-    apps = [{"number": n, "client_id": cid, "emails": listed.get(cid, []), "users": counts.get(cid, 0)}
+    apps = [{"number": n, "client_id": cid, "accounts": listed.get(cid, []), "users": counts.get(cid, 0)}
             for n, cid in enumerate(settings.spotify_client_ids, 1)]
     return templates.TemplateResponse(request, "apps.html", {"user": user, "apps": apps, "saved": saved})
 

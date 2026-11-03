@@ -244,10 +244,12 @@ CREATE TABLE IF NOT EXISTS service_quota (
     PRIMARY KEY (service, day)
 );
 
--- Which Spotify app's allowlist holds each friend's email, pasted by the owner on /apps (src/spotify_apps.py).
--- The login page asks for the email and tries that app first
+-- Which Spotify app's allowlist holds each friend, by the email or phone number they log in to Spotify with,
+-- pasted by the owner on /apps (src/spotify_apps.py). The login page asks for either and tries that app first.
+-- user_id: the friend whose own login wrote the row, so deleting their data takes it; NULL for the owner's list
 CREATE TABLE IF NOT EXISTS spotify_app_members (
-    email            TEXT PRIMARY KEY,
+    account          TEXT PRIMARY KEY,
     oauth_client_id  TEXT NOT NULL,
-    added_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    added_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_id          TEXT REFERENCES users(user_id) ON DELETE CASCADE
 );
