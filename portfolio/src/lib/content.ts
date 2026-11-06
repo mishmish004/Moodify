@@ -42,7 +42,8 @@ export async function songs(): Promise<Song[]> {
 }
 
 export function readMinutes(markdown: string | undefined): number {
-  const words = (markdown ?? '').trim().split(/\s+/).filter(Boolean).length;
+  // Raw HTML (diagrams, tables) is markup, not reading
+  const words = (markdown ?? '').replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.round(words / 220));
 }
 

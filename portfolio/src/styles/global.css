@@ -252,6 +252,29 @@ textarea.field { min-height: 180px; padding: 14px; line-height: 1.55; resize: ve
 .prose table { width: 100%; border-collapse: collapse; font-size: 16px; display: block; overflow-x: auto; }
 .prose th, .prose td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 
+/* Pieces a write-up can use as raw HTML in its Markdown */
+.prose .sec-num { font-family: var(--deva); font-size: 0.75em; color: var(--muted); margin-right: 14px; }
+.prose .sub-num { font-family: var(--mono); font-size: 14px; color: var(--muted); margin-right: 10px; }
+.prose .diagram {
+  margin: 32px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+  padding: 20px 20px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.prose .diagram figcaption { margin: 0; line-height: 22px; }
+/* The diagrams are drawn 680px wide; on desktop let the box reach past the text column to fit them */
+@media (min-width: 820px) { .prose .diagram { margin-left: -28px; margin-right: -28px; } }
+.prose .diagram-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.prose .diagram-label.today { color: #A8431E; }
+.prose .diagram-label.after { color: #1F5FBF; }
+.prose .diagram-scroll { overflow-x: auto; display: flex; justify-content: safe center; }
+.prose .diagram-scroll svg { display: inline; max-width: none; }
+.prose .fix { display: flex; gap: 14px; align-items: baseline; background: var(--chip); border-radius: 12px; padding: 14px 18px; margin: 0 0 20px; font-size: 17px; line-height: 28px; }
+.prose .fix-label { flex: none; font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; color: #1F5FBF; }
+.prose .cost { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; margin: 8px 0 12px; }
+.prose .cost table { display: table; overflow: visible; }
+.prose .note { font-size: 14px; line-height: 22px; color: var(--muted); }
+.prose .post-cta { margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-size: 16px; color: var(--muted); }
+.prose .post-cta a { text-decoration: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .rise { animation: fade 240ms ease both; }
   .btn:active, a.card:active, .lang-pill:active { transform: none; }
