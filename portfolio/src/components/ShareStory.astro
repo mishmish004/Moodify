@@ -21,11 +21,12 @@ const shortUrl = url.replace(/^https?:\/\//, '');
   <div class="share-btns">
     <button class="btn btn-dark btn-md btn-pill" type="button" data-story>
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"></circle></svg>
-      Share to Instagram story
+      Share
     </button>
     <button class="btn btn-line btn-md btn-pill" type="button" data-copy-link>Copy link</button>
   </div>
   <p class="share-status muted" role="status" aria-live="polite" data-share-status></p>
+  <input class="field share-url" type="text" readonly value={url} aria-label="Link to this write-up" hidden data-share-url />
   <span class="probe-sans" aria-hidden="true"></span><span class="probe-mono" aria-hidden="true"></span><span class="probe-display" aria-hidden="true"></span>
 </section>
 
@@ -35,6 +36,8 @@ const shortUrl = url.replace(/^https?:\/\//, '');
   .share-btns { display: flex; flex-wrap: wrap; gap: 10px; }
   .share-status { min-height: 1.45em; font-size: 15px; line-height: 1.5; }
   .share-status:empty { display: none; }
+  .share-url { font-family: var(--mono); font-size: 16px; }
+  .share-url[hidden] { display: none; }
   .probe-sans, .probe-mono, .probe-display { position: absolute; visibility: hidden; pointer-events: none; }
   .probe-sans { font-family: var(--sans); }
   .probe-mono { font-family: var(--mono); }
@@ -77,16 +80,44 @@ const shortUrl = url.replace(/^https?:\/\//, '');
     if ('requestIdleCallback' in window) requestIdleCallback(() => getCard(), { timeout: 3000 });
     else setTimeout(getCard, 1200);
 
+    const urlField = root.querySelector<HTMLInputElement>('[data-share-url]')!;
+
+    // In-app browsers (Instagram, LinkedIn, WhatsApp) and unfocused tabs refuse the Clipboard API,
+    // so copy the old way first. It is synchronous, which also keeps the tap valid for the share
+    // sheet that may open next.
+    const copyLegacy = () => {
+      const t = document.createElement('textarea');
+      t.value = post.url;
+      t.setAttribute('readonly', '');
+      t.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+      document.body.appendChild(t);
+      t.select();
+      t.setSelectionRange(0, t.value.length);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      t.remove();
+      return ok;
+    };
     const copyLink = async () => {
+      if (copyLegacy()) return true;
       try { await navigator.clipboard.writeText(post.url); return true; } catch { return false; }
+    };
+    // Last resort: show the link, selected, for a long-press copy
+    const showLink = () => {
+      urlField.hidden = false;
+      urlField.focus();
+      urlField.select();
     };
 
     copyBtn.addEventListener('click', async () => {
-      status.textContent = (await copyLink()) ? 'Link copied.' : `Couldn’t copy. The link is ${post.url}`;
+      if (await copyLink()) { urlField.hidden = true; status.textContent = 'Link copied.'; return; }
+      status.textContent = 'This browser won’t let me copy. Press and hold the link below to copy it.';
+      showLink();
     });
 
     storyBtn.addEventListener('click', async () => {
       const copied = await copyLink();
+      if (!copied) showLink();
       const linkNote = copied
         ? 'The link is copied: add a Link sticker and paste it.'
         : `Add a Link sticker with ${post.url}`;

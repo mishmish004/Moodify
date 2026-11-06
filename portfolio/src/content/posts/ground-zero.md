@@ -7,7 +7,7 @@ featured: true
 tags: ["Railway", "Postgres", "Object storage", "Job queues"]
 ---
 
-We're close to launching a SaaS that edits and generates video through a chat with AI. It runs on Railway, it serves 33 active test users, and before launch it has to run on more than one replica. Right now it can't.
+We're close to launching a SaaS with a feature that lets anyone make short-form videos just by chatting with AI. It runs on Railway, it serves 33 active test users, and before launch it has to run on more than one replica. Right now it can't.
 
 That's a choice I made, not an accident. One container with one volume was the fastest path to a working product: Railway's abstractions took the infrastructure off my plate while I built the agentic features, and at that stage features were the risk, not scale. The cost of shipping that fast is that you lose track of how reliable the storage architecture is.
 
@@ -53,7 +53,7 @@ Everything the web knows sits on one disk that only one deployment can mount. A 
 
 And every video byte a viewer watches in the app is streamed through the web service, which costs egress and memory.
 
-## <span class="sec-num">०२</span>The change I'm making before launch
+## <span class="sec-num">०२</span>The change I made before launch
 
 The change is simple yet effective: **no service owns a disk anymore.** State lives in Postgres and a bucket, which every replica reaches over Railway's private network, so the web and the worker can each run more than one copy. The rest of the backend doesn't change.
 
@@ -85,7 +85,7 @@ The change is simple yet effective: **no service owns a disk anymore.** State li
 
 A volume is a virtual hard drive attached to one machine (on AWS that's EBS). If two replicas each had their own copy, the copies would drift apart after the first write: user A uploads to replica 1, and replica 2 never sees the file.
 
-<div class="fix"><span class="fix-label">Fix</span><span>Split state by kind.</span></div>
+<div class="fix"><span class="fix-label">What worked</span><span>Split state by kind.</span></div>
 
 - **Files → object storage** (a bucket). Files are stored under keys like `projects/123/video.mp4` and fetched over HTTP. Any number of machines can read and write them. On AWS this is S3.
 - **Rows → a shared database server** (Postgres). It handles concurrent writes from many clients properly, which SQLite can't do across machines.
@@ -97,7 +97,7 @@ A job runs as a JavaScript function inside the web process with `setImmediate`. 
 - Another machine can't pick the job up, because a function in memory can't be sent anywhere.
 - If the process crashes or redeploys, the job silently disappears. Nothing sweeps jobs left as “running”, so the user just sees a render stuck forever.
 
-<div class="fix"><span class="fix-label">Fix</span><span>A job queue in Postgres plus a separate worker service. A job becomes data (a type name and a JSON payload) instead of code in memory, and any worker can claim it. Capacity becomes elastic: add workers when the queue is long, remove them when it's short.</span></div>
+<div class="fix"><span class="fix-label">What worked</span><span>A job queue in Postgres plus a separate worker service. A job becomes data (a type name and a JSON payload) instead of code in memory, and any worker can claim it. Capacity becomes elastic: add workers when the queue is long, remove them when it's short.</span></div>
 
 ### <span class="sub-num">c)</span>Process-local singletons
 
@@ -109,7 +109,7 @@ Several things live only in the web process's memory:
 
 With two replicas, both schedulers would post the same scheduled post twice, and each replica would only see its own half of those counters.
 
-<div class="fix"><span class="fix-label">Fix</span><span>Advisory locks in Postgres for the timers, so each tick only the replica holding the lock runs it. The counters move into a Postgres table.</span></div>
+<div class="fix"><span class="fix-label">What worked</span><span>Advisory locks in Postgres for the timers, so each tick only the replica holding the lock runs it. The counters move into a Postgres table.</span></div>
 
 ## <span class="sec-num">०३</span>What it costs
 
@@ -118,7 +118,5 @@ With two replicas, both schedulers would post the same scheduled post twice, and
 </div>
 
 <p class="note">Estimates at 100 customers: around 20 videos a month each, ~2 GB of media each, each video watched ~3 times.</p>
-
-Right now we pay about $7 a month, so this is where we're headed, not what we've saved yet. And the AI APIs cost far more than hosting, so this change is about **reliability first and money second.**
 
 <div class="post-cta"><span>Seen this exact bug?</span><a class="btn btn-dark" href="/contact">Say hello</a></div>
