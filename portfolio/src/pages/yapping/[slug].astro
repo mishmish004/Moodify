@@ -1,6 +1,7 @@
 ---
 import type { GetStaticPaths } from 'astro';
 import { render } from 'astro:content';
+import ShareStory from '../../components/ShareStory.astro';
 import Site from '../../layouts/Site.astro';
 import { allPosts, capitalize, formatDate, incidentPosts, readMinutes, type Post } from '../../lib/content';
 import { site } from '../../site/site';
@@ -76,6 +77,15 @@ const newer = i > 0 ? log[i - 1] : undefined;
           {d.tags.map((t) => <li class="tag">{t}</li>)}
         </ul>
       )}
+
+      <ShareStory
+        title={d.title}
+        summary={d.summary}
+        label={`The incident log · ${capitalize(d.category)}`}
+        tags={d.tags}
+        url={new URL(`/yapping/${post.id}`, Astro.site).href}
+        slug={post.id}
+      />
     </div>
   </article>
 

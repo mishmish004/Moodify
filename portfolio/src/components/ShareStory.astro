@@ -1,0 +1,226 @@
+---
+// "Share to your story" for a write-up. Instagram has no web intent for stories, so the page draws
+// a 1080×1920 card of the post on a canvas and hands it to the phone's share sheet, where Instagram
+// is one of the targets. Where files can't be shared (most desktops), the card downloads instead.
+// Either way the post's link is copied, for the story's Link sticker.
+interface Props {
+  title: string;
+  summary: string;
+  label: string;
+  tags: string[];
+  url: string;
+  slug: string;
+}
+
+const { title, summary, label, tags, url, slug } = Astro.props;
+const shortUrl = url.replace(/^https?:\/\//, '');
+---
+
+<section class="share" aria-labelledby="share-h" data-share data-title={title} data-summary={summary} data-label={label} data-tags={JSON.stringify(tags)} data-url={url} data-short-url={shortUrl} data-slug={slug}>
+  <h2 id="share-h" class="share-h">Share this write-up</h2>
+  <div class="share-btns">
+    <button class="btn btn-dark btn-md btn-pill" type="button" data-story>
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"></circle></svg>
+      Share to Instagram story
+    </button>
+    <button class="btn btn-line btn-md btn-pill" type="button" data-copy-link>Copy link</button>
+  </div>
+  <p class="share-status muted" role="status" aria-live="polite" data-share-status></p>
+  <span class="probe-sans" aria-hidden="true"></span><span class="probe-mono" aria-hidden="true"></span><span class="probe-display" aria-hidden="true"></span>
+</section>
+
+<style>
+  .share { margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+  .share-h { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .share-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  .share-status { min-height: 1.45em; font-size: 15px; line-height: 1.5; }
+  .share-status:empty { display: none; }
+  .probe-sans, .probe-mono, .probe-display { position: absolute; visibility: hidden; pointer-events: none; }
+  .probe-sans { font-family: var(--sans); }
+  .probe-mono { font-family: var(--mono); }
+  .probe-display { font-family: var(--display); }
+</style>
+
+<script>
+  const W = 1080;
+  const H = 1920;
+  // Instagram draws its own bar over the top ~220px and the reply box over the bottom ~220px
+  const SAFE_TOP = 260;
+  const SAFE_BOTTOM = H - 260;
+  const PAD = 96;
+  const C = { ground: '#FDFDFC', ink: '#1C1B1B', ink2: '#2A2927', muted: '#5F5E5A', line: '#E7E5E0', chip: '#F3F1EC', accent: '#1F5FBF' };
+
+  const root = document.querySelector<HTMLElement>('[data-share]');
+  if (root) init(root);
+
+  function init(root: HTMLElement) {
+    const d = root.dataset;
+    const post = {
+      title: d.title ?? '',
+      summary: d.summary ?? '',
+      label: d.label ?? '',
+      tags: JSON.parse(d.tags ?? '[]') as string[],
+      url: d.url ?? location.href,
+      shortUrl: d.shortUrl ?? location.host + location.pathname,
+      slug: d.slug ?? 'write-up',
+    };
+    const status = root.querySelector<HTMLElement>('[data-share-status]')!;
+    const storyBtn = root.querySelector<HTMLButtonElement>('[data-story]')!;
+    const copyBtn = root.querySelector<HTMLButtonElement>('[data-copy-link]')!;
+    const family = (sel: string) => getComputedStyle(root.querySelector(sel)!).fontFamily;
+    const fonts = { sans: family('.probe-sans'), mono: family('.probe-mono'), display: family('.probe-display') };
+
+    // Draw the card ahead of time: Safari only opens the share sheet straight from a tap, with no
+    // slow work in between.
+    let card: Promise<File | null> | null = null;
+    const getCard = () => (card ??= drawCard(post, fonts).catch(() => null));
+    if ('requestIdleCallback' in window) requestIdleCallback(() => getCard(), { timeout: 3000 });
+    else setTimeout(getCard, 1200);
+
+    const copyLink = async () => {
+      try { await navigator.clipboard.writeText(post.url); return true; } catch { return false; }
+    };
+
+    copyBtn.addEventListener('click', async () => {
+      status.textContent = (await copyLink()) ? 'Link copied.' : `Couldn’t copy. The link is ${post.url}`;
+    });
+
+    storyBtn.addEventListener('click', async () => {
+      const copied = await copyLink();
+      const linkNote = copied
+        ? 'The link is copied: add a Link sticker and paste it.'
+        : `Add a Link sticker with ${post.url}`;
+      const file = await getCard();
+      if (!file) {
+        status.textContent = `Couldn’t draw the card here. ${linkNote}`;
+        return;
+      }
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          status.textContent = `Pick Instagram, then Story. ${linkNote}`;
+          return;
+        } catch (e) {
+          if ((e as DOMException).name === 'AbortError') { status.textContent = ''; return; }
+          // Anything else (e.g. the tap expired): fall through to a download
+        }
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(file);
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      status.textContent = `Story image saved. Post it to your story from Instagram on your phone. ${linkNote}`;
+    });
+  }
+
+  async function drawCard(
+    post: { title: string; summary: string; label: string; tags: string[]; shortUrl: string; slug: string },
+    fonts: { sans: string; mono: string; display: string },
+  ): Promise<File> {
+    await Promise.all([
+      document.fonts.load(`400 120px ${fonts.display}`),
+      document.fonts.load(`400 44px ${fonts.sans}`),
+      document.fonts.load(`600 44px ${fonts.sans}`),
+      document.fonts.load(`500 30px ${fonts.mono}`),
+    ]).catch(() => {});
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d')!;
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.fillStyle = C.ground;
+    ctx.fillRect(0, 0, W, H);
+
+    // The "amish" pill, as in the site header
+    ctx.font = `600 44px ${fonts.sans}`;
+    const brand = 'amish';
+    const bw = ctx.measureText(brand).width + 72;
+    roundRect(ctx, PAD, SAFE_TOP, bw, 92, 46);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = C.ink;
+    ctx.fillText(brand, PAD + 36, SAFE_TOP + 61);
+
+    // The card itself
+    const cardTop = SAFE_TOP + 160;
+    const cardBottom = SAFE_BOTTOM - 260;
+    roundRect(ctx, PAD - 24, cardTop, W - 2 * (PAD - 24), cardBottom - cardTop, 40);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.stroke();
+
+    const left = PAD + 40;
+    const maxW = W - 2 * left;
+    let y = cardTop + 108;
+
+    ctx.font = `500 30px ${fonts.mono}`;
+    ctx.fillStyle = C.muted;
+    ctx.fillText(post.label.toUpperCase(), left, y);
+    y += 56;
+
+    // Title: as large as fits in four lines
+    let size = 150;
+    let lines: string[] = [];
+    for (; size >= 72; size -= 6) {
+      ctx.font = `400 ${size}px ${fonts.display}`;
+      lines = wrap(ctx, post.title, maxW);
+      if (lines.length <= 4) break;
+    }
+    ctx.fillStyle = C.ink;
+    for (const line of lines) { y += size * 1.0; ctx.fillText(line, left, y); }
+    y += 56;
+
+    ctx.font = `400 48px ${fonts.sans}`;
+    ctx.fillStyle = C.muted;
+    for (const line of wrap(ctx, post.summary, maxW).slice(0, 5)) { y += 66; ctx.fillText(line, left, y); }
+    y += 64;
+
+    // Tags as chips, wrapping onto new rows
+    ctx.font = `500 30px ${fonts.mono}`;
+    let x = left;
+    for (const tag of post.tags) {
+      const tw = ctx.measureText(tag).width + 44;
+      if (x + tw > left + maxW) { x = left; y += 72; }
+      if (y > cardBottom - 80) break;
+      roundRect(ctx, x, y, tw, 56, 28);
+      ctx.fillStyle = C.chip; ctx.fill();
+      ctx.fillStyle = C.ink2;
+      ctx.fillText(tag, x + 22, y + 38);
+      x += tw + 14;
+    }
+
+    // Where to read it; the sharer adds the Link sticker just below
+    const footY = cardBottom + 96;
+    ctx.font = `500 30px ${fonts.mono}`;
+    ctx.fillStyle = C.accent;
+    ctx.fillText('READ THE WRITE-UP', PAD, footY);
+    ctx.font = `400 40px ${fonts.sans}`;
+    ctx.fillStyle = C.ink;
+    const urlLines = wrap(ctx, post.shortUrl, W - 2 * PAD, /(?<=\/)/);
+    urlLines.slice(0, 2).forEach((l, i) => ctx.fillText(l, PAD, footY + 62 + i * 52));
+
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('toBlob failed');
+    return new File([blob], `${post.slug}-story.png`, { type: 'image/png' });
+  }
+
+  function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, splitter: RegExp = / /): string[] {
+    const sep = splitter.source === ' ' ? ' ' : '';
+    const words = text.split(splitter);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const next = line ? line + sep + word : word;
+      if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = word; } else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+  }
+</script>
