@@ -23,7 +23,7 @@ const older = i >= 0 ? log[i + 1] : undefined;
 const newer = i > 0 ? log[i - 1] : undefined;
 ---
 
-<Site title={`${d.title} — amish`} description={d.summary} current="yapping" banner type="article" image={d.image?.src}>
+<Site title={`${d.title} — amish`} description={d.summary} current="yapping" banner type="article" image={d.image?.src ?? `/og/${post.id}.png`}>
   <article>
     <header class="head narrow">
       <a class="back" href={d.kind === 'incident' ? '/yapping' : '/good-morning'}><span class="arrow arrow-back" aria-hidden="true">←</span>{d.kind === 'incident' ? 'All write-ups' : 'Back to good morning'}</a>

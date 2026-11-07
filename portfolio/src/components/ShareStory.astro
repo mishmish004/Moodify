@@ -14,6 +14,9 @@ interface Props {
 
 const { title, summary, label, tags, url, slug } = Astro.props;
 const shortUrl = url.replace(/^https?:\/\//, '');
+// X's own post composer, with the title and link filled in. The link unfolds into the post's
+// preview card (scripts/og.mjs).
+const xUrl = `https://x.com/intent/post?text=${encodeURIComponent(`${title}: ${summary}`)}&url=${encodeURIComponent(url)}`;
 ---
 
 <section class="share" aria-labelledby="share-h" data-share data-title={title} data-summary={summary} data-label={label} data-tags={JSON.stringify(tags)} data-url={url} data-short-url={shortUrl} data-slug={slug}>
@@ -23,6 +26,10 @@ const shortUrl = url.replace(/^https?:\/\//, '');
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"></circle></svg>
       Share
     </button>
+    <a class="btn btn-line btn-md btn-pill" href={xUrl} target="_blank" rel="noopener">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.75 3h3.07l-6.71 7.67L22 21h-6.18l-4.84-6.33L5.44 21H2.37l7.18-8.2L2 3h6.33l4.38 5.79L17.75 3Zm-1.08 16.2h1.7L7.4 4.73H5.58L16.67 19.2Z"/></svg>
+      Post on X
+    </a>
     <button class="btn btn-line btn-md btn-pill" type="button" data-copy-link>Copy link</button>
   </div>
   <p class="share-status muted" role="status" aria-live="polite" data-share-status></p>
