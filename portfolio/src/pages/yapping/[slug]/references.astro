@@ -1,0 +1,71 @@
+---
+// /yapping/<slug>/references: every source a write-up draws on, from its `references` front matter.
+// Only posts that list references get this page.
+import type { GetStaticPaths } from 'astro';
+import Site from '../../../layouts/Site.astro';
+import { allPosts, hindiNumber, type Post } from '../../../lib/content';
+
+export const getStaticPaths = (async () => {
+  const posts = await allPosts();
+  return posts
+    .filter((post) => post.data.references.length > 0)
+    .map((post) => ({ params: { slug: post.id }, props: { post } }));
+}) satisfies GetStaticPaths;
+
+const { post } = Astro.props as { post: Post };
+const d = post.data;
+
+// Headings in the order they first appear
+const groups: { title: string; items: Post['data']['references'] }[] = [];
+for (const ref of d.references) {
+  let group = groups.find((g) => g.title === ref.group);
+  if (!group) groups.push((group = { title: ref.group, items: [] }));
+  group.items.push(ref);
+}
+---
+
+<Site title={`References: ${d.title} — amish`} description={`The sources “${d.title}” draws on.`} current="yapping">
+  <header class="head narrow">
+    <a class="back" href={`/yapping/${post.id}`}><span class="arrow arrow-back" aria-hidden="true">←</span>Back to the write-up</a>
+    <p class="meta rise">References · {d.references.length} sources</p>
+    <h1 class="display rise d1">{d.title}</h1>
+    <p class="sum rise d2">Everything this write-up draws on, and the part of it each one shaped.</p>
+  </header>
+
+  <div class="narrow body">
+    {groups.map((g, i) => (
+      <section class="group" aria-labelledby={`refs-${i}`}>
+        <h2 id={`refs-${i}`}><span lang="hi" aria-hidden="true" class="deva-num">{hindiNumber(i + 1)}</span>{g.title}</h2>
+        <ul class="refs">
+          {g.items.map((ref) => (
+            <li>
+              {ref.href
+                ? <a class="ref-title" href={ref.href}>{ref.title}<span class="arrow arrow-up" aria-hidden="true">&#160;↗</span></a>
+                : <span class="ref-title">{ref.title}</span>}
+              {ref.by && <span class="by">{ref.by}</span>}
+              {ref.note && <span class="note">{ref.note}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </div>
+</Site>
+
+<style>
+  .narrow { max-width: 760px; margin: 0 auto; padding-left: var(--gutter-wide); padding-right: var(--gutter-wide); }
+  .head { padding-top: clamp(40px, 6vw, 80px); padding-bottom: 40px; }
+  .back { text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; color: var(--muted); min-height: 44px; }
+  .meta { margin: 24px 0 20px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(36px, 4.8vw, 64px); line-height: 1; letter-spacing: -0.02em; text-wrap: balance; }
+  .sum { margin-top: 20px; font-size: clamp(17px, 1.5vw, 19px); line-height: 1.55; color: var(--muted); }
+
+  .body { padding-bottom: 80px; display: flex; flex-direction: column; gap: 48px; }
+  .group h2 { display: flex; align-items: baseline; gap: 14px; margin: 0 0 8px; font-family: var(--display); font-weight: 400; font-size: clamp(24px, 2.4vw, 30px); letter-spacing: -0.015em; }
+  .group .deva-num { font-size: 0.8em; }
+  .refs { list-style: none; margin: 0; padding: 0; }
+  .refs li { display: flex; flex-direction: column; gap: 4px; padding: 18px 0; border-top: 1px solid var(--line); }
+  .ref-title { font-size: 18px; font-weight: 500; line-height: 1.4; color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; overflow-wrap: anywhere; }
+  .by { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .note { font-size: 16px; line-height: 1.6; color: var(--ink-2); }
+</style>

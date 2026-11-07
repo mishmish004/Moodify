@@ -31,6 +31,17 @@ const posts = defineCollection({
     /** Slug of the project this broke, to link the two */
     project: z.string().optional(),
     image: image.extend({ caption: z.string().optional() }).optional(),
+    /** Sources the write-up draws on. When there are any, the post links to /yapping/<slug>/references */
+    references: z.array(z.object({
+      title: z.string(),
+      href: z.url().optional(),
+      /** Who published it, and when */
+      by: z.string().optional(),
+      /** What in the write-up it shaped */
+      note: z.string().optional(),
+      /** The heading it's listed under; headings keep the order they first appear in */
+      group: z.string().default('Sources'),
+    })).default([]),
     draft: z.boolean().default(false),
   }),
 });

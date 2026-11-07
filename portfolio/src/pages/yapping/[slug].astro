@@ -72,6 +72,14 @@ const newer = i > 0 ? log[i - 1] : undefined;
         <Content />
       </div>
 
+      {d.references.length > 0 && (
+        <a class="refs-link" href={`/yapping/${post.id}/references`}>
+          <span class="refs-label">References</span>
+          <span class="refs-count">The {d.references.length} sources this write-up draws on</span>
+          <span class="arrow" aria-hidden="true">→</span>
+        </a>
+      )}
+
       {d.tags.length > 0 && (
         <ul class="tags" aria-label="Tags">
           {d.tags.map((t) => <li class="tag">{t}</li>)}
@@ -131,6 +139,13 @@ const newer = i > 0 ? log[i - 1] : undefined;
   .glance-panel { border-radius: 24px; margin-bottom: 8px; }
   .tl-sec { margin-top: 56px; }
   .content { margin-top: 0; }
+  .refs-link {
+    margin-top: 40px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 18px 20px;
+    border: 1px solid var(--line); border-radius: 16px; text-decoration: none; color: var(--ink);
+  }
+  .refs-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+  .refs-count { flex: 1 1 200px; font-size: 16px; color: var(--muted); }
+  @media (hover: hover) { .refs-link:hover { border-color: var(--line-hover); } }
   .tags { list-style: none; margin: 48px 0 0; padding: 32px 0 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; }
 
   .more {

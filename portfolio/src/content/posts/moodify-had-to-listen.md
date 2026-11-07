@@ -1,16 +1,72 @@
 ---
-title: "Graded by the Listener"
+title: "Moodify had to listen"
 summary: "Turning Google's ReasoningBank into memory for a playlist agent."
 date: 2026-11-07
 category: agents
 tags: ["ReasoningBank", "Agent memory", "Embeddings", "OpenAI"]
+references:
+  - group: Papers
+    title: "ReasoningBank: Scaling Agent Self-Evolving with Reasoning Memory"
+    by: "Google · ICLR 2026 · arXiv 2509.25140"
+    href: https://arxiv.org/abs/2509.25140
+    note: "The loop this post starts from: lessons as a title, description and content, at most three per run, an LLM judge, append-only memory and recall by embedding similarity. The paper's words quoted in the post come from here."
+  - group: Papers
+    title: "Learning Personalized Agents from Human Feedback (PAHF)"
+    by: "Meta Superintelligence Labs · 2026 · arXiv 2602.16173"
+    href: https://ai.meta.com/research/publications/learning-personalized-agents-from-human-feedback/
+    note: "Asking one question before acting (loop 1), and newer feedback winning when preferences drift (consolidation)."
+  - group: Papers
+    title: "Agent Learning via Early Experience"
+    by: "Meta · 2025 · arXiv 2510.08558"
+    href: https://arxiv.org/abs/2510.08558
+    note: "Reflection grounded in what actually happened: the reason every lesson has to quote the review."
+  - group: Docs and posts
+    title: "Architecting efficient context-aware multi-agent framework for production"
+    by: "Google Developers Blog"
+    href: https://developers.googleblog.com/en/architecting-efficient-context-aware-multi-agent-framework-for-production/
+    note: "Keeping stored memory apart from what each model call sees, and keeping prompt prefixes stable: the two-part memory under What it measured."
+  - group: Docs and posts
+    title: "Vertex AI Agent Engine Memory Bank overview"
+    by: "Google Cloud documentation"
+    href: https://docs.cloud.google.com/agent-builder/agent-engine/memory-bank/overview
+    note: "Memories that change as new information arrives, and expiry: consolidation and loop 4."
+  - group: Docs and posts
+    title: "Prompt caching"
+    by: "OpenAI API documentation"
+    href: https://developers.openai.com/api/docs/guides/prompt-caching
+    note: "How the prompt cache reuses a stable prefix: why memory is split into two parts."
+  - group: From Moodify
+    title: "phase-plan.md, Phases 15, 16, 30 and 31"
+    by: "Moodify on GitHub"
+    href: https://github.com/mishmish004/Moodify/blob/master/phase-plan.md
+    note: "The design notes behind every section, and the source of every number in the results table."
+  - group: From Moodify
+    title: "src/reflect.py"
+    by: "Moodify on GitHub"
+    href: https://github.com/mishmish004/Moodify/blob/master/src/reflect.py
+    note: "Reflection: the verdict, up to three lessons, and the quote check."
+  - group: From Moodify
+    title: "src/memory.py"
+    by: "Moodify on GitHub"
+    href: https://github.com/mishmish004/Moodify/blob/master/src/memory.py
+    note: "Consolidation, recall by tags, the 40-lesson cap and expiry."
+  - group: From Moodify
+    title: "src/embeddings.py"
+    by: "Moodify on GitHub"
+    href: https://github.com/mishmish004/Moodify/blob/master/src/embeddings.py
+    note: "Recall by meaning, and the 0.36 and median + 0.15 thresholds."
+  - group: From Moodify
+    title: "src/clarify.py"
+    by: "Moodify on GitHub"
+    href: https://github.com/mishmish004/Moodify/blob/master/src/clarify.py
+    note: "Asking one question before building."
 ---
 
 Moodify is a small app I built that turns how you feel into a Spotify playlist. Four friends and I use it. You type something like “gym session, running on 4 hours of sleep”, it writes a brief, picks the songs and saves the playlist to your account. Afterwards you can rate it and write a review.
 
 At first, Moodify had no memory of what you thought of its playlists. If a workout playlist was too slow, the next one could be too slow in exactly the same way.
 
-I didn't want to invent agent memory from scratch, so I built it on a published design: Google's ReasoningBank. This post is about what I kept from the paper, what broke when I applied it to music, and the four feedback loops Moodify runs now.
+I didn't want to invent agent memory from scratch, so I built it on a published design: Google's <a href="https://arxiv.org/abs/2509.25140">ReasoningBank</a>. This post is about what I kept from the paper, what broke when I applied it to music, and the four feedback loops Moodify runs now.
 
 ## <span class="sec-num">०१</span>What the paper does
 
@@ -40,7 +96,7 @@ Three ideas carried straight over:
 
 The paper usually has no answer key, so it asks a model to grade its own run: “LLM-as-a-judge … without any ground-truth reference”. Moodify has something better, the listener's review. But a review is free text in any shape (slang, typos, one word or a paragraph), and a model reading it can still put words in the listener's mouth.
 
-<div class="fix"><span class="fix-label">What worked</span><span>The review is the judge, and every lesson has to quote it. One LLM call reads the review next to everything about the build: the tracks by section, likes, the rating and the build log. It returns a verdict and up to three lessons, each carrying the exact words it rests on. Code checks those words are really in the review, and a lesson without a real quote is dropped.</span></div>
+<div class="fix"><span class="fix-label">What worked</span><span>The review is the judge, and every lesson has to quote it. One LLM call reads the review next to everything about the build: the tracks by section, likes, the rating and the build log. It returns a verdict and up to three lessons, each carrying the exact words it rests on. Code checks those words are really in the review, and a lesson without a real quote is dropped. Meta's <a href="https://arxiv.org/abs/2510.08558">Early Experience</a> work makes the same point: reflect on what happened, not on the model's opinion.</span></div>
 
 ```
 review    "the workout part was way too slow, rest was great"
@@ -115,7 +171,7 @@ The paper describes one loop. Moodify now runs four, each on a different clock.
 <figcaption>The four loops. The heavy dark loop is the paper's; the three blue loops are what Moodify added around it.</figcaption>
 </figure>
 
-1. **Seconds: ask before building.** When a prompt pulls against a lesson (“gym session, running on 4 hours of sleep” against “workout energy 8 or more”), Moodify asks one question and waits up to 20 seconds. The call that writes the brief spots the clash itself, so asking costs no extra LLM call. “From now on” retires the lesson. No answer keeps it, so a build never stalls. This is the first step of Meta's PAHF loop, which the paper doesn't have.
+1. **Seconds: ask before building.** When a prompt pulls against a lesson (“gym session, running on 4 hours of sleep” against “workout energy 8 or more”), Moodify asks one question and waits up to 20 seconds. The call that writes the brief spots the clash itself, so asking costs no extra LLM call. “From now on” retires the lesson. No answer keeps it, so a build never stalls. This is the first step of Meta's <a href="https://ai.meta.com/research/publications/learning-personalized-agents-from-human-feedback/">PAHF</a> loop, which the paper doesn't have.
 2. **Minutes to days: Fix it.** The lessons about one playlist, plus the review itself, rebuild that playlist as version 2.
 3. **Between playlists: the paper's loop.** Reviews become lessons, and later builds recall them.
 4. **Months: upkeep.** Every recall marks a lesson as used. Pitfalls and strategies nobody recalls for 180 days expire. Preferences never expire; they can only be superseded.
